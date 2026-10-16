@@ -20,7 +20,7 @@ def test_cli_lists_all_stages(capsys):
     out = capsys.readouterr().out
     for stage in ("new-game", "extract", "embed", "recalib", "tracks", "jersey", "analyze", "review", "report",
                   "official", "replay", "html", "narrate", "merge-reviews", "coach-summary", "momentum",
-                  "coach-sheets", "plusminus", "calibrate", "clips"):
+                  "coach-sheets", "plusminus", "calibrate", "clips", "film"):
         assert stage in cli.STAGES
         assert f"  {stage} " in out
 

@@ -30,6 +30,7 @@ For every game, one folder with:
 - **A review of every player on your team**, with what went well, what to fix, and two drills each. You can send it to the whole team.
 - **Charts** of the score margin and scoring runs, shot zones, heat maps, and team comparisons.
 - **A narrated MP3** of the report in both languages, with a big play button on the page. Teammates without time to read can listen on the way to practice.
+- **An explained video**: the narration plays over the key plays and charts it talks about, with subtitles burned in (half-speed replays when the explanation runs longer than the play). The team can just press play.
 - **One shareable HTML file**: images, audio and film clips embedded, opens offline, works in chat apps.
 - **Optional extras:** a private deep dive for one player, and a short looping MP3 of on-court cues ("two dribbles, find a man") to listen to while you play.
 
@@ -120,6 +121,7 @@ The result is a single file with images and audio inside. Send it in any chat ap
 | `plusminus`, `report`, `momentum`, `replay` | facts and figures |
 | `narrate` | spoken script → MP3 (`--chime --gap 6 --loud` makes an on-court cue loop) |
 | `clips` | cut the film clips a report marks (`![caption](clip:07:24-07:33)`) |
+| `film` | explained video: narration over the clips, freeze frames with the players ringed, court diagrams and charts, with subtitles (`film.<lang>.md` → `film.<lang>.mp4`) |
 | `html` | report folder → one bilingual HTML page (`--share` for a single sendable file) |
 
 Run `uv run hoop-tape-miner <stage> -h` for the options of each stage.

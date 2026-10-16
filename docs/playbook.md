@@ -175,6 +175,18 @@ uv run hoop-tape-miner narrate --script workspace/players/<N>/cues.warmup.en.md 
 
 `--lang en` renders one language only; `--rate "-5%"` slows the voice. Measure each MP3 with `ffprobe -v error -show_entries format=duration -of csv=p=0 <file>.mp3` and make the "about N minutes" line in the script match; re-render if it changed. Narration sends the script text to Microsoft's TTS service (see `docs/privacy.md`).
 
+### Explained video (optional, recommended for the team report)
+
+Write `film.<lang>.md` from the finished report following `prompts/film.md` (scenes: clips with freeze frames that ring the players, court diagrams in `plays/*.json` for the plan, stat scenes, figures, short chapter cards; the narration is written for what is on screen). Check new clip windows and freeze moments on a contact sheet first; `--run "$RUN"` points at the CV tracks when they are not next to the video. Then:
+
+```
+uv run hoop-tape-miner film "$G" --video "$V" --dry          # checks the script, lists scenes with estimated lengths
+uv run hoop-tape-miner film "$G" --video "$V" --scenes 1-4   # short preview: fonts, subtitles, timing
+uv run hoop-tape-miner film "$G" --video "$V" > workspace/logs/film.log 2>&1
+```
+
+Writes `film.<lang>.mp4` (720p, about 5 MB per minute). Let a subagent check a few frames before sending: the title card, a chart, a clip and its slow replay, every freeze (is the ring on the right player?) and every diagram. Like the narration, the text goes to Microsoft's TTS service.
+
 ## 12. HTML
 
 ```

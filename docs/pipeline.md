@@ -24,7 +24,7 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 | Jersey numbers | Qwen3-VL-4B (4-bit) OCR, per-tracklet voting, roster-gated |
 | Possessions | half-court occupancy + "offence stands further from the basket" signal |
 | Film review | frame sheets reviewed by vision-LLM subagents against a coach checklist (`prompts/film_review_brief.md`) |
-| Output | metrics, matplotlib figures, agent-written reports, edge-tts narration, single-file HTML |
+| Output | metrics, matplotlib figures, agent-written reports, edge-tts narration, explained video (ffmpeg + libass subtitles), single-file HTML |
 
 ## Stages (in order)
 
@@ -49,6 +49,7 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 | `replay` (optional) | `--run --out` [`--pid --t0 --t1 --fps --game`] | 2D tactics-board clips (mp4) |
 | `narrate` | `FOLDER` or `--script FILE` [`--lang zh en --out --gap --chime --loud --rate`] | `listen.<lang>.mp3` per script, or one MP3 next to `--script` |
 | `clips` | `FOLDER` [`--video --height --force`] | `clips/<from>-<to>.mp4` + poster for every `![caption](clip:mm:ss-mm:ss)` in the READMEs |
+| `film` | `FOLDER` [`--lang zh en --video --run --height 720 --font --scenes A-B --dry`] | `film.<lang>.mp4`: narration from `film.<lang>.md` over chapter cards, figures, stat scenes, animated court diagrams (`plays/*.json`) and clips of our video, with freeze frames that ring players from `run/tracks.pkl` and burned-in subtitles; speech cached in `.film-cache/` |
 | `html` | `FOLDER` [`--out index.html --share`] | bilingual `index.html` with clip players (`--share`: self-contained copy with audio and clips embedded) |
 
 `uv run hoop-tape-miner <stage> -h` is authoritative; `docs/playbook.md` shows each stage with real paths. Team names, colours (`us.hex` / `them.hex`), focus player, periods, rosters, result and narration voices come from `game.json`.
