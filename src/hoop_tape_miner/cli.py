@@ -29,6 +29,7 @@ STAGES = {
     "clips": ("hoop_tape_miner.clips", "cut the video clips a report marks with ![caption](clip:mm:ss-mm:ss)"),
     "narrate":("hoop_tape_miner.narrate", "listen.<lang>.md -> listen.<lang>.mp3 (edge-tts + ffmpeg)"),
     "html": ("hoop_tape_miner.render_html", "report folder (README.md + README.en.md) -> one bilingual index.html"),
+    "publish": ("hoop_tape_miner.publish", "reports -> private-link website (Cloudflare Pages), one stable link per report"),
 }
 
 

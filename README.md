@@ -105,6 +105,15 @@ uv run hoop-tape-miner html workspace/teams/red-foxes/2026-10-14 --share --out N
 
 The shared file embeds the film clips (480p, about 1 MB per 10 s of clip), so a report with a dozen clips is a few tens of MB. Clips show real players: send it to the team only (see [docs/privacy.md](docs/privacy.md)).
 
+Or give the team one link instead of a file, free on Cloudflare (Workers static assets, the successor of Pages). Each report gets a random, stable address, so an updated report shows up behind the same link:
+
+```bash
+npx wrangler login    # once: free Cloudflare account
+uv run hoop-tape-miner publish workspace/teams/red-foxes/2026-10-14 --deploy --project night-owls-film
+```
+
+The pages are unlisted (not indexed, random paths), not password-protected: anyone with a link can open it.
+
 The result is a single file with images and audio inside. Send it in any chat app. If an in-app viewer blocks scripts, the page falls back to the phone's own audio player.
 
 ## Commands
@@ -121,6 +130,7 @@ The result is a single file with images and audio inside. Send it in any chat ap
 | `narrate` | spoken script → MP3 (`--chime --gap 6 --loud` makes an on-court cue loop) |
 | `clips` | cut the film clips a report marks (`![caption](clip:07:24-07:33)`) |
 | `html` | report folder → one bilingual HTML page (`--share` for a single sendable file) |
+| `publish` | reports → private-link website on Cloudflare, one stable link per report |
 
 Run `uv run hoop-tape-miner <stage> -h` for the options of each stage.
 

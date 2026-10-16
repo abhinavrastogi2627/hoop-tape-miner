@@ -50,6 +50,7 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 | `narrate` | `FOLDER` or `--script FILE` [`--lang zh en --out --gap --chime --loud --rate`] | `listen.<lang>.mp3` per script, or one MP3 next to `--script` |
 | `clips` | `FOLDER` [`--video --height --force`] | `clips/<from>-<to>.mp4` + poster for every `![caption](clip:mm:ss-mm:ss)` in the READMEs |
 | `html` | `FOLDER` [`--out index.html --share`] | bilingual `index.html` with clip players (`--share`: self-contained copy with audio and clips embedded) |
+| `publish` | `FOLDER...` [`--deploy --project --base-url --new-link`] | `<workspace>/site/<token>/` per report (web page + audio + clips), a hub of team reports, `<workspace>/publish.json`; `--deploy` uploads with `npx wrangler deploy` (static assets behind `publish_worker.js`, which serves Range requests for Safari) to `<project>.<subdomain>.workers.dev` |
 
 `uv run hoop-tape-miner <stage> -h` is authoritative; `docs/playbook.md` shows each stage with real paths. Team names, colours (`us.hex` / `them.hex`), focus player, periods, rosters, result and narration voices come from `game.json`.
 

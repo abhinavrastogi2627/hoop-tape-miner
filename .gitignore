@@ -21,3 +21,6 @@ CLAUDE.local.md
 
 # personal data: your teams, games, players (never published)
 workspace/
+
+# wrangler (Cloudflare CLI) local cache
+.wrangler/

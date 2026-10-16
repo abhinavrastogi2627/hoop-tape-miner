@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from hoop_tape_miner import cli, clips, game_config, narrate, new_game, render_html, workspace
+from hoop_tape_miner import cli, clips, game_config, narrate, new_game, publish, render_html, workspace
 from hoop_tape_miner.build_tracks import team_map
 from hoop_tape_miner.momentum import auto_stretches, breaks, find_runs, TEXT
 
@@ -133,6 +133,47 @@ def test_render_html_clip_players(tmp_path):
 def test_render_html_flags_missing_clip(tmp_path):
     page = render_html.page(clip_fixture(tmp_path, cut=False))
     assert 'class="clip missing"' in page and "<video" not in page
+
+
+def test_publish_builds_private_site_with_stable_links(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOOP_WORKSPACE", str(tmp_path))
+    folder = clip_fixture(tmp_path)
+    for c in ("zh", "en"):
+        (folder / f"listen.{c}.mp3").write_bytes(b"fake mp3")
+    monkeypatch.setattr(render_html, "duration_s", lambda p: 60.0)
+    player = folder / "player-4"
+    player.mkdir()
+    for name in ("README.md", "README.en.md"):
+        shutil.copy(FIXTURE / name, player / name)
+    publish.main([str(folder), str(player)])
+
+    reg = json.loads((tmp_path / "publish.json").read_text(encoding="utf8"))
+    site, tok = tmp_path / "site", reg["reports"]["game"]
+    page = (site / tok / "index.html").read_text(encoding="utf8")
+    assert 'src="clips/0724-0733.mp4"' in page and 'src="listen.zh.mp3"' in page and "data:audio" not in page
+    assert "notes/part1.md" not in page and 'name="robots" content="noindex' in page  # share clean-up, unlisted
+    assert (site / tok / "clips" / "0724-0733.jpg").exists() and (site / tok / "listen.en.mp3").exists()
+    assert "X-Robots-Tag: noindex" in (site / "_headers").read_text(encoding="utf8")
+    hub = (site / reg["hub"] / "index.html").read_text(encoding="utf8")
+    assert f"../{tok}/" in hub and reg["reports"]["game/player-4"] not in hub  # personal reports stay off the hub
+
+    publish.main([str(folder)])  # an update keeps the link
+    assert json.loads((tmp_path / "publish.json").read_text(encoding="utf8"))["reports"]["game"] == tok
+    publish.main([str(folder), "--new-link"])
+    new = json.loads((tmp_path / "publish.json").read_text(encoding="utf8"))["reports"]["game"]
+    assert new != tok and not (site / tok).exists()
+
+
+def test_publish_worker_config_serves_site_through_range_worker(tmp_path):
+    cfg = json.loads(publish.worker_config(tmp_path / "site", "team-film", tmp_path / "w").read_text(encoding="utf8"))
+    assert cfg["name"] == "team-film" and cfg["assets"]["run_worker_first"] is True
+    assert cfg["assets"]["binding"] == "ASSETS" and "206" in (tmp_path / "w" / cfg["main"]).read_text(encoding="utf8")
+
+
+def test_publish_rejects_folder_outside_workspace(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOOP_WORKSPACE", str(tmp_path / "ws"))
+    with pytest.raises(SystemExit):
+        publish.main([str(FIXTURE)])
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
