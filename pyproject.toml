@@ -71,4 +71,11 @@ build-backend = "uv_build"
 dev = [
     "pytest>=9.1.1",
     "trackeval>=1.3.0",
+    "ruff>=0.17.1",
 ]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
