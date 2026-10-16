@@ -1,12 +1,12 @@
 """No-GPU, no-network tests for the framework layer: CLI, workspace scaffolding, HTML report, narration text,
-team-label mapping and momentum run detection."""
+team-label mapping, momentum run detection and report clips."""
 import json
 import shutil
 from pathlib import Path
 
 import pytest
 
-from hoop_tape_miner import cli, game_config, narrate, new_game, render_html, workspace
+from hoop_tape_miner import cli, clips, game_config, narrate, new_game, render_html, workspace
 from hoop_tape_miner.build_tracks import team_map
 from hoop_tape_miner.momentum import auto_stretches, breaks, find_runs, TEXT
 
@@ -20,7 +20,7 @@ def test_cli_lists_all_stages(capsys):
     out = capsys.readouterr().out
     for stage in ("new-game", "extract", "embed", "recalib", "tracks", "jersey", "analyze", "review", "report",
                   "official", "replay", "html", "narrate", "merge-reviews", "coach-summary", "momentum",
-                  "coach-sheets", "plusminus", "calibrate"):
+                  "coach-sheets", "plusminus", "calibrate", "clips"):
         assert stage in cli.STAGES
         assert f"  {stage} " in out
 
@@ -96,6 +96,58 @@ def test_render_html_tolerates_missing_result_and_colours(tmp_path):
     page = render_html.page(folder)
     assert f"--us: {render_html.DEFAULT_COLOURS['us'][0]};" in page
     assert 'data-result="unknown"' in page
+
+
+def clip_fixture(tmp_path, cut=True):
+    folder = tmp_path / "game"
+    shutil.copytree(FIXTURE, folder)
+    for name, cap in (("README.md", "4 号上篮"), ("README.en.md", "#4 layup")):
+        p = folder / name
+        p.write_text(p.read_text(encoding="utf8") + f"\n![{cap}](clip:07:24-07:33)\n\n- [▶](#clip-0724-0733)\n",
+                     encoding="utf8")
+    if cut:
+        (folder / "clips").mkdir()
+        (folder / "clips" / "0724-0733.mp4").write_bytes(b"fake mp4")
+        (folder / "clips" / "0724-0733.jpg").write_bytes(b"fake jpg")
+    return folder
+
+
+def test_clip_markers_and_names(tmp_path):
+    assert clips.clip_name("07:24", "07:33") == "0724-0733"
+    assert clips.clip_name("1:02.5", "1:10") == "0102_5-0110"
+    assert clips.seconds("1:02.5") == 62.5
+    assert clips.find_clips(clip_fixture(tmp_path, cut=False)) == [("07:24", "07:33")]  # zh + en share one file
+
+
+def test_render_html_clip_players(tmp_path):
+    folder = clip_fixture(tmp_path)
+    page = render_html.page(folder)
+    assert page.count("<video") == 2 and 'src="clips/0724-0733.mp4"' in page and 'poster="clips/0724-0733.jpg"' in page
+    assert "片段 1 · 07:24–07:33" in page and "Clip 1 · 07:24–07:33" in page
+    assert 'id="zh-clip-0724-0733"' in page and 'href="#en-clip-0724-0733"' in page
+    shared = render_html.page(folder, share=True)
+    assert "data:video/mp4;base64," in shared and "clips/0724-0733" not in shared
+    assert 'href="#zh-clip-0724-0733"' in shared  # in-page clip links survive --share
+
+
+def test_render_html_flags_missing_clip(tmp_path):
+    page = render_html.page(clip_fixture(tmp_path, cut=False))
+    assert 'class="clip missing"' in page and "<video" not in page
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
+def test_clips_stage_cuts_window(tmp_path):
+    import subprocess
+    video = tmp_path / "game.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=25:duration=6",
+                    "-pix_fmt", "yuv420p", str(video)], check=True)
+    folder = tmp_path / "rep"
+    folder.mkdir()
+    (folder / "README.md").write_text("# r\n\n![x](clip:0:02-0:04)\n", encoding="utf8")
+    clips.main([str(folder), "--video", str(video), "--height", "120"])
+    out = folder / "clips" / "0002-0004.mp4"
+    assert out.exists() and out.with_suffix(".jpg").exists()
+    assert abs(render_html.duration_s(out) - 2) < 0.3
 
 
 def test_narrate_paragraphs_skip_notes_and_join_lines():

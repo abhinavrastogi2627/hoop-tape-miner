@@ -33,3 +33,4 @@ Before any commit: `git status` must show no file from `workspace/`, no media (`
 
 - `hoop-tape-miner html <folder> --share --out FILE` makes a single self-contained file without local paths or repo links. Send it privately (team chat, email), not on a public page.
 - Re-check the shared file for frames of people who did not consent before sending.
+- Report clips (`hoop-tape-miner clips`) are footage of players and are embedded in `--share` files: the same consent rules as for frames apply, and a shared page with clips goes only to the team.

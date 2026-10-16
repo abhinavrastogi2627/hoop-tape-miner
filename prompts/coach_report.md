@@ -44,6 +44,7 @@ Sources: **official** = <league feed, what it records>; **film** = review of N p
 
 ## 3. How we played and what went wrong
 Numbered list, each item with a count and 1-3 video times. End with "What worked (keep doing it)".
+Film clips (see "Film clips" below) go under the decisive-run table, the scouting weapons, our recurring mistakes and what worked.
 
 ## 4. Game plan for the next game against {them_team}
 **Defence (top priority)** · **Offence** · **Rotation**: numbered, each rule one line, phrased as an instruction.
@@ -58,6 +59,34 @@ Table: #, focus, drill, measurable target.
 - Roster players the film cannot identify: one short line inviting them to say when they played.
 ```
 
+## Film clips: show the play next to the claim
+
+Readers discuss the report together, and an argument about "what happened at 12:42" ends the moment everyone watches it. Put a short clip of our video directly under the most important claims, so the page reads: claim, clip, then what to do differently.
+
+**Marker.** One line of its own, under the paragraph, table or list item it proves:
+
+```
+![#17 dribbles alone into #25's press; no outlet, steal, and-one](clip:07:24-07:33)
+```
+
+Times are video time (mm:ss, optionally `mm:ss.s`). Use the *same* window in `README.md` and `README.en.md` (one file serves both); write the caption naturally in each language. Then run `hoop-tape-miner clips <folder>` (it cuts `clips/<from>-<to>.mp4` + poster) and `hoop-tape-miner html <folder>`. The page numbers the clips ("Clip 3 · 07:24–07:33") and adds a slow-motion button. Elsewhere in the text, link to a clip with `[▶ 07:24](#clip-0724-0733)`.
+
+**Which plays get a clip (be selective).** Choose the plays a coach would stop the tape for: the ones that explain the result or that the team will change. Team report: 8–14 clips; player deep dive: 6–8. In order of priority:
+
+1. The decisive run: the 3–5 opposing scores that best show *how* it happened (one clip per type: e.g. turnover → break, nobody back, help foul). Not every basket.
+2. The opponent's main weapons from the scouting section: one clip per weapon (their best player's favourite move, their press, their set).
+3. Our recurring mistakes from section 3, each with the clearest example.
+4. **What worked**: at least 3 clips of us doing it right (the comeback, the best possession). The fix is easier to copy when the team can see it already did it.
+5. Player sections: link to a team clip already shown (`[▶ 07:24](#clip-0724-0733)`) rather than adding new ones; add a clip only for a player's single most important habit if no team clip shows it.
+
+Skip plays the film does not show clearly (camera off the ball, players hidden), and plays whose cause the facts sheets mark "unclear".
+
+**Window.** 6–20 s; never over 45 s. Start 2–4 s before the cause (the bad pass, the missed box-out, the leak-out), not at the basket, and end 1–2 s after the result. Official feed times lag the play and have 10 s resolution: take the start from the film-review notes, not from the feed.
+
+**Caption.** One sentence, 25 words at most: who, what happened, and the moment to watch ("watch #19 leave before the rebound"). Jersey numbers only. A caption states what is visible; uncertain identities say "likely".
+
+**Check before you send.** Watch every clip once (or have a subagent read 3–4 frames of each): the play described must be in it, start to finish. Fix the window, re-run `clips` (`--force` re-cuts), delete clip files the stage reports as unused.
+
 ## Writing rules
 
 1. **No possession ids, trip ids or file names** in the text. Refer to plays by video time (`12:05`, or `24:10–24:18` for a range). Readers rewatch by time.
@@ -68,7 +97,7 @@ Table: #, focus, drill, measurable target.
 6. Start each player's section with what went well. Criticise decisions and habits, not people. Team failures (e.g. nobody back on defence) are framed as team failures.
 7. Refer to players by jersey number only, never by name.
 8. Plain words for amateur players; short sentences; coaching terms only when the drill uses them.
-9. Tables at most 4-5 columns so they fit a phone. Images by relative file name next to the README.
+9. Tables at most 4-5 columns so they fit a phone. Images by relative file name next to the README. Clip markers go on their own line below a table, never inside a cell.
 10. No local paths and no links into the repo or the workspace.
 11. **Both languages, each a complete file**: `README.md` in Chinese and `README.en.md` in English (the HTML page currently reads exactly these two). Same facts, numbers, times and section order; write each naturally in its language rather than translating word for word. Headings carry the same section numbers in every language.
 12. Length: roughly 2,500-3,500 words per language. Cut prose before cutting evidence.
@@ -78,3 +107,4 @@ Table: #, focus, drill, measurable target.
 - Recount every total you state against `official.json` / `game.json`.
 - Check that every video time you cite exists in the facts sheets.
 - Grep both files for `P0`, `pid`, `trip`, `.json`, `run/`: none should remain.
+- Both files carry the same `clip:` windows (`hoop-tape-miner clips` lists them); every clip shows the play its caption describes.

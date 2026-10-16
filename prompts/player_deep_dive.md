@@ -37,6 +37,8 @@ One H3 each. A small table (time, what happened, result) or a short list, then t
 
 ## 4. Rewatch these 6 clips
 **Best 3** and **Worst 3**: time range (mm:ss–mm:ss) + what to look for (the exact cue: hips turning, last moment to pass, feet set before the catch).
+Each item gets its clip marker on the next line, e.g. `![Hand-off, drive, two defenders jump, kick-out](clip:33:49-33:58)`, so the player watches it right there.
+In section 3, link a pattern's key moment to its clip instead of repeating it: `[▶ 33:49](#clip-3349-3358)`. Window and caption rules: "Film clips" in `prompts/coach_report.md`.
 
 ## 5. Practice plan (4 weeks, N sessions a week)
 Table: #, what, how, volume, target. 4-6 drills, each tied to a pattern in section 3.
@@ -58,5 +60,5 @@ Data note: <what the official sheet does and does not record; which official eve
 4. Conditioning, fatigue and late-game drops are stated plainly with the minute count behind them.
 5. The three calls must be the same words used in the court cues (`prompts/court_cues.md`), so they become anchors.
 6. Jersey numbers only, no names. No local paths or repo links.
-7. Both languages, each a complete file (`README.md` Chinese, `README.en.md` English, as the HTML page expects) with the same facts, times and section order, written naturally. Run `hoop-tape-miner html <game>/player-<N>`; `game.json` is found in the parent folder.
+7. Both languages, each a complete file (`README.md` Chinese, `README.en.md` English, as the HTML page expects) with the same facts, times and section order, written naturally. Run `hoop-tape-miner clips <game>/player-<N>` then `hoop-tape-miner html <game>/player-<N>`; `game.json` is found in the parent folder.
 8. Length: roughly 1,200-1,800 words per language.

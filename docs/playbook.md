@@ -155,6 +155,15 @@ Every claim in the reports must trace back to these sheets.
 
 Language convention (current code): the HTML page is bilingual and reads exactly `README.md` (Chinese) and `README.en.md` (English); both must exist. The listen button appears only when both `listen.zh.mp3` and `listen.en.mp3` exist. Copy the figures a README embeds next to it (e.g. `momentum*.png` into `player-<N>/` too).
 
+Film clips: while writing, put `![caption](clip:mm:ss-mm:ss)` under the claims that matter most (selection, window and caption rules: "Film clips" in `prompts/coach_report.md`). Then cut them:
+
+```
+uv run hoop-tape-miner clips "$G" --video "$V"
+uv run hoop-tape-miner clips "$G/player-<N>" --video "$V"
+```
+
+Writes `clips/<from>-<to>.mp4` (480p, about 1 MB per 10 s) and a poster per marker; existing files are kept (`--force` re-cuts). Check each clip shows the play its caption describes (a subagent can read 3–4 frames per clip with ffmpeg) before building the HTML.
+
 ## 11. Narration
 
 ```
@@ -173,11 +182,11 @@ uv run hoop-tape-miner html "$G"
 uv run hoop-tape-miner html "$G/player-<N>"
 ```
 
-Writes `index.html` in each folder (team names, colours and score from `game.json`, found in the folder or its parent).
+Writes `index.html` in each folder (team names, colours and score from `game.json`, found in the folder or its parent). Clips stay as files in `clips/` next to it; `--share` embeds them.
 
 ## 13. QA via the browser-check subagent
 
-Ask it (text result only, at most 10 lines) to serve `$G` over http and check, for each `index.html` and each language: title and score band correct, every image loads, audio plays and its length label matches, tables do not overflow at 390 px width, no console errors, no dead links, no local paths visible. Fix and re-render until it passes.
+Ask it (text result only, at most 10 lines) to serve `$G` over http and check, for each `index.html` and each language: title and score band correct, every image loads, audio plays and its length label matches, every clip plays and the slow-mo button works, tables do not overflow at 390 px width, no console errors, no dead links, no local paths visible. Fix and re-render until it passes.
 
 ## 14. Share
 
@@ -185,7 +194,7 @@ Ask it (text result only, at most 10 lines) to serve `$G` over http and check, f
 uv run hoop-tape-miner html "$G" --share --out "$PWD/workspace/share/<us>_vs_<them>_<date>.html"
 ```
 
-`--share` embeds the audio and strips local paths and repo links, so the single file can be sent privately to the team (`--out` is a file name inside the folder or an absolute path). Re-run the QA step on the shared file. Never push workspace content or media; read `docs/privacy.md` before sending frames of players to anyone.
+`--share` embeds the audio and clips and strips local paths and repo links, so the single file can be sent privately to the team (`--out` is a file name inside the folder or an absolute path). Re-run the QA step on the shared file. Never push workspace content or media; read `docs/privacy.md` before sending frames of players to anyone.
 
 ## Working rules
 

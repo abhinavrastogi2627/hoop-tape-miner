@@ -30,10 +30,10 @@ For every game, one folder with:
 - **A review of every player on your team**, with what went well, what to fix, and two drills each. You can send it to the whole team.
 - **Charts** of the score margin and scoring runs, shot zones, heat maps, and team comparisons.
 - **A narrated MP3** of the report in both languages, with a big play button on the page. Teammates without time to read can listen on the way to practice.
-- **One shareable HTML file**: images and audio embedded, opens offline, works in chat apps.
+- **One shareable HTML file**: images, audio and film clips embedded, opens offline, works in chat apps.
 - **Optional extras:** a private deep dive for one player, and a short looping MP3 of on-court cues ("two dribbles, find a man") to listen to while you play.
 
-Every claim in the report points to a video time, so a player can go and watch the moment.
+Every claim in the report points to a video time, and the key plays come with **film clips right next to the analysis** (with slow motion), so the team can watch the moment while discussing what to change.
 
 | Bilingual report | Charts | On a phone |
 |---|---|---|
@@ -53,7 +53,7 @@ game video ──► computer vision (GPU, ~1 h) ──► film review by AI age
 2. **Possessions and lineups:** who was on court, who had the ball, when each possession started and ended. If your league publishes a box score, it is aligned with the video.
 3. **Film review:** the game is cut into annotated frame sheets. Your agent sends subagents through them with a coach's checklist covering transition defence, ball pressure, shot selection and more.
 4. **Facts first, then writing:** reviews are merged into fact sheets (plus-minus, stints, patterns, clips). The report is written from those facts using the templates in [`prompts/`](prompts/).
-5. **Render:** charts, narration (Microsoft Edge neural voices) and a single self-contained HTML page.
+5. **Render:** charts, narration (Microsoft Edge neural voices), short film clips of the key plays (cut with ffmpeg from the windows the report marks) and a single self-contained HTML page.
 
 Full details: [docs/pipeline.md](docs/pipeline.md).
 
@@ -103,6 +103,8 @@ When it finishes, open `workspace/teams/red-foxes/2026-10-14/index.html`.
 uv run hoop-tape-miner html workspace/teams/red-foxes/2026-10-14 --share --out Night-Owls_vs_Red-Foxes.html
 ```
 
+The shared file embeds the film clips (480p, about 1 MB per 10 s of clip), so a report with a dozen clips is a few tens of MB. Clips show real players: send it to the team only (see [docs/privacy.md](docs/privacy.md)).
+
 The result is a single file with images and audio inside. Send it in any chat app. If an in-app viewer blocks scripts, the page falls back to the phone's own audio player.
 
 ## Commands
@@ -117,6 +119,7 @@ The result is a single file with images and audio inside. Send it in any chat ap
 | `coach-sheets` → `merge-reviews` → `coach-summary` | film-review sheets, merge and aggregate the agents' reviews |
 | `plusminus`, `report`, `momentum`, `replay` | facts and figures |
 | `narrate` | spoken script → MP3 (`--chime --gap 6 --loud` makes an on-court cue loop) |
+| `clips` | cut the film clips a report marks (`![caption](clip:07:24-07:33)`) |
 | `html` | report folder → one bilingual HTML page (`--share` for a single sendable file) |
 
 Run `uv run hoop-tape-miner <stage> -h` for the options of each stage.

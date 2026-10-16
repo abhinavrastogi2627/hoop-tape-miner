@@ -26,7 +26,8 @@ STAGES = {
     "plusminus": ("hoop_tape_miner.plusminus", "on-court plus-minus per player from lineups + official score flow"),
     "momentum": ("hoop_tape_miner.momentum", "score-margin figure with scoring runs and on-court lanes"),
     "replay": ("hoop_tape_miner.replay", "2D tactics-board replay (mp4) of possessions from CV tracks"),
-    "narrate": ("hoop_tape_miner.narrate", "listen.<lang>.md -> listen.<lang>.mp3 (edge-tts + ffmpeg)"),
+    "clips": ("hoop_tape_miner.clips", "cut the video clips a report marks with ![caption](clip:mm:ss-mm:ss)"),
+    "narrate":("hoop_tape_miner.narrate", "listen.<lang>.md -> listen.<lang>.mp3 (edge-tts + ffmpeg)"),
     "html": ("hoop_tape_miner.render_html", "report folder (README.md + README.en.md) -> one bilingual index.html"),
 }
 

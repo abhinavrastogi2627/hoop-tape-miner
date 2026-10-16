@@ -1,13 +1,14 @@
 """Render a bilingual report folder (README.md = 中文, README.en.md = English) into one HTML page with
 a 中文 / EN switch. Images are inlined; if listen.zh.mp3 / listen.en.mp3 sit next to the READMEs
-(`hoop-tape-miner narrate` makes them) the page gets a play button that reads the report aloud.
+(`hoop-tape-miner narrate` makes them) the page gets a play button that reads the report aloud. Clip markers
+`![caption](clip:07:24-07:33)` become numbered video players (cut them first with `hoop-tape-miner clips`).
 
 usage: hoop-tape-miner html workspace/teams/<opponent>/<date> [--out index.html]
        hoop-tape-miner html workspace/teams/<opponent>/<date>/player-<number>
        hoop-tape-miner html workspace/teams/<opponent>/<date> --share --out /somewhere/Us_vs_Them_<date>.html
 game.json (team names, optional us.hex / them.hex colours, result incl. halftime) is read from the folder or
 its parent. --share drops repo links and local paths and embeds the audio, so the single file can be sent to
-anyone.
+anyone, clips included.
 """
 from __future__ import annotations
 
@@ -19,20 +20,24 @@ import mimetypes
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 from markdown_it import MarkdownIt
 
+from . import clips as clipmod
 from . import game_config as gc
 
 MD = MarkdownIt("commonmark", {"html": True}).enable("table")
 LANGS = [("zh", "zh-CN", "中文", "README.md"), ("en", "en", "EN", "README.en.md")]
 UI = {
     "zh": dict(us="我们", them="对手", half1="上半场", half2="下半场", final="终场", contents="目录", switch="切换语言",
-               listen="听报告", listen_sub="约 {m} 分钟，可以边看边听", play="播放 / 暂停", seek="播放进度", speed="播放速度"),
+               listen="听报告", listen_sub="约 {m} 分钟，可以边看边听", play="播放 / 暂停", seek="播放进度", speed="播放速度",
+               clip="片段", slow="慢放", missing="（片段还没剪：运行 hoop-tape-miner clips）"),
     "en": dict(us="Us", them="Them", half1="1st half", half2="2nd half", final="Final", contents="Contents", switch="Switch language",
                listen="Listen to the report", listen_sub="About {m} min. Read along or just listen.", play="Play / pause",
-               seek="Playback position", speed="Playback speed"),
+               seek="Playback position", speed="Playback speed",
+               clip="Clip", slow="Slow-mo", missing="(clip not cut yet: run hoop-tape-miner clips)"),
 }
 PLAY_ICON = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5.5v13l10.5-6.5z"/>'
              '<path class="i-pause" d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>')
@@ -77,7 +82,7 @@ def inline_images(body: str, folder: Path) -> str:
     def sub(m):
         src = m.group(1)
         p = folder / src
-        if src.startswith(("http:", "https:", "data:")) or not p.exists():
+        if src.startswith(("http:", "https:", "data:")) or src.endswith(".mp4") or not p.exists():
             return m.group(0)
         return f'src="{data_uri(p)}"'
     return re.sub(r'src="([^"]+)"', sub, body)
@@ -95,7 +100,7 @@ def for_sharing(md_text: str) -> str:
     out, skipping = [], False
     for line in md_text.splitlines():
         if line.startswith(("- ", "* ")):
-            skipping = bool(re.search(r"\]\((?!https?:|#)[^)]+\)|`[^`]*[\\/][^`]*`", line))
+            skipping = bool(re.search(r"\]\((?!https?:|#|clip:)[^)]+\)|`[^`]*[\\/][^`]*`", line))
         elif not line.startswith(" "):
             skipping = False
         if not skipping:
@@ -104,11 +109,47 @@ def for_sharing(md_text: str) -> str:
     return re.sub(r"`[^`]*[\\/][^`]*`(?:[，,]\s*)?", "", text)  # inline local paths, e.g. (`gem-work\...`, each trip ...)
 
 
-def render(md_text: str, lang: str, share: bool = False):
+CLIP_IMG = re.compile(r'(<p>)?<img src="clips/([0-9_]+-[0-9_]+)\.mp4" alt="([^"]*)"\s*/?>(?(1)</p>)')
+
+
+def clip_players(body: str, folder: Path | None, lang: str, share: bool, windows: dict) -> str:
+    """Clip images (from `clip:` markers) -> numbered <figure> with a video player, poster and slow-mo button.
+    Paths stay relative in index.html (clips/ sits next to it); --share embeds them."""
+    n = 0
+
+    def sub(m):
+        nonlocal n
+        n += 1
+        name, alt = m.group(2), m.group(3)
+        start, end = windows.get(name, ("", ""))
+        mp4 = folder / "clips" / f"{name}.mp4" if folder else None
+        cap = (f'<figcaption><span class="clip-no">{UI[lang]["clip"]} {n} · {start}–{end}</span>{alt}</figcaption>')
+        if mp4 is None or not mp4.exists():
+            print(f"warning: clips/{name}.mp4 missing; run `hoop-tape-miner clips {folder}`", file=sys.stderr)
+            return f'<figure class="clip missing" id="{lang}-clip-{name}">{cap}<p>{UI[lang]["missing"]}</p></figure>'
+        poster = mp4.with_suffix(".jpg")
+        src = data_uri(mp4) if share else f"clips/{mp4.name}"
+        post = f' poster="{data_uri(poster) if share else "clips/" + poster.name}"' if poster.exists() else ""
+        return (f'<figure class="clip" id="{lang}-clip-{name}"><video controls playsinline preload="none"{post} src="{src}"></video>'
+                f'<div class="clip-bar">{cap}<button type="button" class="slow" data-slow aria-pressed="false">'
+                f'{UI[lang]["slow"]} ½×</button></div></figure>')
+    body = CLIP_IMG.sub(sub, body)
+    return body.replace('href="#clip-', f'href="#{lang}-clip-')  # [▶ 07:24](#clip-0724-0733) jumps to the player
+
+
+def render(md_text: str, lang: str, share: bool = False, folder: Path | None = None):
     md_text = re.sub(r"^# .*\n", "", md_text, count=1)  # H1 becomes the page header
     if share:
         md_text = for_sharing(md_text)
+    windows = {}
+
+    def clip_md(m):  # markdown-it would mangle "clip:07:24-07:33" as a URL, so hand it a plain relative path
+        name = clipmod.clip_name(*m.groups())
+        windows[name] = m.groups()
+        return f"](clips/{name}.mp4)"
+    md_text = clipmod.CLIP_RE.sub(clip_md, md_text)
     body = MD.render(md_text)  # CommonMark: lists need no blank line before them, 2-space nesting works
+    body = clip_players(body, folder, lang, share, windows)
     if share:  # any repo-relative link left would be dead for the recipient
         body = re.sub(r'<a href="(?!https?:|#)[^"]*">(.*?)</a>', r"\1", body)
     heads = []
@@ -161,7 +202,7 @@ def page(folder: Path, share: bool = False) -> str:
     for code, attr, _, fname in LANGS:
         text = (folder / fname).read_text(encoding="utf8")
         titles[code] = re.match(r"# (.*)", text).group(1).strip()
-        body, heads = render(text, code, share)
+        body, heads = render(text, code, share, folder)
         arts.append(f'<article class="report" data-lang="{code}" lang="{attr}"{hide(code)}>{inline_images(body, folder)}</article>')
         links = "".join(f'<li><a href="#{code}-s{i}">{html.escape(h)}</a></li>' for i, h in enumerate(heads, 1))
         tocs.append(f'<nav class="toc" data-lang="{code}" lang="{attr}" aria-label="{UI[code]["contents"]}"{hide(code)}>'
@@ -308,6 +349,21 @@ button:focus-visible, a:focus-visible, input:focus-visible {{ outline: 3px solid
 .figure {{ margin: 1.5rem 0; overflow-x: auto; background: #fff; border: 1px solid var(--rule); border-radius: 6px; }}
 .figure img {{ display: block; width: 100%; height: auto; }}
 
+/* film clips next to the analysis */
+.clip {{ margin: 1.25rem 0 1.75rem; background: #000; border-radius: 6px; overflow: hidden; max-width: 42rem; }}
+.clip video {{ display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }}
+.clip-bar {{ display: flex; align-items: flex-start; gap: .75rem; padding: .6rem .8rem; background: var(--ink); color: #e6e5f5; }}
+.clip figcaption {{ flex: 1; min-width: 0; font-size: .9rem; line-height: 1.55; }}
+.clip-no {{ display: block; font: 600 .95rem/1.3 var(--display); letter-spacing: .03em; color: var(--us-light); font-variant-numeric: tabular-nums; }}
+.slow {{ flex: none; font: 600 .85rem/1 var(--body); color: #c9c7e6; background: none; border: 1px solid #5c5a86; border-radius: 999px;
+  padding: .4rem .7rem; cursor: pointer; }}
+.slow[aria-pressed="true"] {{ background: var(--us-light); color: var(--ink); border-color: var(--us-light); }}
+.no-js .slow {{ display: none; }}
+.clip.missing {{ background: #fff4f4; border: 1px dashed var(--whistle); padding: .6rem .8rem; }}
+.clip.missing .clip-no {{ color: var(--whistle); }}
+.clip.missing p {{ margin: .3rem 0 0; color: var(--whistle); font-size: .85rem; }}
+td .clip {{ min-width: 16rem; margin: .25rem 0; }}
+
 .table-wrap {{ overflow-x: auto; margin: 1.25rem 0; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; }}
 table {{ border-collapse: collapse; width: 100%; font-size: .9rem; line-height: 1.55; }}
 th, td {{ text-align: left; vertical-align: top; padding: .55rem .75rem; border-bottom: 1px solid var(--rule); }}
@@ -327,7 +383,7 @@ td strong {{ color: var(--whistle); }}
   .play.big {{ transition: box-shadow .2s, background-color .2s; }}
 }}
 @media print {{
-  .lang, .toc, .listen, .play {{ display: none !important; }}
+  .lang, .toc, .listen, .play, .slow {{ display: none !important; }}
   .board {{ background: none; color: var(--ink); }}
   .team.us .name, .team.them .name, .halves b {{ color: var(--ink); }}
 }}
@@ -370,13 +426,13 @@ td strong {{ color: var(--whistle); }}
   document.documentElement.classList.remove("no-js");
 
   // Embedded audio: a Blob URL seeks and reports duration more reliably than a multi-MB data: URI in in-app webviews.
-  function toBlob(a) {{
+  function toBlob(a, type) {{
     const s = a.getAttribute("src") || "";
     if (!s.startsWith("data:")) return;
     try {{
       const bin = atob(s.slice(s.indexOf(",") + 1)), buf = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-      a.src = URL.createObjectURL(new Blob([buf], {{ type: "audio/mpeg" }}));
+      a.src = URL.createObjectURL(new Blob([buf], {{ type: type || "audio/mpeg" }}));
     }} catch (e) {{}}
   }}
   function showNative(a) {{ a.controls = true; a.classList.add("fallback"); }}
@@ -399,6 +455,22 @@ td strong {{ color: var(--whistle); }}
     if (p && p.catch) p.catch(() => showNative(a));  // blocked custom player: fall back to the browser's own controls
   }}));
   Object.values(audios).forEach(a => a && a.addEventListener("error", () => showNative(a)));
+
+  // clips: one thing plays at a time (narration or one clip); the slow-mo button halves the speed
+  const videos = document.querySelectorAll(".clip video");
+  videos.forEach(v => {{
+    toBlob(v, "video/mp4");
+    v.addEventListener("play", () => {{
+      Object.values(audios).forEach(a => a && a.pause());
+      videos.forEach(o => {{ if (o !== v) o.pause(); }});
+    }});
+  }});
+  Object.values(audios).forEach(a => a && a.addEventListener("play", () => videos.forEach(v => v.pause())));
+  document.querySelectorAll("[data-slow]").forEach(b => b.addEventListener("click", () => {{
+    const v = b.closest(".clip").querySelector("video"), on = b.getAttribute("aria-pressed") !== "true";
+    v.defaultPlaybackRate = v.playbackRate = on ? 0.5 : 1;  // default survives the first load of a preload="none" video
+    b.setAttribute("aria-pressed", String(on));
+  }}));
   seek?.addEventListener("input", () => {{ audios[lang].currentTime = Number(seek.value); }});
   speedBtn?.addEventListener("click", () => {{
     speed = (speed + 1) % speeds.length;
@@ -416,6 +488,7 @@ td strong {{ color: var(--whistle); }}
     if (!titles[next]) next = "zh";
     const section = keepPlace ? currentSection() : 0;
     if (next !== lang && audios[lang]) audios[lang].pause();  // the two narrations are different scripts
+    document.querySelectorAll(".clip video").forEach(v => v.pause());
     lang = next;
     document.querySelectorAll("[data-lang]").forEach(el => {{ el.hidden = el.dataset.lang !== lang; }});
     buttons.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.setLang === lang)));
@@ -439,6 +512,8 @@ td strong {{ color: var(--whistle); }}
   if (!start && !/^zh/i.test(navigator.language || "")) start = "en";
   setLang(start || "zh", false);
   if (fromHash) document.querySelector(location.hash)?.scrollIntoView();  // target was hidden at load
+  const clipHash = location.hash.match(/^#clip-([0-9_-]+)$/);  // language-free link to a clip
+  if (clipHash) document.getElementById(lang + "-clip-" + clipHash[1])?.scrollIntoView();
 }})();
 </script>
 </body>
@@ -450,7 +525,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("folder")
     ap.add_argument("--out", default="index.html", help="file name in the folder, or an absolute path")
-    ap.add_argument("--share", action="store_true", help="copy to send to others: drop repo links and local paths, embed audio")
+    ap.add_argument("--share", action="store_true", help="copy to send to others: drop repo links and local paths, embed audio and clips")
     a = ap.parse_args(argv)
     folder = Path(a.folder)
     out = folder / a.out
