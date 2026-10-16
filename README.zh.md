@@ -106,6 +106,15 @@ uv run hoop-tape-miner html workspace/teams/red-foxes/2026-10-14 --share --out N
 
 分享文件会把录像片段打包进去（480p，每 10 秒片段约 1 MB），十几段片段的报告大约几十 MB。片段里是真实球员，只发给本队（见 [docs/privacy.md](docs/privacy.md)）。
 
+也可以不发文件，发一个链接（Cloudflare Workers 静态资源，即 Pages 的后继，免费）。每份报告有一个随机、固定的网址，报告更新后链接不变：
+
+```bash
+npx wrangler login    # 只需一次：免费 Cloudflare 账号
+uv run hoop-tape-miner publish workspace/teams/red-foxes/2026-10-14 --deploy --project night-owls-film
+```
+
+网页不公开列出（不被搜索引擎收录，路径随机），但没有密码：拿到链接的人都能打开。
+
 得到一个单文件，图片和音频都在里面，直接发聊天软件。如果聊天软件的内置浏览器禁用了脚本，页面会自动退回到手机自带的播放器。
 
 ## 命令一览
@@ -123,6 +132,7 @@ uv run hoop-tape-miner html workspace/teams/red-foxes/2026-10-14 --share --out N
 | `clips` | 按报告里的标记（`![说明](clip:07:24-07:33)`）剪出录像片段 |
 | `film` | 带解说的视频：解说配着录像片段、定格圈人、战术动画和图表，烧录字幕（`film.<lang>.md` → `film.<lang>.mp4`） |
 | `html` | 报告文件夹 → 一个双语 HTML（`--share` 生成可发送的单文件） |
+| `publish` | 报告 → Cloudflare 上的私密链接网站，每份报告一个固定链接 |
 
 每一步的参数：`uv run hoop-tape-miner <步骤> -h`。
 

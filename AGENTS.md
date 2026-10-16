@@ -3,6 +3,7 @@
 Turns one amateur basketball game video into a coach report: CV pipeline, agent film review, written reports, narration and a single-page HTML.
 
 - Procedure: follow `docs/playbook.md` step by step (video -> report). Stage details: `docs/pipeline.md`.
+- Sharing: publish a stable link per report (`publish --deploy`, playbook step 14); a `--share` file is the fallback.
 - Writing: use the guides in `prompts/` (film review brief, coach report, player deep dive, opponent dossier, narration, explained video, court cues).
 - Personal data lives in `$HOOP_WORKSPACE` (default `./workspace`, gitignored); one game = `workspace/teams/<opponent-slug>/<date>/`.
 

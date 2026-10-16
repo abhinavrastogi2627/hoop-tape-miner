@@ -8,7 +8,8 @@ usage: hoop-tape-miner html workspace/teams/<opponent>/<date> [--out index.html]
        hoop-tape-miner html workspace/teams/<opponent>/<date> --share --out /somewhere/Us_vs_Them_<date>.html
 game.json (team names, optional us.hex / them.hex colours, result incl. halftime) is read from the folder or
 its parent. --share drops repo links and local paths and embeds the audio, so the single file can be sent to
-anyone, clips included.
+anyone, clips included. `hoop-tape-miner publish` uses the same clean-up but keeps audio and clips as files
+(page(..., share=True, embed=False)) for a hosted copy.
 """
 from __future__ import annotations
 
@@ -112,9 +113,9 @@ def for_sharing(md_text: str) -> str:
 CLIP_IMG = re.compile(r'(<p>)?<img src="clips/([0-9_]+-[0-9_]+)\.mp4" alt="([^"]*)"\s*/?>(?(1)</p>)')
 
 
-def clip_players(body: str, folder: Path | None, lang: str, share: bool, windows: dict) -> str:
+def clip_players(body: str, folder: Path | None, lang: str, embed: bool, windows: dict) -> str:
     """Clip images (from `clip:` markers) -> numbered <figure> with a video player, poster and slow-mo button.
-    Paths stay relative in index.html (clips/ sits next to it); --share embeds them."""
+    Paths stay relative in index.html (clips/ sits next to it); embed (--share) inlines them."""
     n = 0
 
     def sub(m):
@@ -128,8 +129,8 @@ def clip_players(body: str, folder: Path | None, lang: str, share: bool, windows
             print(f"warning: clips/{name}.mp4 missing; run `hoop-tape-miner clips {folder}`", file=sys.stderr)
             return f'<figure class="clip missing" id="{lang}-clip-{name}">{cap}<p>{UI[lang]["missing"]}</p></figure>'
         poster = mp4.with_suffix(".jpg")
-        src = data_uri(mp4) if share else f"clips/{mp4.name}"
-        post = f' poster="{data_uri(poster) if share else "clips/" + poster.name}"' if poster.exists() else ""
+        src = data_uri(mp4) if embed else f"clips/{mp4.name}"
+        post = f' poster="{data_uri(poster) if embed else "clips/" + poster.name}"' if poster.exists() else ""
         return (f'<figure class="clip" id="{lang}-clip-{name}"><video controls playsinline preload="none"{post} src="{src}"></video>'
                 f'<div class="clip-bar">{cap}<button type="button" class="slow" data-slow aria-pressed="false">'
                 f'{UI[lang]["slow"]} ½×</button></div></figure>')
@@ -137,7 +138,7 @@ def clip_players(body: str, folder: Path | None, lang: str, share: bool, windows
     return body.replace('href="#clip-', f'href="#{lang}-clip-')  # [▶ 07:24](#clip-0724-0733) jumps to the player
 
 
-def render(md_text: str, lang: str, share: bool = False, folder: Path | None = None):
+def render(md_text: str, lang: str, share: bool = False, folder: Path | None = None, embed: bool | None = None):
     md_text = re.sub(r"^# .*\n", "", md_text, count=1)  # H1 becomes the page header
     if share:
         md_text = for_sharing(md_text)
@@ -149,7 +150,7 @@ def render(md_text: str, lang: str, share: bool = False, folder: Path | None = N
         return f"](clips/{name}.mp4)"
     md_text = clipmod.CLIP_RE.sub(clip_md, md_text)
     body = MD.render(md_text)  # CommonMark: lists need no blank line before them, 2-space nesting works
-    body = clip_players(body, folder, lang, share, windows)
+    body = clip_players(body, folder, lang, share if embed is None else embed, windows)
     if share:  # any repo-relative link left would be dead for the recipient
         body = re.sub(r'<a href="(?!https?:|#)[^"]*">(.*?)</a>', r"\1", body)
     heads = []
@@ -167,14 +168,14 @@ def hide(code: str) -> str:
     return "" if code == "zh" else " hidden"
 
 
-def listen_block(folder: Path, share: bool):
+def listen_block(folder: Path, embed: bool):
     """Big play button + progress for the narration, or empty strings when there is no audio yet."""
     files = {c: folder / f"listen.{c}.mp3" for c, *_ in LANGS}
     if not all(p.exists() for p in files.values()):
         return "", ""
     audios, labels = [], []
     for c, attr, *_ in LANGS:
-        src = data_uri(files[c]) if share else files[c].name
+        src = data_uri(files[c]) if embed else files[c].name
         # native controls stay visible when scripts are blocked (WeChat / mail file previews); the script hides them
         audios.append(f'<audio id="audio-{c}" class="native" data-lang="{c}"{hide(c)} controls preload="metadata" src="{src}"></audio>')
         m = round(duration_s(files[c]) / 60)
@@ -196,13 +197,15 @@ def listen_block(folder: Path, share: bool):
     return block, mini
 
 
-def page(folder: Path, share: bool = False) -> str:
+def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
+    """share: drop repo links and local paths; embed (default: same as share): inline audio and clips."""
+    embed = share if embed is None else embed
     sb = scoreboard(folder)
     arts, tocs, titles = [], [], {}
     for code, attr, _, fname in LANGS:
         text = (folder / fname).read_text(encoding="utf8")
         titles[code] = re.match(r"# (.*)", text).group(1).strip()
-        body, heads = render(text, code, share, folder)
+        body, heads = render(text, code, share, folder, embed)
         arts.append(f'<article class="report" data-lang="{code}" lang="{attr}"{hide(code)}>{inline_images(body, folder)}</article>')
         links = "".join(f'<li><a href="#{code}-s{i}">{html.escape(h)}</a></li>' for i, h in enumerate(heads, 1))
         tocs.append(f'<nav class="toc" data-lang="{code}" lang="{attr}" aria-label="{UI[code]["contents"]}"{hide(code)}>'
@@ -222,7 +225,7 @@ def page(folder: Path, share: bool = False) -> str:
         halves.append(f'<span>{lab("final")}<b>{us}–{them}</b></span>')
     (us_hex, us_light), (them_hex, them_light) = sb["colours"]["us"], sb["colours"]["them"]
     buttons = "".join(f'<button type="button" data-set-lang="{c}" lang="{a}" aria-pressed="{str(c == "zh").lower()}">{n}</button>' for c, a, n, _ in LANGS)
-    listen, mini = listen_block(folder, share)
+    listen, mini = listen_block(folder, embed)
     ui_js = {c: {k: UI[c][k] for k in ("play", "seek", "speed", "switch")} for c, *_ in LANGS}
     return TEMPLATE.format(
         page_title=html.escape(titles["zh"]), titles_js=json.dumps(json.dumps(titles, ensure_ascii=False)).replace("</", "<\\/"),
@@ -242,6 +245,7 @@ TEMPLATE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>{page_title}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

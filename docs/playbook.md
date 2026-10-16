@@ -202,11 +202,25 @@ Ask it (text result only, at most 10 lines) to serve `$G` over http and check, f
 
 ## 14. Share
 
+Send the team a link rather than a file (free on Cloudflare; `npx wrangler login` once):
+
+```
+uv run hoop-tape-miner publish "$G" "$G/player-<N>" --deploy --project <name>   # --project only the first time
+```
+
+- Each folder keeps the same random URL across updates: after any edit, re-run this and the link already sent shows the new version. No one downloads anything again.
+- Team reports are also listed on a hub page (its link is printed); send the hub once and new games appear on it. `player-<N>` reports are only reachable through their own link: send each one only to that player.
+- Audio and clips stay as separate files behind a small Worker that serves the Range requests iPhones need for video.
+- Run the QA step against `$HOOP_WORKSPACE/site/` (serve it over http) before `--deploy`, then spot-check the live URLs.
+- Links are unlisted, not password-protected. `--new-link` retires a leaked link. Read `docs/privacy.md` before sending frames of players to anyone.
+
+Fallback, a single file (offline, or where workers.dev is blocked, e.g. mainland China):
+
 ```
 uv run hoop-tape-miner html "$G" --share --out "$PWD/workspace/share/<us>_vs_<them>_<date>.html"
 ```
 
-`--share` embeds the audio and clips and strips local paths and repo links, so the single file can be sent privately to the team (`--out` is a file name inside the folder or an absolute path). Re-run the QA step on the shared file. Never push workspace content or media; read `docs/privacy.md` before sending frames of players to anyone.
+`--share` embeds the audio and clips and strips local paths and repo links, so the single file can be sent privately to the team (`--out` is a file name inside the folder or an absolute path). Re-run the QA step on the shared file. Never push workspace content or media.
 
 ## Working rules
 

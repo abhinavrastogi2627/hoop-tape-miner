@@ -30,6 +30,7 @@ STAGES = {
     "narrate":("hoop_tape_miner.narrate", "listen.<lang>.md -> listen.<lang>.mp3 (edge-tts + ffmpeg)"),
     "film": ("hoop_tape_miner.film", "film.<lang>.md -> explained video: narration over clips and charts, subtitled"),
     "html": ("hoop_tape_miner.render_html", "report folder (README.md + README.en.md) -> one bilingual index.html"),
+    "publish": ("hoop_tape_miner.publish", "reports -> private-link website (Cloudflare Pages), one stable link per report"),
 }
 
 
