@@ -42,7 +42,7 @@ def test_new_game_scaffolds_workspace(tmp_path, monkeypatch, capsys):
     video = tmp_path / "game.mp4"
     video.write_bytes(b"")
     cli.main(["new-game", "--opponent", "Red Foxes", "--date", "2026-10-14", "--video", str(video),
-              "--us-team", "Example Owls"])
+              "--us-team", "Example Owls", "--dossier"])
     folder = tmp_path / "ws" / "teams" / "red-foxes" / "2026-10-14"
     assert (folder / "run").is_dir()
     game = json.loads((folder / "game.json").read_text(encoding="utf8"))
@@ -57,6 +57,7 @@ def test_new_game_scaffolds_workspace(tmp_path, monkeypatch, capsys):
     game["periods"] = [[0, 100]]
     (folder / "game.json").write_text(json.dumps(game), encoding="utf8")
     new_game.main(["--opponent", "Red Foxes", "--date", "2026-10-14"])
+    assert (folder.parent / "README.md").exists()  # kept from the --dossier run
     assert json.loads((folder / "game.json").read_text(encoding="utf8"))["periods"] == [[0, 100]]
 
 

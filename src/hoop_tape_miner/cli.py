@@ -9,6 +9,8 @@ import importlib
 import sys
 
 STAGES = {
+    "run": ("hoop_tape_miner.run", "one game end to end: run every stage in order, stop where the agent must judge"),
+    "fetch": ("hoop_tape_miner.fetch", "league game url -> game folder, game.json, official.json and the game video"),
     "new-game": ("hoop_tape_miner.new_game", "scaffold workspace/teams/<opponent>/<date>/ with game.json + run/"),
     "extract": ("hoop_tape_miner.extract", "pass 1: detection + court homography + colour features"),
     "embed": ("hoop_tape_miner.embed", "pass 2a: SigLIP embeddings for team classification"),
@@ -27,10 +29,10 @@ STAGES = {
     "momentum": ("hoop_tape_miner.momentum", "score-margin figure with scoring runs and on-court lanes"),
     "replay": ("hoop_tape_miner.replay", "2D tactics-board replay (mp4) of possessions from CV tracks"),
     "clips": ("hoop_tape_miner.clips", "cut the video clips a report marks with ![caption](clip:mm:ss-mm:ss)"),
-    "narrate":("hoop_tape_miner.narrate", "listen.<lang>.md -> listen.<lang>.mp3 (edge-tts + ffmpeg)"),
+    "narrate": ("hoop_tape_miner.narrate", "listen.<lang>.md -> listen.<lang>.mp3 (edge-tts + ffmpeg)"),
     "film": ("hoop_tape_miner.film", "film.<lang>.md -> explained video: narration over clips and charts, subtitled"),
     "html": ("hoop_tape_miner.render_html", "report folder (README.md + README.en.md) -> one bilingual index.html"),
-    "publish": ("hoop_tape_miner.publish", "reports -> private-link website (Cloudflare Pages), one stable link per report"),
+    "publish": ("hoop_tape_miner.publish", "reports -> private-link website (Cloudflare Workers), one stable link per report"),
 }
 
 

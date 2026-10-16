@@ -1,0 +1,185 @@
+{
+ "data": {
+  "game": {
+   "id": "RkFLRUdBTUU=",
+   "org": {
+    "gaId": "1",
+    "id": "b3Jn",
+    "timeZoneName": "Australia/Sydney",
+    "__typename": "Org"
+   },
+   "statsVisible": true,
+   "gameVideoStatus": "available",
+   "videoDownloadUrl": "https://video.example.invalid/fake/league-720-low.mp4",
+   "videoProcessing": false,
+   "videoArchived": false,
+   "videoAvailableUntil": "2027-03-02T09:30:00+13:00",
+   "playedAt": "2026-03-02T00:05:00+13:00",
+   "videoHlsUrl": "https://video.example.invalid/fake/playlist.m3u8",
+   "homeScore": 20,
+   "home": {
+    "id": "dGVhbS1ob21l",
+    "name": "Red Foxes",
+    "__typename": "Team"
+   },
+   "awayScore": 16,
+   "away": {
+    "id": "dGVhbS1hd2F5",
+    "name": "Night Owls",
+    "__typename": "Team"
+   },
+   "league": {
+    "id": "bGVhZ3Vl",
+    "name": "Example League",
+    "__typename": "League"
+   },
+   "thumbnailUrl": "https://video.example.invalid/fake/thumb.jpg",
+   "gamePlayers": [
+    {
+     "id": "Z3Ata0",
+     "playerNumber": "4",
+     "isHomeTeamPlayer": true,
+     "person": {
+      "id": "cGVyc29u0",
+      "fullNameWithAnonymisation": "Test Person 0",
+      "__typename": "Person"
+     },
+     "team": {
+      "id": "dGVhbS1ob21l",
+      "__typename": "Team"
+     },
+     "__typename": "GamePlayer"
+    },
+    {
+     "id": "Z3Ata1",
+     "playerNumber": "7",
+     "isHomeTeamPlayer": true,
+     "person": {
+      "id": "cGVyc29u1",
+      "fullNameWithAnonymisation": "Test Person 1",
+      "__typename": "Person"
+     },
+     "team": {
+      "id": "dGVhbS1ob21l",
+      "__typename": "Team"
+     },
+     "__typename": "GamePlayer"
+    },
+    {
+     "id": "Z3Ata2",
+     "playerNumber": "11",
+     "isHomeTeamPlayer": true,
+     "person": {
+      "id": "cGVyc29u2",
+      "fullNameWithAnonymisation": "Test Person 2",
+      "__typename": "Person"
+     },
+     "team": {
+      "id": "dGVhbS1ob21l",
+      "__typename": "Team"
+     },
+     "__typename": "GamePlayer"
+    },
+    {
+     "id": "Z3Ata3",
+     "playerNumber": "22",
+     "isHomeTeamPlayer": true,
+     "person": {
+      "id": "cGVyc29u3",
+      "fullNameWithAnonymisation": "Test Person 3",
+      "__typename": "Person"
+     },
+     "team": {
+      "id": "dGVhbS1ob21l",
+      "__typename": "Team"
+     },
+     "__typename": "GamePlayer"
+    },
+    {
+     "id": "Z3Ata10",
+     "playerNumber": "5",
+     "isHomeTeamPlayer": false,
+     "person": {
+      "id": "cGVyc29u10",
+      "fullNameWithAnonymisation": "Test Person 10",
+      "__typename": "Person"
+     },
+     "team": {
+      "id": "dGVhbS1hd2F5",
+      "__typename": "Team"
+     },
+     "__typename": "GamePlayer"
+    },
+    {
+     "id": "Z3Ata11",
+     "playerNumber": "8",
+     "isHomeTeamPlayer": false,
+     "person": {
+      "id": "cGVyc29u11",
+      "fullNameWithAnonymisation": "Test Person 11",
+      "__typename": "Person"
+     },
+     "team": {
+      "id": "dGVhbS1hd2F5",
+      "__typename": "Team"
+     },
+     "__typename": "GamePlayer"
+    },
+    {
+     "id": "Z3Ata12",
+     "playerNumber": "17",
+     "isHomeTeamPlayer": false,
+     "person": {
+      "id": "cGVyc29u12",
+      "fullNameWithAnonymisation": "Test Person 12",
+      "__typename": "Person"
+     },
+     "team": {
+      "id": "dGVhbS1hd2F5",
+      "__typename": "Team"
+     },
+     "__typename": "GamePlayer"
+    },
+    {
+     "id": "Z3Ata13",
+     "playerNumber": "30",
+     "isHomeTeamPlayer": false,
+     "person": {
+      "id": "cGVyc29u13",
+      "fullNameWithAnonymisation": "Test Person 13",
+      "__typename": "Person"
+     },
+     "team": {
+      "id": "dGVhbS1hd2F5",
+      "__typename": "Team"
+     },
+     "__typename": "GamePlayer"
+    }
+   ],
+   "__typename": "Game",
+   "aiStatsAvailable": false,
+   "aiStatsStatus": "none",
+   "aiStatsRequestedByCurrentUser": false,
+   "participations": [
+    {
+     "id": "cGFydC1h",
+     "team": {
+      "id": "dGVhbS1hd2F5",
+      "name": "Night Owls",
+      "__typename": "Team"
+     },
+     "__typename": "Participation"
+    },
+    {
+     "id": "cGFydC1o",
+     "team": {
+      "id": "dGVhbS1ob21l",
+      "name": "Red Foxes",
+      "__typename": "Team"
+     },
+     "__typename": "Participation"
+    }
+   ]
+  }
+ }
+}

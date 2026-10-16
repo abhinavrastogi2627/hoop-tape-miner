@@ -1,19 +1,64 @@
-# Playbook: one game video -> coach report
+# Playbook: one game -> coach pages + explained video
 
-The single procedure for an agent (Claude Code or Codex) driving hoop-tape-miner. Follow the steps in order; each ends with an output you can check. Writing guides live in `prompts/`; stage details in `docs/pipeline.md`; privacy rules in `docs/privacy.md`. `uv run hoop-tape-miner <stage> -h` is authoritative for flags.
+The single procedure for an agent (Claude Code or Codex) driving hoop-tape-miner. Writing guides live in `prompts/`; stage details in `docs/pipeline.md`; privacy rules in `docs/privacy.md`. `uv run hoop-tape-miner <stage> -h` is authoritative for flags.
 
-Conventions used below (POSIX shell; on PowerShell use `$env:G = ...` and `$env:G` instead of `$G`):
+Each game produces two deliverables:
+
+1. **Pages**: the team report and the focus player's report (`index.html`, bilingual, with the narration audio and film clips), published as private links.
+2. **The explained video** `film.<lang>.mp4` (one per language). It is a file the user sends themselves (e.g. in a chat app); it is never published.
+
+Everything else the code can make (opponent dossier, court cues, tactics-board replay, single-file share, event review) is optional; see "Optional extras" at the end.
+
+## One-command run (start here)
+
+Once per machine, create the team profile: copy `templates/team.example.json` to `workspace/team.json` and fill it (our team name as the league shows it, jersey description, colour, focus player, `media_root` for heavy files, the league secrets file, languages).
+
+Then, per game, either type `/game <league game url>` in Claude Code (`.claude/commands/game.md`), or run the loop yourself:
 
 ```
-G=workspace/teams/<opponent-slug>/<YYYY-MM-DD>   # one game; created by new-game
-RUN=$G/run                                       # heavy outputs
+uv run hoop-tape-miner run <league game url | game folder> > workspace/logs/run.log 2>&1
+```
+
+- A url is fetched first (step 1); the run then works in the game folder it prints. Use that folder for every later run.
+- Each step knows its output file, so a run resumes where it stopped and never redoes a stage whose output exists. CV stages log to `workspace/logs/<team>-<date>-<step>.log`.
+- **Exit 3**: the run waits for you. The log names the step and what to do (the matching section below). Do it, then run again.
+- **Exit 1**: a command failed; the log shows the tail of its stage log. Fix the cause and run again.
+- **Exit 0**: done. It prints the page paths and the explained video paths.
+- `--status` lists every step and whether it is done; `--dry` prints the next command; `--until STEP` stops after a step; `--redo STEP` runs a done step again.
+- Publishing is outward-facing, so it only happens with `--publish`: once `qa.md` says PASS, run again with `--publish`, then have the browser-check subagent check the live links.
+
+Steps in order (agent steps marked *):
+
+| Step | Section |
+|---|---|
+| video*, teams* | 1 |
+| periods* | 2 |
+| calib-grid, calibrate* | 3 |
+| extract, embed, montage | 4 |
+| clusters*, tracks, jersey, analyze | 5 |
+| official* | 6 |
+| coach-sheets, film-review*, summary* | 7 |
+| momentum | 8 |
+| facts* | 9 |
+| reports*, clips | 10 |
+| listen-script*, narrate | 11 |
+| html | 12 |
+| qa* | 13 |
+| publish (only with `--publish`) | 14 |
+| film-script*, film | 15 |
+
+The sections below also work by hand. Conventions (POSIX shell; on PowerShell use `$env:G = ...` and `$env:G`):
+
+```
+G=workspace/teams/<opponent-slug>/<YYYY-MM-DD>   # one game folder: game.json, reports, pages
+RUN=<run dir>                                    # heavy outputs: game.json "run", else $G/run
 GJ=$G/game.json
-V=/path/to/game.mp4                              # our video
+V=<video>                                        # game.json "video"
 ```
 
 - Workspace root = `$HOOP_WORKSPACE`, else `./workspace` (gitignored). Nothing in it is ever committed.
-- Times in reports are **video times** (mm:ss of your file), never the game clock.
-- Long runs: redirect to `workspace/logs/<stage>.log` and read only the tail (`tail -n 20`). Never stream a long log into the conversation.
+- Times in reports are **video times** (mm:ss of the file), never the game clock.
+- Long runs: redirect to `workspace/logs/<stage>.log` and read only the tail (`tail -n 20`).
 
 ## 0. Prerequisites (once per machine)
 
@@ -21,35 +66,60 @@ V=/path/to/game.mp4                              # our video
 2. [uv](https://docs.astral.sh/uv/) and Python 3.11: `uv sync` in the repo.
 3. `ffmpeg` and `ffprobe` on PATH, or set `$FFMPEG` / `$FFPROBE` to their full paths.
 4. Hugging Face models download on first use (several GB: RF-DETR, ball detector, SigLIP, Qwen3-VL-4B). Point `HF_HOME` at a disk with ~20 GB free.
-5. Internet for narration (edge-tts) and, optionally, your league's stats site.
-6. For QA: Node.js (`npx`) and a Playwright MCP server in your agent.
+5. Internet for the league data, narration (edge-tts) and publishing.
+6. For QA: Node.js (`npx`) and a Playwright MCP server in your agent. For publishing: a free Cloudflare account (`npx wrangler login` once).
 7. Video: one full game from a single side camera that pans/zooms (typical club recording). Court is FIBA 28 x 15 m.
 
-## 1. New game
+## 1. Start a game
+
+**From a league link** (Glory League today):
+
+```
+uv run hoop-tape-miner fetch <game url> [--video OUR_VIDEO] [--no-video]
+```
+
+- Logs in with `GLORY_EMAIL` / `GLORY_PASSWORD` from the environment or the secrets file in `team.json` (never print them), reads the game, box score and point chart, and downloads the league's game video (720p, resumable).
+- Writes `$GJ` (teams, rosters, final and halftime score, periods, league id) and `$RUN/official.json` (box score, score flow, video alignment). Heavy files go to `<media_root>/teams/<slug>/<date>/` (`video/`, `run/`, raw `league/` responses, which contain names).
+- `--video OUR_VIDEO` keeps our own recording as the game video; the league video is then only used to align the score flow to it.
+- An existing `game.json` keeps the fields you filled (`--force` overwrites them with league data). The last line printed is the game folder.
+
+**Without league data**:
 
 ```
 uv run hoop-tape-miner new-game --opponent "Opponent Name" --date YYYY-MM-DD --video "$V" --us-team "Our Team"
 ```
 
-Writes `$GJ` (from `templates/game.example.json`), `$RUN/`, and the opponent dossier `workspace/teams/<opponent-slug>/README.md` if missing; never overwrites without `--force`. Then fill `$GJ` (keys starting with `_comment` explain each field):
+Writes `$GJ` from `templates/game.example.json` (keys starting with `_comment` explain each field) and `$RUN/`; never overwrites without `--force`. Fill `us` / `them` (`team`, `label`, `hex`, `us.focus_player`), `rosters` (jersey numbers as strings), `periods` and `result`. Ask the user for anything you cannot see on film.
 
-- `us` / `them`: `team` (display name), `label` (jersey description), optional `hex` (#rrggbb for charts and the page), `us.focus_player` (jersey number for the player figure, or null).
-- `rosters`: jersey numbers as strings; reads not on the roster are rejected.
-- `periods` and `result`: fill later (steps 5 and 6).
-- Optional for the film-review brief: `date`, `competition`, `memo_language`, `watch_notes`, or a `brief` block overriding any brief placeholder, e.g. `"brief": {"us_colour": "dark navy", "them_colour": "light blue"}` (without it the brief uses `us.colour` / `them.colour`, which are cluster labels).
-- Optional `narration.voices`: edge-tts voice per language.
+Optional `game.json` fields for the film-review brief: `date`, `competition`, `memo_language`, `watch_notes`, or a `brief` block overriding any brief placeholder, e.g. `"brief": {"us_colour": "dark navy", "them_colour": "light blue"}`. `narration.voices`: edge-tts voice per language.
 
-Ask the user for anything you cannot see on film: team names, rosters, focus players.
+## 2. Periods
 
-## 2. Calibration
+`periods` are the playing periods in seconds of our video, e.g. two halves `[[78, 1078], [1268, 2400]]`; gaps are shaded as breaks and calibration frames are chosen inside them. The league's periods split the whole video, pre-game footage and the break included, so `fetch` marks them `"periods_checked": false`. Grab stills around each boundary (`ffmpeg -ss T -i "$V" -frames:v 1 x.jpg`), set the real start and end of play, then set `"periods_checked": true`. With our own video, shift the league times by the alignment in `$RUN/official.json`.
+
+## 3. Calibration (no GUI needed)
 
 ```
-uv run hoop-tape-miner calibrate --video "$V" --times 120,900,1500 --out "$RUN/calib" --propagate 140,160
+uv run hoop-tape-miner calibrate --video "$V" --times 330,830,1500,2100 --out "$RUN/calib" --grid
 ```
 
-An OpenCV picker asks for court landmarks one by one at each `--times` frame (a minimap shows the target; keys: `s` skip, `u` undo, Enter accept, Esc quit). Choose frames covering both halves and the camera's zoom range; `--propagate` adds keyframes by camera tracking. Picks are saved to `$RUN/calib/points.json` (`--points` replays them without a display). Output: `$RUN/calib/keyframes.json` plus `ov_<t>.jpg` overlays. Check the overlays: projected lines sit on the painted lines.
+Writes `grid_<t>.jpg` per time: the frame with a labelled pixel grid and a numbered court landmark map below it. Pick four frames inside play covering both halves and the camera's zoom range (`run` chooses them from `periods`). Read each grid image and write `$RUN/calib/points.json`, 4–6 clearly visible landmarks per frame:
 
-## 3. CV stages (about 1 h per game on an 8 GB GPU)
+```
+{"330": [{"name": "L_lane_base_far", "px": [180, 355]}, {"court": [14, 15], "px": [1137, 282]}]}
+```
+
+`name` is a landmark from the map (`calibrate -h` lists them); `court` gives raw court metres instead (x from the left baseline, y from the near sideline). Then solve and verify:
+
+```
+uv run hoop-tape-miner calibrate --video "$V" --times 330,830,1500,2100 --out "$RUN/calib" --points "$RUN/calib/points.json"
+```
+
+Each frame prints `PASS` or `WEAK` with its fit and its worst three points (`loo` = how far the other points put it; a large one marks the misplaced point); exit 2 while any frame is weak or missing. Move or drop the points it names and run again until every frame passes, then look at the `ov_<t>.jpg` overlays (the lane and three-point arc on the painted lines matter most). Only passing frames go to `keyframes.json`. Once all pass, add `--propagate 60,1040,...` to add keyframes by tracking the camera from the solved ones (backward and forward). With a display you can also click the points in a window (no `--grid` / `--points`).
+
+Tips: prefer sharp line crossings (lane x baseline, free-throw line ends, halfway line x far sideline); a raw `court` point is fine for a painted feature you can see, e.g. the centre circle `[14, 7.5]`. Avoid circle-top landmarks unless they are clear (in perspective the top is where the tangent runs parallel to the baseline, not the outermost pixel). To read pixels precisely, crop and enlarge a region of the grid image. Gyms often have other courts' lines painted on the same floor, and the near sideline may hide behind chairs.
+
+## 4. CV stages (about 1 h per game on an 8 GB GPU)
 
 ```
 uv run hoop-tape-miner extract --video "$V" --out "$RUN" --calib "$RUN/calib/keyframes.json" --fps 10 > workspace/logs/extract.log 2>&1
@@ -57,41 +127,25 @@ uv run hoop-tape-miner embed   --run "$RUN" --video "$V" > workspace/logs/embed.
 uv run hoop-tape-miner tracks  --run "$RUN" --video "$V" --game "$GJ" > workspace/logs/tracks.log 2>&1   # pass 1: stops at the montage
 ```
 
-Optional, if court lines drift: `uv run hoop-tape-miner recalib --run "$RUN" --video "$V" --calib "$RUN/calib/keyframes.json"` (`--dry` keeps existing outputs). Run long stages in the background and check the log tails. Do not re-run `extract` if `$RUN` already has `detections.pkl` and `camera.npz`.
+Do not re-run `extract` if `$RUN` already has `detections.pkl` and `camera.npz`. If court lines drift: `uv run hoop-tape-miner recalib --run "$RUN" --video "$V" --calib "$RUN/calib/keyframes.json"` (`--dry` keeps existing outputs).
 
-## 4. Checkpoint: name the team clusters
+## 5. Team clusters, then tracks, jersey, analyze
 
 1. Open `$RUN/cluster_montage.jpg`.
-2. Write `$RUN/cluster_names.json`, one label per cluster id: `us`, `them`, `ref` or `unk`, e.g. `{"0": "unk", "1": "them", "2": "us", "3": "ref", "4": "us", "5": "unk"}`.
-3. Re-run `tracks` (pass 2), then `jersey`:
+2. Write `$RUN/cluster_names.json`, one label per cluster id: `us`, `them`, `ref` or `unk`, e.g. `{"0": "unk", "1": "them", "2": "us", "3": "ref", "4": "us", "5": "unk"}`. Jersey descriptions are `us.label` / `them.label` in `$GJ`.
+3. Then:
 
 ```
-uv run hoop-tape-miner tracks --run "$RUN" --video "$V" --game "$GJ" > workspace/logs/tracks.log 2>&1
-uv run hoop-tape-miner jersey --run "$RUN" --video "$V" > workspace/logs/jersey.log 2>&1
-```
-
-## 5. Checkpoint: periods, then analyze
-
-Fill `periods` in `$GJ`: playing periods in seconds of our video, e.g. two halves `[[0, 1000], [1120, 2184]]` (gaps are shaded as breaks). Then:
-
-```
+uv run hoop-tape-miner tracks  --run "$RUN" --video "$V" --game "$GJ" > workspace/logs/tracks.log 2>&1
+uv run hoop-tape-miner jersey  --run "$RUN" --video "$V" > workspace/logs/jersey.log 2>&1
 uv run hoop-tape-miner analyze --run "$RUN" --game "$GJ"
 ```
 
 ## 6. Official stats and result
 
-Fill `result` in `$GJ` (final, halftime, home/away) as soon as you know it; the page header reads it.
-
-- **League feed**: `official` currently reads one league format, a box-score JSON plus a point-chart JSON export:
-
-```
-uv run hoop-tape-miner official --boxscore box.json --pointchart points.json --us-home true --out "$RUN/official.json" \
-    --video "$V" --official-video league_video.mp4     # last two only if the league has its own video, for alignment
-```
-
-  Fetching may need a login; do it via the browser-check subagent with credentials from a secrets file outside the repo (never print them). Keep the exports in `$RUN/official/`.
-- **Other leagues**: convert their data to the same `official.json` shape (`final`, `totals`, `players`, `score_flow`), or write the score flow by hand while watching: `{"score_flow": [{"our_video_t": 61.5, "team": "us", "points": 2, "score_us": 2, "score_them": 0}, ...]}`.
-- **No data at all**: nothing to do. `coach-sheets` notices there is no `official.json`, says so, and builds the sheets without a score flow; the review works from the recording alone. Skip `plusminus` and `momentum` (they need a score flow), put the final score in `game.json` `result`, and say in the report's sources line that it rests on film review alone.
+- **League link**: `fetch` already wrote `$RUN/official.json` and `result`. Nothing to do.
+- **Other leagues**: convert their data to the same `official.json` shape (`final`, `totals`, `players`, `score_flow`), or write the score flow by hand while watching: `{"score_flow": [{"our_video_t": 61.5, "team": "us", "points": 2, "score_us": 2, "score_them": 0}, ...]}`. `official --boxscore box.json --pointchart points.json --us-home true --out "$RUN/official.json"` converts saved Glory League exports.
+- **No data at all**: set `"no_league_data": true` in `$GJ` and put the final score in `result`. `coach-sheets` builds the sheets without a score flow, `momentum` is skipped, and the report's sources line says it rests on film review alone.
 - Alignment: every score-flow event needs `our_video_t`. If the video was edited (cuts, trimmed breaks), check three known baskets by eye and correct `video_alignment.segments` / the times.
 
 ## 7. Film review (the core)
@@ -103,7 +157,7 @@ uv run hoop-tape-miner coach-sheets --run "$RUN" --game "$GJ" --out "$RUN/review
     > workspace/logs/coach-sheets.log 2>&1
 ```
 
-   Writes `p<pid>_<k>.jpg` sheets, `manifest.json`, `part<N>.json`, `lineup_intervals.json` and `brief_part<N>.md` (filled from `prompts/film_review_brief.md`). Read one brief: no `{...}` left, team names and jersey colours right. To fix values, edit `$GJ` and re-run with `--skip-sheets` (seconds, not minutes).
+   Writes `p<pid>_<k>.jpg` sheets, `manifest.json`, `part<N>.json`, `lineup_intervals.json` and `brief_part<N>.md` (filled from `prompts/film_review_brief.md`). Read one brief: no `{...}` left, team names and jersey colours right. To fix values, edit `$GJ` and re-run with `--skip-sheets`.
 2. Launch one subagent per part, **at most 3 at once**. Each gets only its `brief_part<N>.md` path. It reads every sheet of its part, writes `coach_part<N>.json`, `memo_part<N>.md`, `notes_part<N>.txt` into `$RUN/review_v1`, and replies in at most 8 lines. Do not read the sheets yourself. Close-ups: `uv run hoop-tape-miner coach-sheets zoom SHEET TILE X Y W H OUT [--scale 3]`.
 3. Check every `coach_part<N>.json` parses and covers all pids of its part; re-run a part that does not.
 4. Aggregate. Choose the game's stretches (start, decisive run, comeback, finish) from the score flow first:
@@ -116,24 +170,20 @@ uv run hoop-tape-miner plusminus --lineup "$RUN/review_v1/lineup_intervals.json"
     --official "$RUN/official.json" --out "$RUN/review_v1/pm_<N>.json" --player <N>
 ```
 
-   CV lineups are fragmentary. For focus players, write `film_stints.json` (same shape, `{"us#<N>": [[t0, t1], ...]}`) from substitutions seen in the memos and notes; later `--lineup` files override earlier ones. `--event-times` maps feed times to the real basket times when the feed lags.
-
-Optional event review for shot charts: `uv run hoop-tape-miner review --run "$RUN" --video "$V" --game "$GJ"` writes `$RUN/review/`; reviewers follow `docs/review_protocol.md` and write `events_part<N>.json` + `coverage_part<N>.json` there; then `uv run hoop-tape-miner merge-reviews --run "$RUN" --review review` writes `events.json` and `review_coverage.json`.
+   CV lineups are fragmentary. For the focus player, write `film_stints.json` (same shape, `{"us#<N>": [[t0, t1], ...]}`) from substitutions seen in the memos and notes; later `--lineup` files override earlier ones. `--event-times` maps feed times to the real basket times when the feed lags.
 
 ## 8. Figures
 
 ```
-uv run hoop-tape-miner report   --run "$RUN" --out "$RUN/report" --game "$GJ" [--events "$RUN/events.json" --coverage "$RUN/review_coverage.json"]
-uv run hoop-tape-miner momentum --official "$RUN/official.json" --game "$GJ" --lineup "$RUN/review_v1/lineup_intervals.json" --out "$G/momentum.en.png" --lang en
 uv run hoop-tape-miner momentum --official "$RUN/official.json" --game "$GJ" --lineup "$RUN/review_v1/lineup_intervals.json" --out "$G/momentum.png" --lang zh
-uv run hoop-tape-miner replay   --run "$RUN" --out "$RUN/replay" --game "$GJ" --pid 13     # optional tactics-board clip
+uv run hoop-tape-miner momentum --official "$RUN/official.json" --game "$GJ" --lineup "$RUN/review_v1/lineup_intervals.json" --out "$G/momentum.en.png" --lang en
 ```
 
-`momentum` detects scoring runs itself (`--min-run 8`); pass `--stretches "Start:0-450,Run:450-1272,..."` to match the stretches you chose in step 7. `--players us#4,us#7` limits the on-court lanes. `report --focus <N>` overrides `us.focus_player`.
+`momentum` detects scoring runs itself (`--min-run 8`); pass `--stretches "Start:0-450,Run:450-1272,..."` to match the stretches you chose in step 7. `--players us#4,us#7` limits the on-court lanes.
 
 ## 9. Fact sheets (before any prose)
 
-Write `$RUN/review_v1/players_facts.md` (all our players) and `player<N>_facts.md` per focus player from the coach parts, memos, notes, `summary.json`, plus-minus and official data:
+Write `$RUN/review_v1/players_facts.md` (all our players) and `player<N>_facts.md` for the focus player from the coach parts, memos, notes, `summary.json`, plus-minus and official data:
 
 - official line, estimated minutes (a lower bound; say so), on/off score;
 - scoring attribution checked against official totals (mark undecided cases, do not force them);
@@ -143,17 +193,14 @@ Write `$RUN/review_v1/players_facts.md` (all our players) and `player<N>_facts.m
 
 Every claim in the reports must trace back to these sheets.
 
-## 10. Write the reports (in `$G`)
+## 10. Reports and film clips
 
 | Output | Guide |
 |---|---|
-| `README.md` + `README.en.md` | `prompts/coach_report.md` |
-| `player-<N>/README.md` + `README.en.md` per focus player | `prompts/player_deep_dive.md` |
-| `workspace/teams/<opponent-slug>/README.md` (update) | `prompts/opponent_dossier.md` |
-| `listen.zh.md` + `listen.en.md` in `$G` and in each `player-<N>/` | `prompts/narration.md` |
-| `workspace/players/<N>/cues.court.<lang>.md`, `cues.warmup.<lang>.md` (optional) | `prompts/court_cues.md` |
+| `$G/README.md` + `README.en.md` | `prompts/coach_report.md` |
+| `$G/player-<N>/README.md` + `README.en.md` for the focus player | `prompts/player_deep_dive.md` |
 
-Language convention (current code): the HTML page is bilingual and reads exactly `README.md` (Chinese) and `README.en.md` (English); both must exist. The listen button appears only when both `listen.zh.mp3` and `listen.en.mp3` exist. Copy the figures a README embeds next to it (e.g. `momentum*.png` into `player-<N>/` too).
+The HTML page is bilingual and reads exactly `README.md` (Chinese) and `README.en.md` (English); both must exist. Copy the figures a README embeds next to it (e.g. `momentum*.png` into `player-<N>/` too).
 
 Film clips: while writing, put `![caption](clip:mm:ss-mm:ss)` under the claims that matter most (selection, window and caption rules: "Film clips" in `prompts/coach_report.md`). Then cut them:
 
@@ -162,30 +209,18 @@ uv run hoop-tape-miner clips "$G" --video "$V"
 uv run hoop-tape-miner clips "$G/player-<N>" --video "$V"
 ```
 
-Writes `clips/<from>-<to>.mp4` (480p, about 1 MB per 10 s) and a poster per marker; existing files are kept (`--force` re-cuts). Check each clip shows the play its caption describes (a subagent can read 3–4 frames per clip with ffmpeg) before building the HTML.
+Writes `clips/<from>-<to>.mp4` (480p, about 1 MB per 10 s) and a poster per marker; existing files are kept (`--force` re-cuts). Check each clip shows the play its caption describes (a subagent can read 3–4 frames per clip with ffmpeg).
 
 ## 11. Narration
+
+Write `listen.<lang>.md` for each language in `$G` and in `$G/player-<N>/` (`prompts/narration.md`), then:
 
 ```
 uv run hoop-tape-miner narrate "$G"
 uv run hoop-tape-miner narrate "$G/player-<N>"
-uv run hoop-tape-miner narrate --script workspace/players/<N>/cues.court.en.md --chime --gap 6 --loud
-uv run hoop-tape-miner narrate --script workspace/players/<N>/cues.warmup.en.md --loud
 ```
 
-`--lang en` renders one language only; `--rate "-5%"` slows the voice. Measure each MP3 with `ffprobe -v error -show_entries format=duration -of csv=p=0 <file>.mp3` and make the "about N minutes" line in the script match; re-render if it changed. Narration sends the script text to Microsoft's TTS service (see `docs/privacy.md`).
-
-### Explained video (optional, recommended for the team report)
-
-Write `film.<lang>.md` from the finished report following `prompts/film.md` (scenes: clips with freeze frames that ring the players, court diagrams in `plays/*.json` for the plan, stat scenes, figures, short chapter cards; the narration is written for what is on screen). Check new clip windows and freeze moments on a contact sheet first; `--run "$RUN"` points at the CV tracks when they are not next to the video. Then:
-
-```
-uv run hoop-tape-miner film "$G" --video "$V" --dry          # checks the script, lists scenes with estimated lengths
-uv run hoop-tape-miner film "$G" --video "$V" --scenes 1-4   # short preview: fonts, subtitles, timing
-uv run hoop-tape-miner film "$G" --video "$V" > workspace/logs/film.log 2>&1
-```
-
-Writes `film.<lang>.mp4` (720p, about 5 MB per minute). Let a subagent check a few frames before sending: the title card, a chart, a clip and its slow replay, every freeze (is the ring on the right player?) and every diagram. Like the narration, the text goes to Microsoft's TTS service.
+`--lang en` renders one language only; `--rate "-5%"` slows the voice. Measure each MP3 with `ffprobe -v error -show_entries format=duration -of csv=p=0 <file>.mp3` and make the "about N minutes" line in the script match; re-render if it changed. The listen button appears when both `listen.zh.mp3` and `listen.en.mp3` exist. Narration sends the script text to Microsoft's TTS service (see `docs/privacy.md`).
 
 ## 12. HTML
 
@@ -194,33 +229,51 @@ uv run hoop-tape-miner html "$G"
 uv run hoop-tape-miner html "$G/player-<N>"
 ```
 
-Writes `index.html` in each folder (team names, colours and score from `game.json`, found in the folder or its parent). Clips stay as files in `clips/` next to it; `--share` embeds them.
+Writes `index.html` in each folder (team names, colours and score from `game.json`, found in the folder or its parent). Audio and clips stay as files next to it.
 
 ## 13. QA via the browser-check subagent
 
-Ask it (text result only, at most 10 lines) to serve `$G` over http and check, for each `index.html` and each language: title and score band correct, every image loads, audio plays and its length label matches, every clip plays and the slow-mo button works, tables do not overflow at 390 px width, no console errors, no dead links, no local paths visible. Fix and re-render until it passes.
+Ask it (text result only, at most 10 lines) to serve `$G` over http and check, for each `index.html` and each language: title and score band correct, every image loads, audio plays and its length label matches, every clip plays and the slow-mo button works, tables do not overflow at 390 px width, no console errors, no dead links, no local paths visible. Fix and re-render until it passes, then write `$G/qa.md` with `PASS` as its first word (the run waits for that).
 
-## 14. Share
-
-Send the team a link rather than a file (free on Cloudflare; `npx wrangler login` once):
+## 14. Publish the pages
 
 ```
-uv run hoop-tape-miner publish "$G" "$G/player-<N>" --deploy --project <name>   # --project only the first time
+uv run hoop-tape-miner publish "$G" "$G/player-<N>" --deploy [--project <name>]   # --project only the first time
 ```
 
-- Each folder keeps the same random URL across updates: after any edit, re-run this and the link already sent shows the new version. No one downloads anything again.
+(`run --publish` does this.) Then have the browser-check subagent spot-check the live URLs.
+
+- Each folder keeps the same random URL across updates: after any edit, publish again and the link already sent shows the new version. Links are stored in `workspace/publish.json`.
 - Team reports are also listed on a hub page (its link is printed); send the hub once and new games appear on it. `player-<N>` reports are only reachable through their own link: send each one only to that player.
-- Audio and clips stay as separate files behind a small Worker that serves the Range requests iPhones need for video.
-- Run the QA step against `$HOOP_WORKSPACE/site/` (serve it over http) before `--deploy`, then spot-check the live URLs.
+- Audio and clips stay as separate files behind a small Worker that serves the Range requests iPhones need for video. The explained video is never published.
 - Links are unlisted, not password-protected. `--new-link` retires a leaked link. Read `docs/privacy.md` before sending frames of players to anyone.
 
-Fallback, a single file (offline, or where workers.dev is blocked, e.g. mainland China):
+Reply to the user with: the hub link, the team page link, the focus player's link (and who gets it).
+
+## 15. Explained video
+
+Write `film.<lang>.md` for each language from the finished team report following `prompts/film.md` (scenes: clips with freeze frames that ring the players, court diagrams in `plays/*.json` for the plan, stat scenes, figures, short chapter cards; the narration is written for what is on screen). Check new clip windows and freeze moments on a contact sheet first. Then:
 
 ```
-uv run hoop-tape-miner html "$G" --share --out "$PWD/workspace/share/<us>_vs_<them>_<date>.html"
+uv run hoop-tape-miner film "$G" --video "$V" --run "$RUN" --dry          # checks the script, lists scenes with estimated lengths
+uv run hoop-tape-miner film "$G" --video "$V" --run "$RUN" --scenes 1-4   # short preview: fonts, subtitles, timing
+uv run hoop-tape-miner film "$G" --video "$V" --run "$RUN" > workspace/logs/film.log 2>&1
 ```
 
-`--share` embeds the audio and clips and strips local paths and repo links, so the single file can be sent privately to the team (`--out` is a file name inside the folder or an absolute path). Re-run the QA step on the shared file. Never push workspace content or media.
+Writes `film.<lang>.mp4` (720p H.264, `--crf 23` by default; raise it for a smaller file) and a poster `film.<lang>.jpg`. Let a subagent check a few frames: the title card, a chart, a clip and its slow replay, every freeze (is the ring on the right player?) and every diagram. Like the narration, the text goes to Microsoft's TTS service. Give the user both file paths; they send the videos themselves.
+
+## Optional extras
+
+Not part of the default run; make them when the user asks.
+
+| Extra | How |
+|---|---|
+| Opponent dossier `workspace/teams/<slug>/README.md` | `new-game --dossier` creates it; update it with `prompts/opponent_dossier.md` |
+| On-court cue loops | `prompts/court_cues.md` -> `workspace/players/<N>/cues.court.<lang>.md`, then `narrate --script <file> --chime --gap 6 --loud` |
+| Tactics-board replay | `replay --run "$RUN" --out "$RUN/replay" --game "$GJ" --pid 13` |
+| Figures from CV (shot zones, heat maps) | `report --run "$RUN" --out "$RUN/report" --game "$GJ" [--events "$RUN/events.json" --coverage "$RUN/review_coverage.json"]` |
+| Event review for shot charts | `review --run "$RUN" --video "$V" --game "$GJ"`; reviewers follow `docs/review_protocol.md`, then `merge-reviews --run "$RUN" --review review` |
+| Single sendable file (offline, or where workers.dev is blocked) | `html "$G" --share --out "$PWD/workspace/share/<us>_vs_<them>_<date>.html"`: embeds audio and clips, strips local paths; re-run QA on it |
 
 ## Working rules
 
@@ -228,3 +281,4 @@ uv run hoop-tape-miner html "$G" --share --out "$PWD/workspace/share/<us>_vs_<th
 - Subagents: at most 3 at once; they write results to files and reply in a few lines.
 - Browser work and screenshots go to the browser-check subagent, not the main session.
 - Never invent a result; "unclear" and "likely" are valid answers.
+- Never commit anything from `workspace/`, any media, or credentials.

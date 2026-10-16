@@ -10,9 +10,9 @@
 
 English · [中文](README.zh.md)
 
-AI basketball video analysis for amateur and club teams. Turn the video of your game into a coach's report: what happened, why you lost or won, how the opponent plays, what each player should practise, and a narrated version your teammates can listen to.
+AI basketball video analysis for amateur and club teams. Paste the link of your game and get back what a coach would give you: what happened, why you won or lost, what the opponent did and what to work on next. You get it as a page to read or listen to, and as a video that explains it over the plays.
 
-You bring one game video. Your AI coding agent ([Claude Code](https://claude.com/claude-code) or [Codex](https://openai.com/codex)) runs the computer-vision pipeline in this repo on your own GPU, reviews the film like a coach, and writes the report. No subscription, no upload of your video to a sports-analytics service.
+Your AI coding agent ([Claude Code](https://claude.com/claude-code) or [Codex](https://openai.com/codex)) runs the computer-vision pipeline in this repo on your own GPU, reviews the film like a coach, and writes everything. No subscription, no upload of your video to a sports-analytics service.
 
 **Who it's for**
 
@@ -24,17 +24,17 @@ You bring one game video. Your AI coding agent ([Claude Code](https://claude.com
 
 ## What you get
 
-For every game, one folder with:
+Two things per game:
 
-- **A coach report** in English and Chinese, switchable on the page: how the game went, the opponent's key players and habits, what worked and what didn't for you, a game plan for the rematch, and a practice plan.
-- **A review of every player on your team**, with what went well, what to fix, and two drills each. You can send it to the whole team.
-- **Charts** of the score margin and scoring runs, shot zones, heat maps, and team comparisons.
-- **A narrated MP3** of the report in both languages, with a big play button on the page. Teammates without time to read can listen on the way to practice.
-- **An explained video**: the narration plays over the key plays and charts it talks about, with subtitles burned in (half-speed replays when the explanation runs longer than the play). The team can just press play.
-- **One shareable HTML file**: images, audio and film clips embedded, opens offline, works in chat apps.
-- **Optional extras:** a private deep dive for one player, and a short looping MP3 of on-court cues ("two dribbles, find a man") to listen to while you play.
+1. **Pages, shared as links**: a team page and a page for one focus player, each in English and Chinese (switch on the page).
+   - Team page: how the game went, the opponent's key players and habits, what worked and what didn't, a game plan for the rematch, a practice plan, and a review of every player with two drills each.
+   - Player page: a deep dive for one player, sent only to them.
+   - A big play button for the **narration** of each page, for teammates who would rather listen on the way to practice.
+   - **Film clips right next to the analysis** (with slow motion), and a score-margin chart with the scoring runs.
+   - Each page keeps one stable, unlisted link (free on Cloudflare). Publish again after an edit and the link you already sent shows the new version.
+2. **An explained video** per language: the narration plays over the key plays and charts it talks about, with freeze frames that ring the players and subtitles burned in. It is a normal MP4 that you send yourself; it is never uploaded anywhere.
 
-Every claim in the report points to a video time, and the key plays come with **film clips right next to the analysis** (with slow motion), so the team can watch the moment while discussing what to change.
+Every claim points to a video time, so the team can watch the moment while discussing what to change.
 
 | Bilingual report | Charts | On a phone |
 |---|---|---|
@@ -42,121 +42,117 @@ Every claim in the report points to a video time, and the key plays come with **
 
 *Screenshots are from a real game with the team names changed.*
 
+The code can also make an opponent dossier, on-court cue loops, a tactics-board replay, shot-zone charts and a single offline HTML file. These are optional extras (see the [playbook](docs/playbook.md#optional-extras)).
+
 ## How it works
 
 ```
-game video ──► computer vision (GPU, ~1 h) ──► film review by AI agents ──► report + charts + narration ──► one HTML file
-               players, ball, court position      coach checklist per         written from structured facts
-               teams, jersey numbers              stretch of the game         with video times for every claim
+league link ──► fetch ──────────────► computer vision (GPU, ~1 h) ──► film review ──► pages, narration ──► links
+                video, box score,     players, ball, court,           by AI agents     clips                + explained video
+                score flow, rosters   teams, jersey numbers
 ```
 
-1. **Computer vision:** detects players and the ball every frame, maps them onto the court, splits the two teams by jersey colour, and reads jersey numbers.
-2. **Possessions and lineups:** who was on court, who had the ball, when each possession started and ended. If your league publishes a box score, it is aligned with the video.
-3. **Film review:** the game is cut into annotated frame sheets. Your agent sends subagents through them with a coach's checklist covering transition defence, ball pressure, shot selection and more.
-4. **Facts first, then writing:** reviews are merged into fact sheets (plus-minus, stints, patterns, clips). The report is written from those facts using the templates in [`prompts/`](prompts/).
-5. **Render:** charts, narration (Microsoft Edge neural voices), short film clips of the key plays (cut with ffmpeg from the windows the report marks) and a single self-contained HTML page.
+1. **Fetch:** the agent reads the game from the league site (teams, rosters, score, box score, the score after every basket) and downloads the game video.
+2. **Computer vision:** detects players and the ball in every frame, maps them onto the court, splits the two teams by jersey colour, reads jersey numbers, and works out lineups and possessions. The agent calibrates the court itself by reading frames with a grid drawn on them; nobody has to click points.
+3. **Film review:** the game is cut into annotated frame sheets. Subagents go through them with a coach's checklist covering transition defence, ball pressure, shot selection and more.
+4. **Facts first, then writing:** reviews are merged into fact sheets (plus-minus, stints, patterns, clips). The pages are written from those facts using the guides in [`prompts/`](prompts/).
+5. **Render and share:** narration (Microsoft Edge neural voices), clips of the key plays, the HTML pages (published as links) and the explained video.
 
-Full details: [docs/pipeline.md](docs/pipeline.md).
+One command drives all of it: `hoop-tape-miner run`. It knows which file each step produces, so it resumes where it stopped and only pauses where the agent has to look or write. Full details: [docs/pipeline.md](docs/pipeline.md).
 
 ## Quick start
 
 ### 1. Requirements
 
 - An **NVIDIA GPU** with 8 GB or more of VRAM, on Windows or Linux. The jersey reader needs CUDA.
-- [uv](https://docs.astral.sh/uv/), Python 3.11, and `ffmpeg` on your PATH.
+- [uv](https://docs.astral.sh/uv/), Python 3.11, and `ffmpeg` on your PATH. Node.js for publishing and the page checks.
 - About 20 GB of disk for the models. They download on first use.
-- Claude Code or Codex. The pipeline can also be run by hand, but the film review and the writing are agent work.
-- One full game video from a single camera on the side of the court (a typical club recording).
+- Claude Code or Codex. The film review and the writing are agent work.
+- A game filmed by one camera on the side of the court: a league video (link) or your own recording.
 
 ### 2. Install
 
 ```bash
-git clone https://github.com/mariusDing/hoop-tape-miner.git
+git clone https://github.com/mariusDing/hoop-tape-miner.git    # or your fork
 cd hoop-tape-miner
 uv sync
 uv run hoop-tape-miner          # lists every stage
 ```
 
-### 3. Start a game
+### 3. Tell it who you are (once)
 
 ```bash
-uv run hoop-tape-miner new-game --opponent "Red Foxes" --date 2026-10-14 --video path/to/game.mp4 --us-team "Night Owls"
+mkdir -p workspace && cp templates/team.example.json workspace/team.json
 ```
 
-This creates `workspace/teams/red-foxes/2026-10-14/` with a `game.json` to fill in: team names, jersey colours, rosters and the final score. Everything in `workspace/` stays on your machine and is never committed.
+Fill in your team's name as the league shows it, your jersey colour, the focus player's number, the report languages, and the path of a secrets file **outside the repo** with your league login (`GLORY_EMAIL=...` and `GLORY_PASSWORD=...` on two lines). Everything in `workspace/` stays on your machine and is never committed.
 
-### 4. Let your agent run it
+For the links, create a free Cloudflare account and run `npx wrangler login` once.
 
-Open Claude Code or Codex in the repo and say:
+### 4. After each game, paste the link
 
-> Analyse the game in `workspace/teams/red-foxes/2026-10-14` following docs/playbook.md. We are Night Owls in dark blue.
+In Claude Code, inside the repo:
 
-The agent follows [docs/playbook.md](docs/playbook.md) step by step ([`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md) point it there). It will stop and ask you twice:
-
-1. **Court calibration:** confirm a few court points on a frame.
-2. **Team colours:** confirm which colour cluster is your team.
-
-When it finishes, open `workspace/teams/red-foxes/2026-10-14/index.html`.
-
-### 5. Share it
-
-```bash
-uv run hoop-tape-miner html workspace/teams/red-foxes/2026-10-14 --share --out Night-Owls_vs_Red-Foxes.html
+```
+/game https://my.gloryleague.basketball/game/<id>/overview
 ```
 
-The shared file embeds the film clips (480p, about 1 MB per 10 s of clip), so a report with a dozen clips is a few tens of MB. Clips show real players: send it to the team only (see [docs/privacy.md](docs/privacy.md)).
+In Codex (or any agent), say: *"Here is our game: `<link>`. Run it following AGENTS.md."*
 
-Or give the team one link instead of a file, free on Cloudflare (Workers static assets, the successor of Pages). Each report gets a random, stable address, so an updated report shows up behind the same link:
+The agent runs `uv run hoop-tape-miner run <link>` and does the steps that need eyes: court points, which jersey colour is which team, the film review, the writing, and a browser check of the pages. It then publishes the pages and replies with the links and the paths of the two videos. Expect about an hour on the GPU plus the agent's work.
 
-```bash
-npx wrangler login    # once: free Cloudflare account
-uv run hoop-tape-miner publish workspace/teams/red-foxes/2026-10-14 --deploy --project night-owls-film
-```
+**Another league, or no league?** Start from your own video instead: `uv run hoop-tape-miner new-game --opponent "Red Foxes" --date 2026-10-14 --video game.mp4 --us-team "Night Owls"`, fill `game.json`, then `run` that folder. The box score and score flow are optional: convert your league's data to the `official.json` shape (see [playbook step 6](docs/playbook.md#6-official-stats-and-result)), or let the report rest on the film review alone. A `fetch` for another league site is a welcome contribution.
 
-The pages are unlisted (not indexed, random paths), not password-protected: anyone with a link can open it.
+### 5. Share
 
-The result is a single file with images and audio inside. Send it in any chat app. If an in-app viewer blocks scripts, the page falls back to the phone's own audio player.
+- Pages: send the team the hub link (new games appear on it) or the team page link; send the player page only to that player. Links are unlisted, not password-protected.
+- Explained video: send `film.zh.mp4` / `film.en.mp4` in your team chat.
+- Clips and videos show real players: share them with the team only (see [docs/privacy.md](docs/privacy.md)).
 
 ## Commands
 
 | Stage | What it does |
 |---|---|
-| `new-game` | create the game folder and `game.json` |
-| `calibrate` | court calibration keyframes |
+| `run` | one game end to end: every stage below in order, resuming, pausing where the agent must judge (`--status`, `--publish`) |
+| `fetch` | league game link → `game.json`, box score and score flow, game video |
+| `new-game` | create a game folder and `game.json` by hand (no league data) |
+| `calibrate` | court calibration: `--grid` writes frames to read, `--points` solves and checks them |
 | `extract` → `embed` → `tracks` → `jersey` | computer vision: detections, team split, tracking, jersey numbers |
 | `analyze` | identities, possessions, tactical metrics |
-| `official` | import a league box score and align it to the video (optional) |
-| `coach-sheets` → `merge-reviews` → `coach-summary` | film-review sheets, merge and aggregate the agents' reviews |
-| `plusminus`, `report`, `momentum`, `replay` | facts and figures |
-| `narrate` | spoken script → MP3 (`--chime --gap 6 --loud` makes an on-court cue loop) |
+| `coach-sheets` → `coach-summary`, `plusminus` | film-review sheets, and the numbers from the agents' reviews |
+| `momentum` | score-margin chart with scoring runs |
 | `clips` | cut the film clips a report marks (`![caption](clip:07:24-07:33)`) |
-| `film` | explained video: narration over the clips, freeze frames with the players ringed, court diagrams and charts, with subtitles (`film.<lang>.md` → `film.<lang>.mp4`) |
-| `html` | report folder → one bilingual HTML page (`--share` for a single sendable file) |
-| `publish` | reports → private-link website on Cloudflare, one stable link per report |
+| `narrate` | narration script → MP3 |
+| `html` | report folder → one bilingual HTML page |
+| `publish` | pages → private-link website on Cloudflare, one stable link per report |
+| `film` | explained video: narration over clips, freeze frames, court diagrams and charts, with subtitles |
+| `official`, `recalib`, `report`, `replay`, `review`, `merge-reviews` | optional: league JSON import, re-run court mapping, CV figures, tactics-board replay, event review |
 
 Run `uv run hoop-tape-miner <stage> -h` for the options of each stage.
 
 ## Project layout
 
 ```
-docs/playbook.md         the procedure your agent follows, video → report
-prompts/                 writing guides: film review brief, coach report, player deep dive, narration, court cues
-templates/               game.json and opponent dossier skeletons
-src/hoop_tape_miner/     the pipeline (one module per stage)
-workspace/               YOUR data: videos, runs, reports (gitignored)
+.claude/commands/game.md   the /game command for Claude Code
+AGENTS.md                  instructions for any agent (CLAUDE.md points here)
+docs/playbook.md           the procedure the agent follows, link → pages + video
+prompts/                   writing guides: film review brief, coach report, player deep dive, narration, explained video
+templates/                 team.json, game.json and opponent dossier skeletons
+src/hoop_tape_miner/       the pipeline (one module per stage; run.py drives them)
+workspace/                 YOUR data: team profile, games, reports (gitignored)
 ```
 
 ## FAQ
 
-**Does it need the internet?** The models download once. After that the vision and analysis run locally. Narration sends the narration text (not the video) to Microsoft's text-to-speech service. Your agent runs on whichever service you use it with.
+**Does it need the internet?** The models download once. After that the vision and analysis run locally. Fetching reads your league's site, narration sends the script text (not the video) to Microsoft's text-to-speech service, and publishing uploads the pages, audio and clips (not the full video) to your Cloudflare account. Your agent runs on whichever service you use it with.
 
 **Can I run it without a GPU, or on a Mac?** Not yet. Detection falls back to CPU, but that is very slow, and the jersey reader needs CUDA.
 
-**My league has no box score.** That's fine. Put the final score in `game.json` and the report is built from the film review alone.
+**My league has no box score, or isn't Glory League.** That's fine. Start with `new-game`, put the final score in `game.json`, and the report is built from the film review alone. If your league publishes data, convert it to the `official.json` shape, or add a `fetch` for it.
 
 **How accurate is it?** The vision gives positions and possessions. The judgement comes from the film review, which flags anything uncertain (an unreadable jersey, for example) as "likely". Check the clips it points to before you act on them.
 
-**Which languages?** The report and narration come in English and Chinese.
+**Which languages?** The pages, narration and video come in English and Chinese.
 
 **Privacy.** The reports name players and show frames of real people. Read [docs/privacy.md](docs/privacy.md) before sharing, especially if minors play in your league.
 
@@ -166,7 +162,7 @@ Working end to end on real games (one side-on camera, NVIDIA GPU). Known limits 
 
 - [ ] Run without CUDA (CPU or Apple Silicon jersey reader)
 - [ ] A synthetic demo game anyone can run, with no real players in it
-- [ ] Box-score importers for more leagues (today: one league format, see [`official.py`](src/hoop_tape_miner/official.py))
+- [ ] `fetch` for more leagues (today: Glory League, see [`fetch.py`](src/hoop_tape_miner/fetch.py))
 - [ ] More report and narration languages beyond English and Chinese
 - [ ] Better handling of panning or phone-recorded video
 
@@ -174,7 +170,7 @@ Ideas and votes are welcome in [Discussions](https://github.com/mariusDing/hoop-
 
 ## Contributing
 
-Contributions are welcome, from a typo fix to a new league importer. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [good first issues](https://github.com/mariusDing/hoop-tape-miner/issues?q=is%3Aopen+label%3A%22good+first+issue%22). Ask questions in [Discussions](https://github.com/mariusDing/hoop-tape-miner/discussions).
+Contributions are welcome, from a typo fix to a new league fetcher. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [good first issues](https://github.com/mariusDing/hoop-tape-miner/issues?q=is%3Aopen+label%3A%22good+first+issue%22). Ask questions in [Discussions](https://github.com/mariusDing/hoop-tape-miner/discussions).
 
 One hard rule: never attach game videos, frames, rosters or names of real players to issues or pull requests. See [docs/privacy.md](docs/privacy.md).
 

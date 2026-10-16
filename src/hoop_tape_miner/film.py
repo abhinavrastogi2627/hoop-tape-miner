@@ -28,7 +28,9 @@ Each paragraph is spoken by edge-tts (needs internet: the text is sent to Micros
 $FFPROBE override the binaries).
 
 usage: hoop-tape-miner film workspace/teams/<opponent>/<date> [--lang zh en] [--video game.mp4] [--run run/]
-       [--height 720] [--font "Microsoft YaHei"] [--scenes 3-6] [--dry]
+       [--height 720] [--crf 23] [--font "Microsoft YaHei"] [--scenes 3-6] [--dry]
+--crf trades size for quality (x264: +6 is about half the size; 23 makes ~75 MB for 10 min at 720p).
+A full render also writes film.<lang>.jpg, a poster frame from the title card (~1 s).
 --dry checks the script and prints the scene list with estimated lengths (no TTS, no rendering).
 --scenes renders only those scenes (1-based) into film.<lang>.preview.mp4, for a quick look.
 """
@@ -52,6 +54,8 @@ from .clips import seconds
 from .narrate import voices
 
 FPS = 30
+CRF = 23                         # x264 quality (--crf): higher = smaller file
+POSTER_S = 1.0                   # poster frame time (the title card)
 LEAD, TAIL, GAP = 0.3, 0.5, 0.4  # silence before the voice, after it, and between paragraphs (s)
 CARD_S, IMAGE_S = 3.0, 4.0       # scene length without narration
 SLOW = 0.5                       # replay speed when the narration outlasts a clip
@@ -475,7 +479,7 @@ def voice_track(paras: list[str], voice: str, rate: str, cache: Path, out: Path,
 
 def scene_cmd(sc: Scene, length: float, slow: float, w: int, h: int, folder: Path, video: Path | None,
               game_audio: bool, voices: list[tuple[Path, float]], ass_name: str, accent: str, out: str, *,
-              segs=None, bg: float | None = None, court: str | None = None) -> list[str]:
+              segs=None, bg: float | None = None, court: str | None = None, crf: int = CRF) -> list[str]:
     """ffmpeg arguments for one scene. voices: (wav, start s) per narration group; segs: a clip's play / hold
     segments (clip_plan); bg: video time of the blurred footage behind a card; court: a diagram's ffconcat list."""
     fit = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2"
@@ -544,7 +548,7 @@ def scene_cmd(sc: Scene, length: float, slow: float, w: int, h: int, folder: Pat
     # timestamps, and an open-ended apad then never let atrim / -t stop (ffmpeg ticket #3015 pattern).
     graph.append(f"{mix}asetpts=N/SR/TB,apad=whole_dur={length:.3f},atrim=duration={length:.3f}[a]")
     return [*args, "-filter_complex", ";".join(graph), "-map", "[v]", "-map", "[a]", "-t", f"{length:.3f}",
-            "-r", str(FPS), "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+            "-r", str(FPS), "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf), "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "1", out]
 
 
@@ -592,7 +596,7 @@ def plan(sc: Scene, voice_s: list[float], para_starts: list[float], n_steps: int
 
 
 def build(folder: Path, lang: str, video: Path | None, height: int, font: str, pick: tuple[int, int] | None = None,
-          dry: bool = False, run: Path | None = None) -> Path | None:
+          dry: bool = False, run: Path | None = None, crf: int = CRF) -> Path | None:
     script = folder / f"film.{lang}.md"
     scenes = parse_script(script.read_text(encoding="utf8"))
     if not scenes:
@@ -669,14 +673,23 @@ def build(folder: Path, lang: str, video: Path | None, height: int, font: str, p
             bg = backdrop(scenes, i - 1) if sc.kind in ("title", "card", "stat") and has_video else None
             seg = f"s{i:03d}.mp4"
             ffmpeg(*scene_cmd(sc, length, slow, w, h, folder, video, game_audio, [(v[0], st) for v, st in voiced],
-                              ass_name, accent, seg, segs=segs, bg=bg, court=court), cwd=tmp)
+                              ass_name, accent, seg, segs=segs, bg=bg, court=court, crf=crf), cwd=tmp)
             rendered.append(seg)
             print(f"scene {i}/{len(scenes)} {sc.kind} {length:.1f} s", flush=True)
         (tmp / "list.txt").write_text("".join(f"file '{x}'\n" for x in rendered), encoding="utf8")
         ffmpeg("-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy", "-movflags", "+faststart",
                str(out.resolve()), cwd=tmp)
+    if not pick:
+        poster(out, out.with_suffix(".jpg"))
     print(f"wrote {out} {out.stat().st_size / 1e6:.1f} MB, {duration_s(out) / 60:.1f} min")
     return out
+
+
+def poster(mp4: Path, jpg: Path, at: float = POSTER_S) -> Path:
+    """One frame (the title card at ~1 s) as the page player's poster."""
+    t = min(at, duration_s(mp4) / 2)
+    ffmpeg("-ss", f"{t:.3f}", "-i", str(mp4), "-frames:v", "1", "-q:v", "3", str(jpg))
+    return jpg
 
 
 def main(argv=None):
@@ -690,6 +703,8 @@ def main(argv=None):
     ap.add_argument("--run", help="CV run folder with tracks.pkl, for 我#17 / 对#25 marks (default: run/ next to the "
                                   "report or the video)")
     ap.add_argument("--height", type=int, default=720, help="video height in pixels (default 720)")
+    ap.add_argument("--crf", type=int, default=CRF, help=f"x264 quality, higher = smaller file (default {CRF}; "
+                                                          "28 is about half the size)")
     ap.add_argument("--font", default=FONT, help=f"subtitle font, must cover the script's language (default {FONT})")
     ap.add_argument("--scenes", help="render only scenes A-B (1-based) into film.<lang>.preview.mp4")
     ap.add_argument("--dry", action="store_true", help="check the script and print scenes with estimated lengths")
@@ -707,7 +722,7 @@ def main(argv=None):
     video = a.video or gc.load_game(folder).get("video")
     for lang in langs:
         build(folder, lang, Path(video) if video else None, a.height, a.font, pick, a.dry,
-              Path(a.run) if a.run else None)
+              Path(a.run) if a.run else None, a.crf)
 
 
 if __name__ == "__main__":

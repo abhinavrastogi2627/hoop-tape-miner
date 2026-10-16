@@ -1,10 +1,11 @@
 # hoop-tape-miner (agent instructions)
 
-Turns one amateur basketball game video into a coach report: CV pipeline, agent film review, written reports, narration and a single-page HTML.
+Turns one amateur basketball game into two deliverables: the team page and the focus player's page (bilingual HTML with narration audio and film clips, published as private links), and an explained video per language (a file the user sends themselves, never published).
 
-- Procedure: follow `docs/playbook.md` step by step (video -> report). Stage details: `docs/pipeline.md`.
-- Sharing: publish a stable link per report (`publish --deploy`, playbook step 14); a `--share` file is the fallback.
-- Writing: use the guides in `prompts/` (film review brief, coach report, player deep dive, opponent dossier, narration, explained video, court cues).
+- When the user gives a league game link or a game folder, drive `uv run hoop-tape-miner run <link|folder>` in a loop as `docs/playbook.md` "One-command run" describes (Claude Code: `/game <link>`). Exit 3 = do the agent step it names, then run again; exit 1 = fix and run again; publish only with `--publish` after QA passes.
+- Procedure and each step: `docs/playbook.md`. Stage details: `docs/pipeline.md`.
+- Team profile (our team, focus player, league secrets file, languages): `workspace/team.json`, from `templates/team.example.json`.
+- Writing: use the guides in `prompts/` (film review brief, coach report, player deep dive, narration, explained video; opponent dossier and court cues are optional extras).
 - Personal data lives in `$HOOP_WORKSPACE` (default `./workspace`, gitignored); one game = `workspace/teams/<opponent-slug>/<date>/`.
 
 ## Working rules

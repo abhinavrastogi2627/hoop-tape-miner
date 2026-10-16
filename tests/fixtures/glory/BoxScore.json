@@ -1,0 +1,876 @@
+{
+ "data": {
+  "game": {
+   "id": "RkFLRUdBTUU=",
+   "participations": [
+    {
+     "id": "cGFydA0",
+     "isHomeTeam": false,
+     "team": {
+      "id": "dGVhbS1hd2F5",
+      "name": "Night Owls",
+      "__typename": "Team"
+     },
+     "overviewStats": [
+      {
+       "shortName": "PTS",
+       "name": "PTS",
+       "statType": "simple",
+       "value": "16",
+       "made": null,
+       "total": null,
+       "__typename": "Stat"
+      }
+     ],
+     "gamePlayers": [
+      {
+       "id": "Z3Ata10",
+       "playerNumber": "5",
+       "person": {
+        "id": "cGVyc29u10",
+        "fullNameWithAnonymisation": "Test Person 10",
+        "__typename": "Person"
+       },
+       "boxScoreStats": [
+        {
+         "shortName": "PTS",
+         "name": "PTS",
+         "statType": "simple",
+         "value": "5",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FGM-A",
+         "name": "FGM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 2,
+         "total": 2,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "2PM-A",
+         "name": "2PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 1,
+         "total": 1,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "3PM-A",
+         "name": "3PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 1,
+         "total": 1,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FTM-A",
+         "name": "FTM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "REB",
+         "name": "REB",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "AST",
+         "name": "AST",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "PF",
+         "name": "PF",
+         "statType": "simple",
+         "value": "2",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        }
+       ],
+       "__typename": "GamePlayer"
+      },
+      {
+       "id": "Z3Ata11",
+       "playerNumber": "8",
+       "person": {
+        "id": "cGVyc29u11",
+        "fullNameWithAnonymisation": "Test Person 11",
+        "__typename": "Person"
+       },
+       "boxScoreStats": [
+        {
+         "shortName": "PTS",
+         "name": "PTS",
+         "statType": "simple",
+         "value": "4",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FGM-A",
+         "name": "FGM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 2,
+         "total": 2,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "2PM-A",
+         "name": "2PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 2,
+         "total": 2,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "3PM-A",
+         "name": "3PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FTM-A",
+         "name": "FTM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "REB",
+         "name": "REB",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "AST",
+         "name": "AST",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "PF",
+         "name": "PF",
+         "statType": "simple",
+         "value": "1",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        }
+       ],
+       "__typename": "GamePlayer"
+      },
+      {
+       "id": "Z3Ata12",
+       "playerNumber": "17",
+       "person": {
+        "id": "cGVyc29u12",
+        "fullNameWithAnonymisation": "Test Person 12",
+        "__typename": "Person"
+       },
+       "boxScoreStats": [
+        {
+         "shortName": "PTS",
+         "name": "PTS",
+         "statType": "simple",
+         "value": "7",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FGM-A",
+         "name": "FGM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 3,
+         "total": 3,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "2PM-A",
+         "name": "2PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 2,
+         "total": 2,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "3PM-A",
+         "name": "3PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 1,
+         "total": 1,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FTM-A",
+         "name": "FTM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "REB",
+         "name": "REB",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "AST",
+         "name": "AST",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "PF",
+         "name": "PF",
+         "statType": "simple",
+         "value": "4",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        }
+       ],
+       "__typename": "GamePlayer"
+      },
+      {
+       "id": "Z3Ata13",
+       "playerNumber": "30",
+       "person": {
+        "id": "cGVyc29u13",
+        "fullNameWithAnonymisation": "Test Person 13",
+        "__typename": "Person"
+       },
+       "boxScoreStats": [
+        {
+         "shortName": "PTS",
+         "name": "PTS",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FGM-A",
+         "name": "FGM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "2PM-A",
+         "name": "2PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "3PM-A",
+         "name": "3PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FTM-A",
+         "name": "FTM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "REB",
+         "name": "REB",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "AST",
+         "name": "AST",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "PF",
+         "name": "PF",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        }
+       ],
+       "__typename": "GamePlayer"
+      }
+     ],
+     "boxScoreTotalStats": [
+      {
+       "shortName": "PTS",
+       "name": "PTS",
+       "statType": "simple",
+       "value": "16",
+       "made": null,
+       "total": null,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "FGM-A",
+       "name": "FGM-A",
+       "statType": "percentage",
+       "value": null,
+       "made": 7,
+       "total": 7,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "2PM-A",
+       "name": "2PM-A",
+       "statType": "percentage",
+       "value": null,
+       "made": 5,
+       "total": 5,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "3PM-A",
+       "name": "3PM-A",
+       "statType": "percentage",
+       "value": null,
+       "made": 2,
+       "total": 2,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "FTM-A",
+       "name": "FTM-A",
+       "statType": "percentage",
+       "value": null,
+       "made": 0,
+       "total": 0,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "REB",
+       "name": "REB",
+       "statType": "simple",
+       "value": "0",
+       "made": null,
+       "total": null,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "AST",
+       "name": "AST",
+       "statType": "simple",
+       "value": "0",
+       "made": null,
+       "total": null,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "PF",
+       "name": "PF",
+       "statType": "simple",
+       "value": "7",
+       "made": null,
+       "total": null,
+       "__typename": "Stat"
+      }
+     ],
+     "__typename": "Participation"
+    },
+    {
+     "id": "cGFydA1",
+     "isHomeTeam": true,
+     "team": {
+      "id": "dGVhbS1ob21l",
+      "name": "Red Foxes",
+      "__typename": "Team"
+     },
+     "overviewStats": [
+      {
+       "shortName": "PTS",
+       "name": "PTS",
+       "statType": "simple",
+       "value": "20",
+       "made": null,
+       "total": null,
+       "__typename": "Stat"
+      }
+     ],
+     "gamePlayers": [
+      {
+       "id": "Z3Ata0",
+       "playerNumber": "4",
+       "person": {
+        "id": "cGVyc29u0",
+        "fullNameWithAnonymisation": "Test Person 0",
+        "__typename": "Person"
+       },
+       "boxScoreStats": [
+        {
+         "shortName": "PTS",
+         "name": "PTS",
+         "statType": "simple",
+         "value": "8",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FGM-A",
+         "name": "FGM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 4,
+         "total": 4,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "2PM-A",
+         "name": "2PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 4,
+         "total": 4,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "3PM-A",
+         "name": "3PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FTM-A",
+         "name": "FTM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "REB",
+         "name": "REB",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "AST",
+         "name": "AST",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "PF",
+         "name": "PF",
+         "statType": "simple",
+         "value": "1",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        }
+       ],
+       "__typename": "GamePlayer"
+      },
+      {
+       "id": "Z3Ata1",
+       "playerNumber": "7",
+       "person": {
+        "id": "cGVyc29u1",
+        "fullNameWithAnonymisation": "Test Person 1",
+        "__typename": "Person"
+       },
+       "boxScoreStats": [
+        {
+         "shortName": "PTS",
+         "name": "PTS",
+         "statType": "simple",
+         "value": "6",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FGM-A",
+         "name": "FGM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 2,
+         "total": 2,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "2PM-A",
+         "name": "2PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 1,
+         "total": 1,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "3PM-A",
+         "name": "3PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 1,
+         "total": 1,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FTM-A",
+         "name": "FTM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 1,
+         "total": 1,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "REB",
+         "name": "REB",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "AST",
+         "name": "AST",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "PF",
+         "name": "PF",
+         "statType": "simple",
+         "value": "2",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        }
+       ],
+       "__typename": "GamePlayer"
+      },
+      {
+       "id": "Z3Ata2",
+       "playerNumber": "11",
+       "person": {
+        "id": "cGVyc29u2",
+        "fullNameWithAnonymisation": "Test Person 2",
+        "__typename": "Person"
+       },
+       "boxScoreStats": [
+        {
+         "shortName": "PTS",
+         "name": "PTS",
+         "statType": "simple",
+         "value": "6",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FGM-A",
+         "name": "FGM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 3,
+         "total": 3,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "2PM-A",
+         "name": "2PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 3,
+         "total": 3,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "3PM-A",
+         "name": "3PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FTM-A",
+         "name": "FTM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "REB",
+         "name": "REB",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "AST",
+         "name": "AST",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "PF",
+         "name": "PF",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        }
+       ],
+       "__typename": "GamePlayer"
+      },
+      {
+       "id": "Z3Ata3",
+       "playerNumber": "22",
+       "person": {
+        "id": "cGVyc29u3",
+        "fullNameWithAnonymisation": "Test Person 3",
+        "__typename": "Person"
+       },
+       "boxScoreStats": [
+        {
+         "shortName": "PTS",
+         "name": "PTS",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FGM-A",
+         "name": "FGM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "2PM-A",
+         "name": "2PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "3PM-A",
+         "name": "3PM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "FTM-A",
+         "name": "FTM-A",
+         "statType": "percentage",
+         "value": null,
+         "made": 0,
+         "total": 0,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "REB",
+         "name": "REB",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "AST",
+         "name": "AST",
+         "statType": "simple",
+         "value": "0",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        },
+        {
+         "shortName": "PF",
+         "name": "PF",
+         "statType": "simple",
+         "value": "3",
+         "made": null,
+         "total": null,
+         "__typename": "Stat"
+        }
+       ],
+       "__typename": "GamePlayer"
+      }
+     ],
+     "boxScoreTotalStats": [
+      {
+       "shortName": "PTS",
+       "name": "PTS",
+       "statType": "simple",
+       "value": "20",
+       "made": null,
+       "total": null,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "FGM-A",
+       "name": "FGM-A",
+       "statType": "percentage",
+       "value": null,
+       "made": 9,
+       "total": 9,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "2PM-A",
+       "name": "2PM-A",
+       "statType": "percentage",
+       "value": null,
+       "made": 8,
+       "total": 8,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "3PM-A",
+       "name": "3PM-A",
+       "statType": "percentage",
+       "value": null,
+       "made": 1,
+       "total": 1,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "FTM-A",
+       "name": "FTM-A",
+       "statType": "percentage",
+       "value": null,
+       "made": 1,
+       "total": 1,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "REB",
+       "name": "REB",
+       "statType": "simple",
+       "value": "0",
+       "made": null,
+       "total": null,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "AST",
+       "name": "AST",
+       "statType": "simple",
+       "value": "0",
+       "made": null,
+       "total": null,
+       "__typename": "Stat"
+      },
+      {
+       "shortName": "PF",
+       "name": "PF",
+       "statType": "simple",
+       "value": "6",
+       "made": null,
+       "total": null,
+       "__typename": "Stat"
+      }
+     ],
+     "__typename": "Participation"
+    }
+   ],
+   "__typename": "Game"
+  }
+ }
+}

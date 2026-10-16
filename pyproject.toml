@@ -1,7 +1,7 @@
 [project]
 name = "hoop-tape-miner"
 version = "0.1.0"
-description = "AI basketball video analysis for amateur teams: one game video -> coach report, player reviews, charts and narration, via computer vision and AI-agent film review"
+description = "AI basketball video analysis for amateur teams: one league game link -> coach pages with narration and clips, plus an explained video, via computer vision and AI-agent film review"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

@@ -1,0 +1,56 @@
+{
+ "data": {
+  "game": {
+   "id": "RkFLRUdBTUU=",
+   "periodType": "half",
+   "participations": [
+    {
+     "id": "cGFydDA",
+     "isHomeTeam": false,
+     "team": {
+      "id": "dGVhbS1hd2F5",
+      "name": "Night Owls",
+      "__typename": "Team"
+     },
+     "gamePlayers": [
+      {
+       "id": "Z3AtYTEw",
+       "playerNumber": "17",
+       "person": {
+        "id": "cGVyc29uMTA",
+        "fullNameWithAnonymisation": "Test Person 12",
+        "__typename": "Person"
+       },
+       "events": [
+        {
+         "made": true,
+         "period": 1,
+         "coordinates": {
+          "x": 0.4,
+          "y": 0.2,
+          "__typename": "Coordinates"
+         },
+         "__typename": "Event"
+        }
+       ],
+       "__typename": "GamePlayer"
+      }
+     ],
+     "__typename": "Participation"
+    },
+    {
+     "id": "cGFydDE",
+     "isHomeTeam": true,
+     "team": {
+      "id": "dGVhbS1ob21l",
+      "name": "Red Foxes",
+      "__typename": "Team"
+     },
+     "gamePlayers": [],
+     "__typename": "Participation"
+    }
+   ],
+   "__typename": "Game"
+  }
+ }
+}

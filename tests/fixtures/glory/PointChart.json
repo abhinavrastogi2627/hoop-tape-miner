@@ -1,0 +1,764 @@
+{
+ "data": {
+  "game": {
+   "id": "RkFLRUdBTUU=",
+   "home": {
+    "id": "dGVhbS1ob21l",
+    "name": "Red Foxes",
+    "__typename": "Team"
+   },
+   "away": {
+    "id": "dGVhbS1hd2F5",
+    "name": "Night Owls",
+    "__typename": "Team"
+   },
+   "pointChart": {
+    "maxScore": 20,
+    "entries": [
+     {
+      "timeString": "00:00",
+      "homeScore": 0,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "00:10",
+      "homeScore": 0,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "00:20",
+      "homeScore": 0,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "00:30",
+      "homeScore": 0,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "00:40",
+      "homeScore": 0,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "00:50",
+      "homeScore": 0,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "01:00",
+      "homeScore": 2,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "01:10",
+      "homeScore": 2,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "01:20",
+      "homeScore": 2,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "01:30",
+      "homeScore": 2,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "01:40",
+      "homeScore": 2,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "01:50",
+      "homeScore": 2,
+      "awayScore": 0,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "02:00",
+      "homeScore": 2,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "02:10",
+      "homeScore": 2,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "02:20",
+      "homeScore": 2,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "02:30",
+      "homeScore": 2,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "02:40",
+      "homeScore": 2,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "02:50",
+      "homeScore": 2,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "03:00",
+      "homeScore": 2,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "03:10",
+      "homeScore": 2,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "03:20",
+      "homeScore": 5,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "03:30",
+      "homeScore": 5,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "03:40",
+      "homeScore": 5,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "03:50",
+      "homeScore": 5,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "04:00",
+      "homeScore": 5,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "04:10",
+      "homeScore": 5,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "04:20",
+      "homeScore": 5,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "04:30",
+      "homeScore": 5,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "04:40",
+      "homeScore": 5,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "04:50",
+      "homeScore": 5,
+      "awayScore": 2,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "05:00",
+      "homeScore": 5,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "05:10",
+      "homeScore": 5,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "05:20",
+      "homeScore": 5,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "05:30",
+      "homeScore": 5,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "05:40",
+      "homeScore": 5,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "05:50",
+      "homeScore": 5,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "06:00",
+      "homeScore": 5,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "06:10",
+      "homeScore": 5,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "06:20",
+      "homeScore": 5,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "06:30",
+      "homeScore": 5,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "06:40",
+      "homeScore": 7,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "06:50",
+      "homeScore": 7,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "07:00",
+      "homeScore": 7,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "07:10",
+      "homeScore": 7,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "07:20",
+      "homeScore": 7,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "07:30",
+      "homeScore": 7,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "07:40",
+      "homeScore": 7,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "07:50",
+      "homeScore": 7,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "08:00",
+      "homeScore": 7,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "08:10",
+      "homeScore": 7,
+      "awayScore": 4,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "08:20",
+      "homeScore": 9,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "08:30",
+      "homeScore": 9,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "08:40",
+      "homeScore": 9,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "08:50",
+      "homeScore": 9,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "09:00",
+      "homeScore": 9,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "09:10",
+      "homeScore": 9,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "09:20",
+      "homeScore": 9,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "09:30",
+      "homeScore": 9,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "09:40",
+      "homeScore": 9,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "09:50",
+      "homeScore": 10,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "10:00",
+      "homeScore": 10,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "10:10",
+      "homeScore": 12,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "10:20",
+      "homeScore": 12,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "10:30",
+      "homeScore": 12,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "10:40",
+      "homeScore": 12,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "10:50",
+      "homeScore": 12,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "11:00",
+      "homeScore": 12,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "11:10",
+      "homeScore": 12,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "11:20",
+      "homeScore": 12,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "11:30",
+      "homeScore": 12,
+      "awayScore": 6,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "11:40",
+      "homeScore": 12,
+      "awayScore": 9,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "11:50",
+      "homeScore": 12,
+      "awayScore": 9,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "12:00",
+      "homeScore": 12,
+      "awayScore": 9,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "12:10",
+      "homeScore": 12,
+      "awayScore": 9,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "12:20",
+      "homeScore": 12,
+      "awayScore": 9,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "12:30",
+      "homeScore": 12,
+      "awayScore": 9,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "12:40",
+      "homeScore": 12,
+      "awayScore": 9,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "12:50",
+      "homeScore": 12,
+      "awayScore": 9,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "13:00",
+      "homeScore": 12,
+      "awayScore": 9,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "13:10",
+      "homeScore": 12,
+      "awayScore": 9,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "13:20",
+      "homeScore": 14,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "13:30",
+      "homeScore": 14,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "13:40",
+      "homeScore": 14,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "13:50",
+      "homeScore": 14,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "14:00",
+      "homeScore": 14,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "14:10",
+      "homeScore": 14,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "14:20",
+      "homeScore": 14,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "14:30",
+      "homeScore": 14,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "14:40",
+      "homeScore": 14,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "14:50",
+      "homeScore": 14,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "15:00",
+      "homeScore": 16,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "15:10",
+      "homeScore": 16,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "15:20",
+      "homeScore": 16,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "15:30",
+      "homeScore": 16,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "15:40",
+      "homeScore": 16,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "15:50",
+      "homeScore": 16,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "16:00",
+      "homeScore": 16,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "16:10",
+      "homeScore": 16,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "16:20",
+      "homeScore": 16,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "16:30",
+      "homeScore": 16,
+      "awayScore": 11,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "16:40",
+      "homeScore": 16,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "16:50",
+      "homeScore": 16,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "17:00",
+      "homeScore": 16,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "17:10",
+      "homeScore": 16,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "17:20",
+      "homeScore": 16,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "17:30",
+      "homeScore": 16,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "17:40",
+      "homeScore": 16,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "17:50",
+      "homeScore": 16,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "18:00",
+      "homeScore": 16,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "18:10",
+      "homeScore": 16,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "18:20",
+      "homeScore": 18,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "18:30",
+      "homeScore": 18,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "18:40",
+      "homeScore": 18,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "18:50",
+      "homeScore": 18,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "19:00",
+      "homeScore": 18,
+      "awayScore": 13,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "19:10",
+      "homeScore": 18,
+      "awayScore": 16,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "19:20",
+      "homeScore": 18,
+      "awayScore": 16,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "19:30",
+      "homeScore": 18,
+      "awayScore": 16,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "19:40",
+      "homeScore": 18,
+      "awayScore": 16,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "19:50",
+      "homeScore": 20,
+      "awayScore": 16,
+      "__typename": "PointChartEntry"
+     },
+     {
+      "timeString": "20:00",
+      "homeScore": 20,
+      "awayScore": 16,
+      "__typename": "PointChartEntry"
+     }
+    ],
+    "periods": [
+     {
+      "name": "H1",
+      "startTimeString": "00:00",
+      "finishTimeString": "10:00",
+      "__typename": "PointChartPeriod"
+     },
+     {
+      "name": "H2",
+      "startTimeString": "10:00",
+      "finishTimeString": "20:00",
+      "__typename": "PointChartPeriod"
+     }
+    ],
+    "__typename": "PointChart"
+   },
+   "__typename": "Game"
+  }
+ }
+}

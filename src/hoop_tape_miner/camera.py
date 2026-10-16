@@ -28,23 +28,27 @@ class KeyframeBank:
     sift: cv2.SIFT = field(default_factory=lambda: cv2.SIFT_create(nfeatures=3000))
     frames: list = field(default_factory=list)  # (kp, des, H_court2img)
     views: list = field(default_factory=list)   # view descriptor per keyframe
+    size: tuple = (1280, 720)                    # (w, h) of the frames, set by the first add()
 
     @staticmethod
-    def view(H):
+    def view(H, size=(1280, 720)):
         """Court position of the image centre + horizontal extent: identifies a pan/zoom state."""
         from .court import project
-        c = project(np.linalg.inv(H), np.array([[640.0, 360.0], [0.0, 360.0], [1280.0, 360.0]]))
+        w, h = size
+        c = project(np.linalg.inv(H), np.array([[w / 2, h / 2], [0.0, h / 2], [float(w), h / 2]]))
         return np.array([c[0, 0], c[0, 1], np.linalg.norm(c[2] - c[1])])
 
     def is_new_view(self, H, min_dist=1.5):
-        v = self.view(H)
+        v = self.view(H, self.size)
         return not self.views or min(np.linalg.norm(v - w) for w in self.views) > min_dist
 
     def add(self, gray, H, mask=None):
+        if not self.frames:
+            self.size = (gray.shape[1], gray.shape[0])
         kp, des = self.sift.detectAndCompute(gray, None if mask is None else 255 - mask)
         if des is not None and len(kp) > 100:
             self.frames.append((np.float32([k.pt for k in kp]), des, H.copy()))
-            self.views.append(self.view(H))
+            self.views.append(self.view(H, self.size))
 
     def localise(self, gray, mask=None):
         kp, des = self.sift.detectAndCompute(gray, None if mask is None else 255 - mask)

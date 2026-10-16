@@ -10,9 +10,9 @@
 
 [English](README.md) · 中文
 
-面向业余和俱乐部球队的 AI 篮球录像分析。把你比赛的录像变成一份教练级复盘：比赛怎么输/赢的、对手怎么打、每个队员该练什么，还附带可以直接听的口播版。
+面向业余和俱乐部球队的 AI 篮球录像分析。贴上比赛链接，就能拿到一份教练会给你的复盘：比赛怎么打的、为什么输/赢、对手做了什么、下一步练什么。有两种形式：可以读也可以听的网页，和一段配着比赛画面讲解的视频。
 
-你只需要一段比赛录像。你的 AI 编程助手（[Claude Code](https://claude.com/claude-code) 或 [Codex](https://openai.com/codex)）在你自己的 GPU 上跑完这个仓库里的计算机视觉流程，像教练一样看录像，然后写出报告。不用订阅，录像也不用上传到任何体育分析平台。
+你的 AI 编程助手（[Claude Code](https://claude.com/claude-code) 或 [Codex](https://openai.com/codex)）在你自己的 GPU 上跑完这个仓库里的计算机视觉流程，像教练一样看录像，然后把所有东西写出来。不用订阅，录像也不用上传到任何体育分析平台。
 
 **适合谁**
 
@@ -24,139 +24,135 @@
 
 ## 你能得到什么
 
-每场比赛一个文件夹，里面有：
+每场比赛两样东西：
 
-- **教练复盘报告**，中英文，页面上一键切换。内容包括：比赛走势、对手核心球员和习惯、我们哪里打得好哪里不好、再碰面的打法、训练计划。
-- **全队逐个球员复盘**：每人做得好、要改的地方，以及两个训练项目，可以直接发给全队。
-- **图表**：分差和得分潮、投篮区域、热区图、两队对比。
-- **口播 MP3**，中英文都有，页面上有大播放按钮，没时间看的队友路上就能听。
-- **一个带解说的视频**：解说配着它讲的关键回合和图表播放，字幕直接烧在画面里（解说比回合长时自动半速重放）。队员打开就能看。
-- **一个可分享的 HTML 文件**：图片、音频和录像片段都打包在里面，离线能打开，发到微信等聊天软件也能用。
-- **可选**：给某个球员的单独深度复盘；以及一段可以循环播放的"场上口令" MP3（"两步内找人"），边打球边听。
+1. **网页，以链接分享**：一个全队页面和一个重点球员页面，都是中英文，页面上一键切换。
+   - 全队页面：比赛走势、对手核心球员和习惯、我们哪里打得好哪里不好、再碰面的打法、训练计划，以及每个队员的复盘和两个训练项目。
+   - 球员页面：针对一个球员的深度复盘，只发给他本人。
+   - 每个页面都有一个**口播**大播放按钮，不想读的队友可以在去训练的路上听。
+   - **关键回合的录像片段就放在分析旁边**（带慢放），还有一张标出得分潮的分差走势图。
+   - 每个页面有一个固定的、不公开的链接（Cloudflare 免费）。改完再发布一次，已经发出去的链接就显示新版本。
+2. **讲解视频**，每种语言一个：口播配着它讲到的关键回合和图表，定格画面圈出球员，字幕烧在画面里。就是普通的 MP4，由你自己发出去，不会上传到任何地方。
 
-报告里每一个结论都标了录像时间，关键回合还**直接在分析旁边配了录像片段**（可以慢放），大家一边看一边讨论下次怎么改。
+每个结论都标了录像时间，球队讨论要改什么的时候可以直接看那一刻。
 
-| 中英双语 | 图表 | 手机上 |
+| 双语报告 | 图表 | 手机上看 |
 |---|---|---|
-| ![中文版报告](docs/images/report-zh.png) | ![报告里的图表](docs/images/charts.png) | ![手机视图](docs/images/mobile.png) |
+| ![中文版报告](docs/images/report-zh.png) | ![报告里的图表](docs/images/charts.png) | ![手机界面](docs/images/mobile.png) |
 
 *截图来自一场真实比赛，队名已替换。*
 
-## 怎么做到的
+代码还能做对手档案、场上提示音循环、战术板回放、投篮区域图和单个离线 HTML 文件。这些是可选的附加项（见 [playbook](docs/playbook.md#optional-extras)）。
+
+## 工作原理
 
 ```
-比赛录像 ──► 计算机视觉（GPU，约 1 小时）──► AI 分段看录像 ──► 报告 + 图表 + 口播 ──► 一个 HTML 文件
-            球员、球、场上位置               按教练清单逐段复盘     先整理事实再写作
-            分队、识别球衣号码                                      每个结论附录像时间
+联赛链接 ──► 抓取 ──────────────► 计算机视觉（GPU，约 1 小时）──► AI 看录像复盘 ──► 网页、口播 ──► 链接
+             录像、技术统计、       球员、球、球场位置、                              片段          + 讲解视频
+             得分流水、名单         两队、球衣号码
 ```
 
-1. **计算机视觉**：逐帧识别球员和球，映射到球场坐标，按球衣颜色分队，识别号码。
-2. **回合与阵容**：谁在场上、谁持球、每个回合何时开始结束。如果你的联赛有官方技术统计，会自动和录像对齐。
-3. **看录像复盘**：把比赛切成带标注的画面表，助手派多个子代理按教练清单逐段看（退防、对持球人施压、出手选择等）。
-4. **先事实，后写作**：复盘结果汇总成事实表（正负值、上场段、模式、录像片段），再按 [`prompts/`](prompts/) 里的写作模板写报告。
-5. **生成**：图表、口播（微软 Edge 神经语音）、关键回合的录像短片段（按报告里标的时间段用 ffmpeg 剪出），以及一个自包含的 HTML 页面。
+1. **抓取：** 助手从联赛网站读取比赛（两队、名单、比分、技术统计、每次得分后的比分），并下载比赛录像。
+2. **计算机视觉：** 每一帧检测球员和球，映射到球场上，按球衣颜色分出两队，识别球衣号码，算出上场阵容和回合。球场标定由助手自己读带网格的画面完成，不需要人去点。
+3. **看录像复盘：** 比赛被切成带标注的帧拼图，子助手按教练检查清单逐段过一遍：退防、对球施压、投篮选择等。
+4. **先事实，后写作：** 复盘结果先汇总成事实表（正负值、上场时段、规律、片段），再按 [`prompts/`](prompts/) 里的写作指南写出页面。
+5. **渲染和分享：** 口播（微软 Edge 神经语音）、关键回合片段、HTML 页面（以链接发布）和讲解视频。
 
-详细说明见 [docs/pipeline.md](docs/pipeline.md)。
+全部由一条命令驱动：`hoop-tape-miner run`。它知道每一步产出哪个文件，所以中断后从停下的地方接着跑，只在需要助手看或写的地方暂停。详细说明：[docs/pipeline.md](docs/pipeline.md)。
 
 ## 快速开始
 
-### 1. 准备
+### 1. 需要什么
 
-- **NVIDIA 显卡**，显存 8 GB 以上，Windows 或 Linux（号码识别需要 CUDA）。
-- [uv](https://docs.astral.sh/uv/)、Python 3.11，`ffmpeg` 在 PATH 里。
-- 约 20 GB 硬盘空间放模型（第一次运行自动下载）。
-- Claude Code 或 Codex。流程也可以手动跑，但看录像和写报告要靠 AI 助手。
-- 一整场比赛录像，球场侧面单机位（俱乐部常见的那种录法）。
+- 一块 **NVIDIA 显卡**，8 GB 显存或以上，Windows 或 Linux。号码识别需要 CUDA。
+- [uv](https://docs.astral.sh/uv/)、Python 3.11，以及 PATH 上的 `ffmpeg`。发布和页面检查需要 Node.js。
+- 大约 20 GB 硬盘放模型，第一次用时自动下载。
+- Claude Code 或 Codex。看录像复盘和写作都是助手的活。
+- 一场由球场侧面单机位拍的比赛：联赛录像（链接）或者你自己的录像。
 
 ### 2. 安装
 
 ```bash
-git clone https://github.com/mariusDing/hoop-tape-miner.git
+git clone https://github.com/mariusDing/hoop-tape-miner.git    # 或者你的 fork
 cd hoop-tape-miner
 uv sync
 uv run hoop-tape-miner          # 列出所有步骤
 ```
 
-### 3. 新建一场比赛
+### 3. 告诉它你是谁（只做一次）
 
 ```bash
-uv run hoop-tape-miner new-game --opponent "Red Foxes" --date 2026-10-14 --video path/to/game.mp4 --us-team "Night Owls"
+mkdir -p workspace && cp templates/team.example.json workspace/team.json
 ```
 
-这会创建 `workspace/teams/red-foxes/2026-10-14/`，里面的 `game.json` 需要你填：队名、球衣颜色、名单、最终比分。`workspace/` 里的一切只留在你自己电脑上，永远不会提交到 git。
+填上联赛里显示的队名、球衣颜色、重点球员号码、报告语言，以及一个放在**仓库外面**的密钥文件路径，里面是你的联赛登录信息（两行：`GLORY_EMAIL=...` 和 `GLORY_PASSWORD=...`）。`workspace/` 里的东西都只留在你的电脑上，永远不会提交。
 
-### 4. 让 AI 助手来跑
+要用链接分享，注册一个免费的 Cloudflare 账号，运行一次 `npx wrangler login`。
 
-在仓库里打开 Claude Code 或 Codex，说：
+### 4. 每场比赛之后，贴上链接
 
-> 按 docs/playbook.md 分析 `workspace/teams/red-foxes/2026-10-14` 这场比赛。我们是 Night Owls，深蓝色球衣。
+在仓库里打开 Claude Code：
 
-助手会按 [docs/playbook.md](docs/playbook.md) 一步步做（[`CLAUDE.md`](CLAUDE.md) 和 [`AGENTS.md`](AGENTS.md) 会把它引到那里）。中间只会停下来问你两次：
+```
+/game https://my.gloryleague.basketball/game/<id>/overview
+```
 
-1. **球场标定**：在一帧画面上确认几个球场点位。
-2. **队伍颜色**：确认哪个颜色是你们队。
+用 Codex（或其他助手）就说：*"这是我们的比赛：`<链接>`。按 AGENTS.md 跑完。"*
 
-跑完后打开 `workspace/teams/red-foxes/2026-10-14/index.html`。
+助手会运行 `uv run hoop-tape-miner run <链接>`，自己完成需要"看"的步骤：球场标定点、哪个颜色是哪队、看录像复盘、写作，以及用浏览器检查页面。然后发布页面，回复你链接和两个视频的路径。GPU 部分大约一小时，再加上助手的工作时间。
+
+**别的联赛，或者没有联赛数据？** 从你自己的录像开始：`uv run hoop-tape-miner new-game --opponent "Red Foxes" --date 2026-10-14 --video game.mp4 --us-team "Night Owls"`，填好 `game.json`，再对这个文件夹 `run`。技术统计和得分流水是可选的：把你联赛的数据转成 `official.json` 的格式（见 [playbook 第 6 步](docs/playbook.md#6-official-stats-and-result)），或者让报告只靠录像复盘。欢迎贡献其他联赛网站的 `fetch`。
 
 ### 5. 分享
 
-```bash
-uv run hoop-tape-miner html workspace/teams/red-foxes/2026-10-14 --share --out Night-Owls_vs_Red-Foxes.html
-```
+- 网页：把总览页（新比赛会自动出现在上面）或全队页面的链接发给全队；球员页面只发给那个球员。链接不公开，但没有密码。
+- 讲解视频：把 `film.zh.mp4` / `film.en.mp4` 发到球队群里。
+- 片段和视频里有真人：只分享给本队（见 [docs/privacy.md](docs/privacy.md)）。
 
-分享文件会把录像片段打包进去（480p，每 10 秒片段约 1 MB），十几段片段的报告大约几十 MB。片段里是真实球员，只发给本队（见 [docs/privacy.md](docs/privacy.md)）。
+## 命令
 
-也可以不发文件，发一个链接（Cloudflare Workers 静态资源，即 Pages 的后继，免费）。每份报告有一个随机、固定的网址，报告更新后链接不变：
-
-```bash
-npx wrangler login    # 只需一次：免费 Cloudflare 账号
-uv run hoop-tape-miner publish workspace/teams/red-foxes/2026-10-14 --deploy --project night-owls-film
-```
-
-网页不公开列出（不被搜索引擎收录，路径随机），但没有密码：拿到链接的人都能打开。
-
-得到一个单文件，图片和音频都在里面，直接发聊天软件。如果聊天软件的内置浏览器禁用了脚本，页面会自动退回到手机自带的播放器。
-
-## 命令一览
-
-| 步骤 | 作用 |
+| 步骤 | 做什么 |
 |---|---|
-| `new-game` | 创建比赛文件夹和 `game.json` |
-| `calibrate` | 球场标定关键帧 |
-| `extract` → `embed` → `tracks` → `jersey` | 计算机视觉：检测、分队、跟踪、号码 |
+| `run` | 一场比赛从头到尾：按顺序跑下面的每一步，可中断续跑，在需要助手判断的地方暂停（`--status`、`--publish`） |
+| `fetch` | 联赛比赛链接 → `game.json`、技术统计和得分流水、比赛录像 |
+| `new-game` | 手动建比赛文件夹和 `game.json`（没有联赛数据时） |
+| `calibrate` | 球场标定：`--grid` 生成供阅读的网格画面，`--points` 求解并检查 |
+| `extract` → `embed` → `tracks` → `jersey` | 计算机视觉：检测、分队、跟踪、球衣号码 |
 | `analyze` | 身份、回合、战术指标 |
-| `official` | 导入联赛技术统计并和录像对齐（可选） |
-| `coach-sheets` → `merge-reviews` → `coach-summary` | 复盘画面表，合并、汇总各代理的复盘 |
-| `plusminus`、`report`、`momentum`、`replay` | 事实和图表 |
-| `narrate` | 口播稿 → MP3（加 `--chime --gap 6 --loud` 就是场上循环口令） |
-| `clips` | 按报告里的标记（`![说明](clip:07:24-07:33)`）剪出录像片段 |
-| `film` | 带解说的视频：解说配着录像片段、定格圈人、战术动画和图表，烧录字幕（`film.<lang>.md` → `film.<lang>.mp4`） |
-| `html` | 报告文件夹 → 一个双语 HTML（`--share` 生成可发送的单文件） |
-| `publish` | 报告 → Cloudflare 上的私密链接网站，每份报告一个固定链接 |
+| `coach-sheets` → `coach-summary`、`plusminus` | 复盘用的帧拼图，以及助手复盘结果的统计 |
+| `momentum` | 带得分潮的分差走势图 |
+| `clips` | 剪出报告里标记的片段（`![说明](clip:07:24-07:33)`） |
+| `narrate` | 口播稿 → MP3 |
+| `html` | 报告文件夹 → 一个双语 HTML 页面 |
+| `publish` | 页面 → Cloudflare 上的私密链接网站，每份报告一个固定链接 |
+| `film` | 讲解视频：口播配片段、定格画面、战术图和图表，带字幕 |
+| `official`、`recalib`、`report`、`replay`、`review`、`merge-reviews` | 可选：导入联赛 JSON、重跑球场映射、视觉图表、战术板回放、事件复盘 |
 
-每一步的参数：`uv run hoop-tape-miner <步骤> -h`。
+每一步的参数用 `uv run hoop-tape-miner <步骤> -h` 查看。
 
-## 目录结构
+## 项目结构
 
 ```
-docs/playbook.md         助手照着做的完整流程：录像 → 报告
-prompts/                 写作模板：复盘任务说明、教练报告、个人深度复盘、口播稿、场上口令
-templates/               game.json 和对手档案的骨架
-src/hoop_tape_miner/     流程代码（每一步一个模块）
-workspace/               你自己的数据：录像、中间结果、报告（不进 git）
+.claude/commands/game.md   Claude Code 的 /game 命令
+AGENTS.md                  给所有助手的说明（CLAUDE.md 指向这里）
+docs/playbook.md           助手照着做的流程，链接 → 页面 + 视频
+prompts/                   写作指南：复盘任务说明、教练报告、球员深度复盘、口播、讲解视频
+templates/                 team.json、game.json 和对手档案的模板
+src/hoop_tape_miner/       流程代码（每一步一个模块；run.py 串起来）
+workspace/                 你自己的数据：球队档案、比赛、报告（不进 git）
 ```
 
 ## 常见问题
 
-**需要联网吗？** 模型只下载一次，之后视觉和分析都在本地跑。口播会把口播文字（不是录像）发给微软的语音合成服务。AI 助手本身用的是你自己的账号。
+**需要联网吗？** 模型只下载一次，之后视觉和分析都在本地跑。抓取会读联赛网站，口播会把口播文字（不是录像）发给微软的语音合成服务，发布会把页面、音频和片段（不是整场录像）上传到你自己的 Cloudflare 账号。AI 助手本身用的是你自己的账号。
 
 **没有 GPU、或者用 Mac 能跑吗？** 暂时不行。检测可以退回 CPU，但非常慢；号码识别需要 CUDA。
 
-**我们联赛没有官方技术统计？** 没关系，在 `game.json` 里填上最终比分，报告只靠录像复盘也能生成。
+**我们联赛没有技术统计，或者不是 Glory League？** 没关系。用 `new-game` 开始，在 `game.json` 里填上最终比分，报告只靠录像复盘也能生成。如果你们联赛有公开数据，可以转成 `official.json` 的格式，或者给它写一个 `fetch`。
 
 **准不准？** 视觉部分给出位置和回合，判断来自看录像复盘；看不清的（比如号码）会标"疑似"。采纳之前先去看报告指出的那段录像。
 
-**支持哪些语言？** 报告和口播都有中文和英文。
+**支持哪些语言？** 网页、口播和视频都有中文和英文。
 
 **隐私。** 报告会点名球员，也会有真人画面。分享前请读 [docs/privacy.md](docs/privacy.md)，尤其是联赛里有未成年人的时候。
 
@@ -166,7 +162,7 @@ workspace/               你自己的数据：录像、中间结果、报告（�
 
 - [ ] 不用 CUDA 也能跑（CPU 或 Apple Silicon 上的号码识别）
 - [ ] 一场谁都能跑的合成演示比赛，里面没有真人
-- [ ] 支持更多联赛的技术统计导入（目前只支持一种格式，见 [`official.py`](src/hoop_tape_miner/official.py)）
+- [ ] 支持更多联赛的 `fetch`（目前是 Glory League，见 [`fetch.py`](src/hoop_tape_miner/fetch.py)）
 - [ ] 中英文之外的更多报告和口播语言
 - [ ] 更好地处理会转动的机位或手机录像
 
@@ -174,7 +170,7 @@ workspace/               你自己的数据：录像、中间结果、报告（�
 
 ## 参与贡献
 
-从改一个错别字到新增一个联赛导入器，都欢迎。先看 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [good first issues](https://github.com/mariusDing/hoop-tape-miner/issues?q=is%3Aopen+label%3A%22good+first+issue%22)，有问题去 [Discussions](https://github.com/mariusDing/hoop-tape-miner/discussions) 问。
+从改一个错别字到新增一个联赛抓取器，都欢迎。先看 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [good first issues](https://github.com/mariusDing/hoop-tape-miner/issues?q=is%3Aopen+label%3A%22good+first+issue%22)，有问题去 [Discussions](https://github.com/mariusDing/hoop-tape-miner/discussions) 问。
 
 一条硬规定：永远不要在 issue 或 PR 里附上比赛录像、截图、名单或真实球员的名字。详见 [docs/privacy.md](docs/privacy.md)。
 

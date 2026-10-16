@@ -2,9 +2,13 @@
 
 Layout: <workspace>/teams/<opponent-slug>/<date>/  game.json, official.json, README*.md, figures, run/
 The workspace root is $HOOP_WORKSPACE when set, else ./workspace (relative to the current directory).
+Team profile: <workspace>/team.json (template templates/team.example.json), read by `profile()`.
+Heavy files (videos, run/, raw league data) go to `media_dir()`: <media_root>/teams/<slug>/<date> when the profile
+sets media_root, else the game folder itself.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -26,3 +30,19 @@ def team_dir(opponent: str) -> Path:
 
 def game_dir(opponent: str, date: str) -> Path:
     return team_dir(opponent) / date
+
+
+def profile() -> dict:
+    """<workspace>/team.json without its _comment keys; {} when missing."""
+    p = root() / "team.json"
+    if not p.exists():
+        return {}
+    data = json.loads(p.read_text(encoding="utf8"))
+    return {k: v for k, v in data.items() if k != "_comment"} if isinstance(data, dict) else {}
+
+
+def media_dir(opponent: str, date: str, prof: dict | None = None) -> Path:
+    media_root = (profile() if prof is None else prof).get("media_root")
+    if media_root:
+        return Path(media_root).expanduser() / "teams" / slug(opponent) / date
+    return game_dir(opponent, date)

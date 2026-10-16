@@ -4,10 +4,10 @@ hoop-tape-miner analyses real people: your teammates, opponents and referees, of
 
 ## What never leaves `workspace/`
 
-`$HOOP_WORKSPACE` (default `./workspace`) is gitignored. Keep all of this inside it and never commit, push or upload it:
+`$HOOP_WORKSPACE` (default `./workspace`) is gitignored. Keep all of this inside it (or under the `media_root` your `team.json` names, also outside the repo) and never commit, push or upload it:
 
 - game videos, extracted frames, review sheets, crops, zooms, evidence images, tactics-board clips;
-- `game.json` (team names, rosters, colours), `official.json` and any league exports;
+- `team.json`, `game.json` (team names, rosters, colours), `official.json` and any league exports, including the raw responses `fetch` saves under `league/` (they contain player names);
 - film-review outputs, fact sheets, reports, narration scripts and MP3s, cue loops, `index.html` pages (they embed figures and may embed frames);
 - logs and screenshots of league sites.
 
@@ -27,7 +27,7 @@ Before any commit: `git status` must show no file from `workspace/`, no media (`
 - **Your AI agent**: when Claude Code, Codex or another agent reads review sheets, frames, stats or reports, that content is sent to the model provider under your account's terms. Only use the film-review step if your team is comfortable with that.
 - **Narration**: `narrate` uses edge-tts, which sends the script text to Microsoft's online text-to-speech service. Keep names out of scripts (jersey numbers only), or skip narration.
 - **Model downloads**: Hugging Face is contacted to download weights; no game data is uploaded.
-- **League sites**: logging in to fetch official stats uses your own credentials. Keep them in a secrets file outside the repo, never in prompts, logs or commits, and follow the site's terms of use.
+- **League sites**: `fetch` logs in with your own credentials (from the environment or the secrets file in `team.json`; it never prints or saves them or the session token). Keep them in a secrets file outside the repo, never in prompts, logs or commits, and follow the site's terms of use.
 
 ## Sharing reports
 

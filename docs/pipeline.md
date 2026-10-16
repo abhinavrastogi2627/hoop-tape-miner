@@ -1,6 +1,6 @@
 # Pipeline
 
-Local pipeline that turns one amateur basketball game video into a tactical scouting report. Developed on a single 8 GB NVIDIA GPU. All stages run through `uv run hoop-tape-miner <stage> ...`. Per-game data lives in the workspace (`$HOOP_WORKSPACE`, default `./workspace`, gitignored): `workspace/teams/<opponent-slug>/<date>/` holds `game.json`, the heavy `run/` folder and the finished report. The step-by-step procedure is `docs/playbook.md`.
+Local pipeline that turns one amateur basketball game into a coach's team page, a focus-player page and an explained video. Developed on a single 8 GB NVIDIA GPU. All stages run through `uv run hoop-tape-miner <stage> ...`. Per-game data lives in the workspace (`$HOOP_WORKSPACE`, default `./workspace`, gitignored): `workspace/teams/<opponent-slug>/<date>/` holds `game.json` and the finished reports; the heavy `run/` folder sits there too, or under `media_root` from `workspace/team.json` (game.json `run`). `run` drives every stage below in order and stops where the agent must judge. The step-by-step procedure is `docs/playbook.md`.
 
 ## Why a custom pipeline
 
@@ -30,15 +30,17 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 
 | Stage | Required args [optional] | Output |
 |---|---|---|
-| `new-game` | `--opponent --date` [`--video --us-team --force`] | `workspace/teams/<slug>/<date>/game.json` (from `templates/game.example.json`), `run/`, opponent dossier README |
-| `calibrate` | `--video --times --out` [`--points --propagate --step`] | `<out>/keyframes.json` (hand-picked court landmarks), `points.json`, overlays |
+| `run` | `TARGET` (game folder or league game url) [`--status --dry --until --redo --publish`] | every stage below in order, resuming from existing outputs; exit 3 when an agent step is due, 1 on a failed stage; publishes only with `--publish` |
+| `fetch` | `URL` [`--video --us-team --secrets --no-video --force`] | Glory League game: `game.json` (teams, rosters, result, periods, league id), `run/official.json`, the league video in `<media>/video/league.mp4` (resumable), raw responses in `<media>/league/` |
+| `new-game` | `--opponent --date` [`--video --us-team --dossier --force`] | `workspace/teams/<slug>/<date>/game.json` (from `templates/game.example.json`), `run/`; `--dossier` also the opponent README |
+| `calibrate` | `--video --times --out` [`--grid --points --propagate --step --detections --max-point-err`] | `--grid`: `grid_<t>.jpg` (pixel grid + numbered landmark map) to read without a GUI; `--points`: solve points.json, print PASS/WEAK per frame (exit 2 if weak); without either, click in a window. `<out>/keyframes.json`, overlays |
 | `extract` | `--video --out --calib` [`--fps 10 --start --end`] | per-frame detections (pickle), homographies (`camera.npz`) |
 | `recalib` (optional) | `--run --video --calib` [`--start --end --dry`] | court homography re-run, court coordinates recomputed |
 | `embed` | `--run --video` [`--batch`] | SigLIP embeddings of on-court person crops |
 | `tracks` | `--run --video` [`--game --us --fps`] | pass 1: `cluster_montage.jpg`; pass 2 (after `cluster_names.json` with `us`/`them`/`ref`/`unk`): `tracks.pkl` |
 | `jersey` | `--run --video` [`--min-len --limit`] | jersey number per tracklet (VLM, voting) |
 | `analyze` | `--run --game` [`--fps`] | identities, possessions, tactical metrics |
-| `official` (optional) | `--boxscore --pointchart --us-home --out` [`--video --official-video --fps`] | `official.json`: box score, score flow, video alignment (one league JSON format for now) |
+| `official` (optional; `fetch` does this for league links) | `--boxscore --pointchart --us-home --out` [`--video --official-video --fps`] | `official.json`: box score, score flow, video alignment (one league JSON format for now) |
 | `review` (optional) | `--run --video` [`--every --pad --game`] | `run/review/`: 3x2 event sheets + manifest (`docs/review_protocol.md`) |
 | `merge-reviews` (optional) | `--run` [`--review review`] | `events.json`, `review_coverage.json` from `events_part*/coverage_part*` |
 | `coach-sheets` | `--run --game --out` [`--official` (auto-found, optional) `--parts --video --brief --skip-sheets`]; `coach-sheets zoom SHEET TILE X Y W H OUT` | 2x2 coach sheets, `manifest.json`, `part<N>.json`, `lineup_intervals.json`, `brief_part<N>.md` |
@@ -49,7 +51,7 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 | `replay` (optional) | `--run --out` [`--pid --t0 --t1 --fps --game`] | 2D tactics-board clips (mp4) |
 | `narrate` | `FOLDER` or `--script FILE` [`--lang zh en --out --gap --chime --loud --rate`] | `listen.<lang>.mp3` per script, or one MP3 next to `--script` |
 | `clips` | `FOLDER` [`--video --height --force`] | `clips/<from>-<to>.mp4` + poster for every `![caption](clip:mm:ss-mm:ss)` in the READMEs |
-| `film` | `FOLDER` [`--lang zh en --video --run --height 720 --font --scenes A-B --dry`] | `film.<lang>.mp4`: narration from `film.<lang>.md` over chapter cards, figures, stat scenes, animated court diagrams (`plays/*.json`) and clips of our video, with freeze frames that ring players from `run/tracks.pkl` and burned-in subtitles; speech cached in `.film-cache/` |
+| `film` | `FOLDER` [`--lang zh en --video --run --height 720 --crf 23 --font --scenes A-B --dry`] | `film.<lang>.mp4`: narration from `film.<lang>.md` over chapter cards, figures, stat scenes, animated court diagrams (`plays/*.json`) and clips of our video, with freeze frames that ring players from `run/tracks.pkl` and burned-in subtitles; speech cached in `.film-cache/` |
 | `html` | `FOLDER` [`--out index.html --share`] | bilingual `index.html` with clip players (`--share`: self-contained copy with audio and clips embedded) |
 | `publish` | `FOLDER...` [`--deploy --project --base-url --new-link`] | `<workspace>/site/<token>/` per report (web page + audio + clips), a hub of team reports, `<workspace>/publish.json`; `--deploy` uploads with `npx wrangler deploy` (static assets behind `publish_worker.js`, which serves Range requests for Safari) to `<project>.<subdomain>.workers.dev` |
 

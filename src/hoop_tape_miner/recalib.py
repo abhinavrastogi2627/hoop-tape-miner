@@ -30,7 +30,8 @@ def main(argv=None):
     persons = det[det.kind == "person"]
     boxes = {f: g[["x1", "y1", "x2", "y2"]].to_numpy()[g.conf.to_numpy() > 0.45] for f, g in persons.groupby("frame")}
 
-    trk = CourtCameraTracker(load_bank(args.calib))  # image paths relative to keyframes.json, or absolute
+    bank = load_bank(args.calib)
+    trk = CourtCameraTracker(bank)  # image paths relative to keyframes.json, or absolute
     cap = cv2.VideoCapture(args.video)
     sel = (cam["t"] >= args.start) & (cam["t"] <= args.end)
     want = {int(f): i for i, f in enumerate(cam["frame"]) if sel[i]}
