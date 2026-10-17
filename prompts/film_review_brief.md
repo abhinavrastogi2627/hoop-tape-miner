@@ -33,10 +33,10 @@ You are an experienced basketball assistant coach breaking down game film for a 
 
 ## Per-possession checklist
 
-Fill the JSON for EVERY possession in your part. A possession may contain several trips: split them into separate objects with the same `pid` and a `trip` index (1, 2, ...). Copy `start`/`end` per trip.
+Fill the JSON for EVERY possession in your part. A possession may contain several trips: split them into separate objects with the same `pid` and a `trip` index (1, 2, ...). Every trip has `"schema": 2` and `t0`/`t1` (trip start/end, seconds of our video). Jerseys are strings like `"13"` or `null`; put doubts ("13 or 45", "likely") in a `*_note` field, never in the jersey field.
 
 Offence:
-- `offence`: us / them (what you actually see; correct the CV guess when wrong).
+- `offence`: us | them | none (dead ball: timeout, period break). What you actually see; correct the CV guess when wrong.
 - `entry`: transition | early_offense (<7 s after crossing) | halfcourt_set | BLOB/SLOB inbound | after_FT | OREB_putback.
 - `alignment`: 5-out | 4-out-1-in | 3-out-2-in | 2-guard front | horns | stack | unclear.
 - `initiator`: jersey # who initiates (brings the ball or starts the action), or null.
@@ -45,8 +45,9 @@ Offence:
 - `ball_reversals`: integer, times the ball changed side of the floor (top counts as centre).
 - `paint_touches`: integer, ball entering the key by pass or dribble.
 - `ball_stops`: integer, 2+ s holds or pounding without action.
-- `result`: made2 | made3 | FT (made/att) | missed (describe) | turnover | foul_no_FT | end_period | unclear.
-- `scorer_or_shooter`: jersey # or null; `shot_type`: layup | floater | pullup_mid | catch_shoot_mid | three_catch | three_pullup | post | putback | FT; `shot_zone`: rim | paint_non_rim | midrange | three | FT; `contested`: open | contested | heavily_contested.
+- `result`: exactly one of made2 | made3 | missed | turnover | foul_ft | foul_side | dead_ball | end_period | unclear. No free text here; descriptions go in `result_note`. An and-one is `made2`/`made3` plus `fts`. "unclear" is always allowed and better than a guess.
+- `shot`: null or `{"t": s, "shooter": "13" | null, "made": true | false, "points": 2 | 3, "zone": rim | paint_non_rim | midrange | three, "type": layup | floater | pullup_mid | catch_shoot_mid | three_catch | three_pullup | post | putback, "contested": open | contested | heavily_contested}` (the last attempt of the trip; `t` = release time). Required for made2/made3/missed.
+- `fts`: null or `{"shooter": "13" | null, "made": n, "att": n}`. Required for foul_ft; also for an and-one.
 - `turnover_cause`: bad_pass | lost_dribble | travel | charge | out_of_bounds | violation | steal_on_ball | null; `turnover_lead_to`: transition points for the other team? yes | no | unclear.
 - `oreb_crash`: `{"n": attackers crashing (0-3+), "got": "us" | "them" | "unclear"}`.
 
@@ -57,7 +58,7 @@ Defence (the team NOT on offence):
 - `help_rotation`: good | late | none | unclear; `closeout`: good | late | ran_past | n/a.
 - `transition_defence`: `{"back": defenders behind the ball when it crossed half court (0-5), "rim_protector": "yes" | "no"}`. Always this object shape.
 - `boxout`: defenders boxing out when the shot went up (0-5) or null.
-- `foul`: null or `{"who": jersey # or "us"/"them" if unknown, "type": reach_in | shooting_on_drive | shooting_on_jumper | block_charge | over_the_back | loose_ball | off_ball | unclear, "cause": one short sentence (e.g. "beaten off the dribble, reached from behind"), "led_to": "2 FT" | "1 FT" | "side-out" | "unclear"}`.
+- `foul`: null or `{"t": s, "by_team": "us" | "them" | null, "by": fouler jersey or null, "on": fouled jersey or null, "type": reach_in | shooting_on_drive | shooting_on_jumper | block_charge | over_the_back | loose_ball | off_ball | unclear, "cause": one short sentence (e.g. "beaten off the dribble, reached from behind"), "led_to": "1 FT" | "2 FT" | "3 FT" | "side-out" | "unclear"}`. Required for foul_side.
 
 Context:
 - `on_court_seen`: `{"us": [...], "them": [...]}` jersey numbers you can actually read.
@@ -65,6 +66,7 @@ Context:
 - `momentum_note`: runs, celebrations, bench reaction, dead-ball substitutions (numbers in/out if visible), timeouts, players walking vs sprinting back, visible frustration.
 - `key_clip`: `{"t0": s, "t1": s}` for a 3-6 s teaching clip, or null.
 - `coach_note`: at most 35 words, the one thing a coach would say about this possession.
+- `evidence`: `{"result": [s, ...], "shot": [s], "foul": [s], "coach_note": [s]}`: the tile times (our-video seconds) where you saw each one. `result` (unless unclear), `shot` and `foul` (when not null) need at least one time.
 - `confidence`: high | medium | low.
 
 ## Output files (write all three; UTF-8; JSON must be valid)
@@ -86,4 +88,12 @@ Context:
 - Read every sheet of your part in order with the image-reading tool. Do not skip possessions. Do not narrate frames in prose; think, then fill the JSON.
 - When a jersey number or a make is decisive and unreadable, you may crop and enlarge that tile (ffmpeg crop + 3x scale) into `{review_dir}/zoom/`; otherwise mark it "likely" or "unclear".
 - Do not read other parts' files and do not edit anything outside `{review_dir}`.
-- Final reply: at most 8 lines: possessions and trips reviewed, our/their scoring plays found, fouls classified, 3 headline findings.
+- Before replying, run `uv run hoop-tape-miner coach-check --review {review_dir}` and fix every error it lists in your `coach_partN.json` (errors in other parts are not yours). The run is not done until your part passes.
+- Final reply: at most 8 lines: possessions and trips reviewed, our/their scoring plays found, fouls classified, the coach-check line for your part, 3 headline findings.
+
+## Fact-check pass with event sheets (separate reviewer, after the parts)
+
+- `hoop-tape-miner coach-sheets event --run RUN --video V --review {review_dir} --official official.json --out {review_dir}/event_sheets --fps 4` writes 4 fps sheets around every official score event (35 s before the logged time, because the feed lags the play, to 6 s after) and every reviewed foul, plus `event_NN.md` per window and `events.json`.
+- The fact-check reviewer reads only one `event_NN.md` and its sheets, answers the narrow questions (who shot, made, 2/3/FT, foul by/on/type) in `event_NN.answer.json`, and leaves the coaching fields alone.
+- The official facts tell you how many points each team scored in the window, never who scored. The thick yellow box with "?" is a guess (that team's player nearest a rim), not a fact: read the jersey or write "unclear".
+- Answers are merged into the v2 trips (`shot`, `fts`, `foul`) by `hoop-tape-miner coach-sheets event-merge --review {review_dir} --events {review_dir}/event_sheets --out <new review folder>`; an answer overrides the part reviewer only with confidence high or medium and at least one `evidence_t` frame time.

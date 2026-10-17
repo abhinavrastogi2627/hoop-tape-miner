@@ -23,6 +23,7 @@ from . import clips, game_config, workspace
 
 WAITING = 3
 LANGS = ("zh", "en")
+KB = Path(__file__).resolve().parents[2] / "prompts" / "coach_kb.md"   # coaching knowledge base (insights step)
 
 
 @dataclass
@@ -55,13 +56,21 @@ class Game:
 
     @property
     def review(self) -> Path:
-        return self.run / "review_v1"
+        """run/review_v1, or game.json "review_dir" (a re-review of the same run, absolute or relative to run)."""
+        r = self.game.get("review_dir")
+        return self.run / r if r else self.run / "review_v1"
 
     @property
     def official(self) -> Path:
         """official.json in run/ (where fetch writes it), else next to game.json."""
         p = self.run / "official.json"
         return p if p.exists() or not (self.folder / "official.json").exists() else self.folder / "official.json"
+
+    @property
+    def lineup(self) -> Path:
+        """lineup_intervals.json in the review folder, else in run/ (older runs wrote it there)."""
+        p = self.review / "lineup_intervals.json"
+        return p if p.exists() or not (self.run / "lineup_intervals.json").exists() else self.run / "lineup_intervals.json"
 
     def no_score_flow(self) -> bool:
         if not self.official.exists():
@@ -122,15 +131,23 @@ def calib_times(g: Game) -> str:
 
 
 def parts_done(g: Game) -> bool:
-    """A coach_part<N>.json for every part coach-sheets wrote (part<N>.json / brief_part<N>.md)."""
+    """A valid (schema v2, see coach_schema) coach_part<N>.json for every part coach-sheets wrote
+    (part<N>.json / brief_part<N>.md)."""
+    from .coach_schema import validate_part
     parts = {p.stem.removeprefix("brief_") for p in g.review.glob("brief_part*.md")}
     parts |= {p.stem for p in g.review.glob("part*.json")}
-    done = {p.stem.removeprefix("coach_") for p in g.review.glob("coach_part*.json")}
+    done = {p.stem.removeprefix("coach_") for p in g.review.glob("coach_part*.json") if not validate_part(p)}
     return bool(done) and parts <= done
 
 
 def parts_listed(g: Game) -> bool:
     return any(g.review.glob("brief_part*.md")) or any(g.review.glob("coach_part*.json"))
+
+
+def insights_done(g: Game) -> bool:
+    """review/insights.json exists and passes `coach-insights check` (trips, KB slugs, summary numbers, critic)."""
+    from .coach_insights import check_review
+    return (g.review / "insights.json").exists() and not check_review(g.review, KB)
 
 
 def reports_done(g: Game) -> bool:
@@ -230,15 +247,25 @@ STEPS = [
     Step("film-review", "agent", parts_done,
          how="Film review (playbook step 7): launch one subagent per {review}/brief_part<N>.md, at most 3 at once; "
              "each writes coach_part<N>.json, memo_part<N>.md and notes_part<N>.txt there. Do not read the sheets "
-             "yourself. Re-run a part whose json does not parse or misses pids."),
+             "yourself. A part counts as done when `hoop-tape-miner coach-check --review {review}` passes for it; "
+             "re-run a part whose json fails coach-check or misses pids."),
+    Step("features", "cmd", lambda g: (g.review / "features.json").exists(),
+         lambda g: [["coach-features", "--run", str(g.run), "--review", str(g.review)]]),
     Step("summary", "agent",
          lambda g: (g.review / "summary.json").exists(),
          how="Choose the game's stretches from the score flow, then run `coach-summary` and `plusminus` into "
              "{review}/summary.json and {review}/plusminus.json (playbook step 7.4)."),
+    Step("insights", "agent", insights_done,
+         how="Coaching insights with a critic (playbook step 7.5): launch the writer subagent with "
+             "prompts/coach_insights.md (review folder {review}; it also uses {review}/features.json when present); "
+             "it writes {review}/insights.json. Then launch the critic subagent with prompts/coach_critic.md: it "
+             "re-checks every insight on the cited sheets, sets critic.verdict and moves dropped insights to "
+             "{review}/insights_dropped.json. Then run `hoop-tape-miner coach-insights check --review {review}` and "
+             "send the errors back to the writer until it passes."),
     Step("momentum", "cmd",
          lambda g: g.no_score_flow() or all((g.folder / n).exists() for n in ("momentum.png", "momentum.en.png")),
          lambda g: [["momentum", "--official", str(g.official), "--game", str(g.gj), "--lineup",
-                     str(g.review / "lineup_intervals.json"), "--out", str(g.folder / out), "--lang", lang]
+                     str(g.lineup), "--out", str(g.folder / out), "--lang", lang]
                     for out, lang in (("momentum.png", "zh"), ("momentum.en.png", "en"))]),
     Step("facts", "agent",
          lambda g: (g.review / "players_facts.md").exists() and (not g.focus or (g.review / f"player{g.focus}_facts.md").exists()),

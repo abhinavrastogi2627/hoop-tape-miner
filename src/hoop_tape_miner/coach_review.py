@@ -5,6 +5,8 @@ score flow in the header, CV lineups per possession, and the game split into N p
     hoop-tape-miner coach-sheets --run RUN --game game.json --official official.json \
         --out RUN/review_v1 [--parts 6] [--video V] [--brief prompts/film_review_brief.md] [--skip-sheets]
     hoop-tape-miner coach-sheets zoom SHEET TILE X Y W H OUT [--scale 3]   # close-up crop of one tile
+    hoop-tape-miner coach-sheets event --run RUN --video V --review R --official O --out DIR [--fps 4]
+    hoop-tape-miner coach-sheets event-merge --review R --events DIR --out NEW_R [--official O]   # merge answers
 
 Reads RUN/tracks.pkl, possessions.pkl, player_numbers.json. Writes to --out: p<pid>_<k>.jpg,
 manifest.json, part<N>.json, lineup_intervals.json, brief_part<N>.md (if the brief template
@@ -217,9 +219,402 @@ def zoom(sheet, tile, x, y, w, h, out, grid=(2, 2), header=28, scale=3):
     cv2.imwrite(str(out), cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_LANCZOS4))
 
 
+def _foul_time(trip: dict) -> float | None:
+    """v2 foul.t when it is a number, else the trip end (t1)."""
+    f = trip.get("foul") if isinstance(trip.get("foul"), dict) else {}
+    t = f.get("t")
+    if isinstance(t, (int, float)) and not isinstance(t, bool):
+        return float(t)
+    t1 = trip.get("t1", trip.get("end"))
+    return float(t1) if isinstance(t1, (int, float)) and not isinstance(t1, bool) else None
+
+
+def event_windows(official: dict, trips: list[dict], pre: float = 35.0, post: float = 6.0) -> list[dict]:
+    """Video windows to fact-check: [t - pre, t + post] around every official score_flow event with an
+    `our_video_t` (the scorer logs 10-30 s after the play, so `pre` covers the lag) and around every reviewed
+    foul (foul.t, else the trip end). Overlapping windows merge; each keeps the events it covers, sorted by time.
+    Returns [{"t0", "t1", "events": [{"kind": "score"|"foul", "t", ...}]}] sorted by t0 (deterministic)."""
+    evs = []
+    for e in official.get("score_flow", []):
+        t = e.get("our_video_t")
+        if t is None:
+            continue
+        evs.append(dict(kind="score", t=float(t), team=e.get("team"), points=e.get("points"),
+                        official_t=e.get("official_t"), score=f'{e.get("score_us")}-{e.get("score_them")}'))
+    for x in trips:
+        f = x.get("foul")
+        if not f:
+            continue
+        t = _foul_time(x)
+        if t is None:
+            continue
+        f = f if isinstance(f, dict) else {}
+        ft = f.get("t")
+        evs.append(dict(kind="foul", t=t, pid=x.get("pid"), trip=x.get("trip"), by_team=f.get("by_team"),
+                        by=f.get("by"), on=f.get("on"), type=f.get("type"),
+                        t_known=isinstance(ft, (int, float)) and not isinstance(ft, bool)))
+    evs.sort(key=lambda e: (e["t"], e["kind"], str(e.get("team") or e.get("by_team"))))
+    wins: list[dict] = []
+    for e in evs:
+        a, b = max(0.0, e["t"] - pre), e["t"] + post
+        if wins and a <= wins[-1]["t1"]:
+            wins[-1]["t1"] = max(wins[-1]["t1"], b)
+            wins[-1]["events"].append(e)
+        else:
+            wins.append(dict(t0=a, t1=b, events=[e]))
+    for w in wins:
+        w["t0"], w["t1"] = round(w["t0"], 1), round(w["t1"], 1)
+    return wins
+
+
+def candidate_tracks(dets: pd.DataFrame, teams, max_dist: float = 3.0) -> set:
+    """Heuristic candidate shooter/fouler in one frame (no ball track exists): for each team in `teams`, the
+    tracked player of that team whose smoothed court position (cx_s, cy_s) is closest to either rim, if within
+    `max_dist` metres. Returns the track ids to draw thicker."""
+    from .court import hoop_xy
+    hoops = np.array([hoop_xy("left"), hoop_xy("right")])
+    out = set()
+    if dets is None or not len(dets) or "cx_s" not in dets:
+        return out
+    for team in teams:
+        d = dets[(dets.team == team) & dets.cx_s.notna()]
+        if not len(d):
+            continue
+        xy = d[["cx_s", "cy_s"]].to_numpy(float)
+        dist = np.min(np.linalg.norm(xy[:, None, :] - hoops[None], axis=2), axis=1)
+        i = int(dist.argmin())
+        if dist[i] <= max_dist:
+            out.add(int(d.track.iloc[i]))
+    return out
+
+
+def window_teams(w: dict) -> list[str]:
+    """Teams whose candidate players get boxed: scoring teams, foul teams (both if a fouler team is unknown)."""
+    ts = set()
+    for e in w["events"]:
+        if e["kind"] == "score" and e.get("team") in ("us", "them"):
+            ts.add(e["team"])
+        elif e["kind"] == "foul":
+            ts |= {e["by_team"]} if e.get("by_team") in ("us", "them") else {"us", "them"}
+    return sorted(ts)
+
+
+def event_questions(i: int, w: dict, sheets: list[str], fps: float) -> str:
+    """Markdown question file for one window: the official facts and reviewed fouls, sheets, narrow questions."""
+    lines = [f"# Event window {i:02d}: {mmss(w['t0'])}-{mmss(w['t1'])} (video {w['t0']}-{w['t1']} s)", "",
+             f"Sheets at {fps:g} fps, 2x2 tiles, time stamp top-left of each tile. A thicker box = candidate "
+             "shooter/fouler (the team's player nearest a rim; a guess, not a fact).", "",
+             "## Official facts in this window (the league feed logs 10-30 s after the play; it has no scorer)", ""]
+    sc = [e for e in w["events"] if e["kind"] == "score"]
+    lines += [f"- S{k}: {e['team']} +{e['points']} logged @~{mmss(e['t'])} (official clock {e['official_t']}, "
+              f"score {e['score']} us-them)" for k, e in enumerate(sc, 1)] or ["- none"]
+    fo = [e for e in w["events"] if e["kind"] == "foul"]
+    lines += ["", "## Fouls the film review reported here (to confirm or correct)", ""]
+    lines += [f"- F{k}: trip pid {e['pid']} #{e['trip']}, @~{mmss(e['t'])}{'' if e['t_known'] else ' (trip end)'}: "
+              f"by {e['by_team'] or '?'} {e['by'] or '?'} on {e['on'] or '?'}, type {e['type'] or '?'}"
+              for k, e in enumerate(fo, 1)] or ["- none"]
+    lines += ["", "## Sheets", ""] + [f"- {s}" for s in sheets]
+    lines += ["", "## Questions (answer from the frames only; unsure = \"unclear\", never guess)", "",
+              "For each S event: 1. who shot (team + jersey)? 2. made? 3. points: 2, 3 or FT? 4. video time of the shot.",
+              "For each F event, and any other foul you see: 5. foul by team + jersey, on whom (jersey), type "
+              "(shooting / non-shooting / offensive / unclear), video time.", "",
+              "Answer as JSON in `event_%02d.answer.json` (jerseys are digit strings or null, doubts go in note; "
+              "fouls you see that are not listed get ids Fx1, Fx2, ...):" % i, "",
+              '```json\n{"window": "%02d", "events": [{"id": "S1", "team": "us", "kind": "shot|ft|and_one", '
+              '"shot_t": 61.0, "shooter": "17", "made": true, "points": 2, "evidence_t": [60.5, 61.0], '
+              '"confidence": "high|medium|low", "not_shooter": ["13"], "note": ""}], "fouls": [{"id": "F1", '
+              '"t": 58.5, "by_team": "them", "by": "2", "on": "17", "type": "shooting_on_drive", "real": true, '
+              '"evidence_t": [58.5], "confidence": "medium", "not_by": [], "note": ""}]}\n```' % i,
+              "`not_shooter` / `not_by`: jerseys the frames rule out (e.g. the earlier review's guess stands "
+              "elsewhere at the release), even when you cannot read the real one.", ""]
+    return "\n".join(lines)
+
+
+def build_event_sheets(cap, tracks, numbers, windows: list[dict], out: Path, fps_out: float = 4.0,
+                       lay: dict | None = None) -> list[dict]:
+    """Reads the video sequentially inside each window (one seek per window) at `fps_out` frames per second,
+    annotates tracks (candidate players boxed thick + "?" label), writes ev<NN>_<k>.jpg and event_NN.md to `out`."""
+    lay = {**LAYOUT, **(lay or {})}
+    vfps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    by_frame = {f: g for f, g in tracks.groupby("frame")}
+    analysed = np.array(sorted(by_frame))
+    per_sheet = lay["grid"][0] * lay["grid"][1]
+    res = []
+    for i, w in enumerate(windows, 1):
+        teams = window_teams(w)
+        targets = [int(round(t * vfps)) for t in np.arange(w["t0"], w["t1"], 1.0 / fps_out)]
+        tiles, fi = [], targets[0] if targets else 0
+        if targets:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, fi)
+        for tgt in targets:
+            ok, f = True, None
+            while fi <= tgt:
+                ok, f = cap.read()
+                fi += 1
+                if not ok:
+                    break
+            if not ok or f is None:
+                break
+            near = analysed[np.abs(analysed - tgt).argmin()] if len(analysed) else None
+            img = f
+            if near is not None and abs(near - tgt) <= 6:
+                dets = by_frame[near]
+                img = annotate(f, dets, numbers)
+                for _, r in dets[dets.track.isin(candidate_tracks(dets, teams))].iterrows():
+                    cv2.rectangle(img, (int(r.x1), int(r.y1)), (int(r.x2), int(r.y2)), (0, 255, 255), 6)
+                    cv2.putText(img, "?", (int(r.x2) + 2, int(r.y1) + 18), 0, 0.8, (0, 255, 255), 2)
+            img = cv2.resize(img, tuple(lay["tile"]))
+            cv2.rectangle(img, (0, 0), (120, 24), (0, 0, 0), -1)
+            t = tgt / vfps
+            cv2.putText(img, f"{int(t // 60):02d}:{t % 60:04.1f}", (4, 18), 0, 0.6, (0, 255, 255), 2)
+            tiles.append(img)
+        sc = "; ".join(f"{e['team']} +{e['points']} @~{mmss(e['t'])}" for e in w["events"] if e["kind"] == "score")
+        nf = sum(e["kind"] == "foul" for e in w["events"])
+        head = f"EV{i:02d} {mmss(w['t0'])}-{mmss(w['t1'])} | OFFICIAL: {sc or 'none'} | review fouls: {nf}"
+        sheets = []
+        for k in range(0, len(tiles), per_sheet):
+            name = f"ev{i:02d}_{k // per_sheet:02d}.jpg"
+            cv2.imwrite(str(out / name), compose(tiles[k:k + per_sheet], head, lay),
+                        [cv2.IMWRITE_JPEG_QUALITY, lay["quality"]])
+            sheets.append(name)
+        (out / f"event_{i:02d}.md").write_text(event_questions(i, w, sheets, fps_out), encoding="utf-8")
+        res.append({**w, "window": i, "teams": teams, "sheets": sheets, "questions": f"event_{i:02d}.md"})
+    return res
+
+
+def _trip_key(x: dict) -> tuple:
+    return x.get("pid"), x.get("trip", 1)
+
+
+def _num_t(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _find_trip(trips: list[dict], t: float, team: str | None = None, slack: float = 3.0) -> dict | None:
+    """The trip (of `team` on offence, if given) whose [t0 - slack, t1 + slack] holds t; nearest centre wins."""
+    best = None
+    for x in trips:
+        t0, t1 = x.get("t0"), x.get("t1")
+        if not (_num_t(t0) and _num_t(t1)) or (team and x.get("offence") != team):
+            continue
+        if t0 - slack <= t <= t1 + slack:
+            d = abs((t0 + t1) / 2 - t)
+            if best is None or d < best[0]:
+                best = (d, x)
+    return best[1] if best else None
+
+
+def _add_evidence(x: dict, field: str, ts) -> None:
+    ev = x.setdefault("evidence", {})
+    ev[field] = sorted(set(ev.get(field) or []) | set(ts))
+
+
+def _credited(trips: list[dict], team: str, j: str, skip: dict | None = None) -> int:
+    """Points the trips credit to jersey j of team (made shots + made FTs), leaving out trip `skip`."""
+    n = 0
+    for x in trips:
+        if x is skip or x.get("offence") != team:
+            continue
+        s, f = x.get("shot") or {}, x.get("fts") or {}
+        n += (s.get("points") or 0) if s.get("made") and s.get("shooter") == j else 0
+        n += (f.get("made") or 0) if f.get("shooter") == j else 0
+    return n
+
+
+def merge_event_answers(trips: list[dict], windows: list[dict], answers: dict, box: dict | None = None) -> list[str]:
+    """Merge fact-check answers (`answers[window_no]` = parsed event_NN.answer.json) into v2 `trips` in place and
+    return a change log. An answer counts only with confidence high/medium and at least one evidence time (the
+    brief's rule: it overrides the part reviewer only when it cites frames). A made shot goes to that team's trip
+    holding shot_t; FT answers raise fts.made to the number of made FTs found for the trip; a listed foul F<k> goes
+    back to the trip it came from (events.json), a new foul Fx<k> to the trip holding its time; `real: false`
+    removes a reviewed foul; `not_shooter` / `not_by` (jerseys the frames rule out) clear a matching earlier jersey
+    when no new one is read. Earlier values stay in `*_v2m` fields; no trip is created (unmatched answers are logged).
+    With `box` ({team: {jersey: PTS}} from the official box score) a new shooter is not taken when it would credit
+    that player with more points than the box score gives him (logged as "exceeds box score")."""
+    log = []
+
+    def fits(team, j, pts, x, tag, aid):
+        if box is None or j is None:
+            return True
+        have, cap = _credited(trips, team, j, skip=x), (box.get(team) or {}).get(j, 0)
+        if have + pts <= cap:
+            return True
+        log.append(f"{tag} {aid}: #{j} not taken, exceeds box score ({have} + {pts} > {cap})")
+        return False
+
+    ok = lambda a: a.get("confidence") in ("high", "medium") and a.get("evidence_t")
+    by_key = {_trip_key(x): x for x in trips}
+    for w in windows:
+        ans = answers.get(int(w["window"]))
+        if not ans:
+            continue
+        tag = f"EV{int(w['window']):02d}"
+        ft_count: dict = {}
+        for a in ans.get("events", []):
+            t = a.get("shot_t")
+            if not ok(a) or not _num_t(t) or a.get("made") is False:
+                continue
+            x = _find_trip(trips, t, a.get("team"))
+            if x is None:
+                log.append(f"{tag} {a.get('id')}: no {a.get('team')} trip at {mmss(t)}, unmatched")
+                continue
+            if a.get("kind") == "ft":
+                f = dict(x.get("fts") or {"shooter": None, "made": 0, "att": 0})
+                n = ft_count[_trip_key(x)] = ft_count.get(_trip_key(x), 0) + 1
+                j = a.get("shooter")
+                if j and j != f.get("shooter") and not fits(a.get("team"), j, max(f.get("made") or 0, n), x, tag,
+                                                            a.get("id")):
+                    j = None
+                new = dict(f, shooter=j or f.get("shooter"), made=max(f.get("made") or 0, n))
+                new["att"] = max(new.get("att") or 0, new["made"])
+                if new != f:
+                    x.setdefault("fts_v2m", x.get("fts"))
+                    x["fts"] = new
+                    if x.get("result") in ("unclear", "foul_side", "missed", None):
+                        x.setdefault("result_v2m", x.get("result"))
+                        x["result"] = "foul_ft"
+                    _add_evidence(x, "fts", a["evidence_t"])
+                    log.append(f"{tag} {a['id']}: pid {x.get('pid')} fts {f} -> {new}")
+                continue
+            old = x.get("shot") if isinstance(x.get("shot"), dict) else {}
+            pts = a.get("points") if a.get("points") in (2, 3) else old.get("points")
+            keep = old.get("shooter") if old.get("shooter") not in (a.get("not_shooter") or []) else None
+            j = a.get("shooter")
+            if j and j != old.get("shooter") and not fits(a.get("team"), j, pts or 0, x, tag, a.get("id")):
+                j = None
+            shot = dict(old, t=t, made=True, points=pts, shooter=j or keep)
+            res = {2: "made2", 3: "made3"}.get(pts, x.get("result"))
+            if shot != old or res != x.get("result"):
+                x.setdefault("shot_v2m", x.get("shot"))
+                x.setdefault("result_v2m", x.get("result"))
+                if old.get("shooter") != shot["shooter"] or res != x.get("result"):
+                    log.append(f"{tag} {a['id']}: pid {x.get('pid')} shooter {old.get('shooter')} -> "
+                               f"{shot['shooter']}, result {x.get('result')} -> {res}")
+                x["shot"], x["result"] = shot, res
+                _add_evidence(x, "shot", a["evidence_t"])
+                _add_evidence(x, "result", a["evidence_t"])
+            if a.get("kind") == "and_one":
+                f = dict(x.get("fts") or {}, shooter=shot["shooter"], made=1, att=1)
+                if f != x.get("fts"):
+                    x.setdefault("fts_v2m", x.get("fts"))
+                    x["fts"] = f
+                    _add_evidence(x, "fts", a["evidence_t"])
+        listed = [e for e in w["events"] if e["kind"] == "foul"]
+        for a in ans.get("fouls", []):
+            if not ok(a):
+                continue
+            fid = str(a.get("id", ""))
+            x = None
+            if fid[:1] == "F" and fid[1:].isdigit() and 1 <= int(fid[1:]) <= len(listed):
+                e = listed[int(fid[1:]) - 1]
+                x = by_key.get((e.get("pid"), e.get("trip") or 1))
+            elif _num_t(a.get("t")):
+                x = _find_trip(trips, a["t"])
+            if x is None:
+                log.append(f"{tag} {fid}: no trip found, unmatched")
+                continue
+            old = x.get("foul") if isinstance(x.get("foul"), dict) else None
+            if a.get("real") is False:
+                if old:
+                    x.setdefault("foul_v2m", old)
+                    x["foul"] = None
+                    log.append(f"{tag} {fid}: pid {x.get('pid')} foul removed (not on film)")
+                continue
+            new = dict(old or {"cause": None, "led_to": None})
+            from .coach_schema import FOUL_TYPES
+            for k in ("t", "by_team", "by", "on", "type"):
+                if a.get(k) is not None and (k != "type" or a[k] in FOUL_TYPES):
+                    new[k] = a[k]
+            if a.get("by") is None and new.get("by") in (a.get("not_by") or []):
+                new["by"] = None
+            if new != old:
+                x.setdefault("foul_v2m", old)
+                x["foul"] = new
+                _add_evidence(x, "foul", a["evidence_t"])
+                o = old or {}
+                if any(o.get(k) != new.get(k) for k in ("by_team", "by", "on", "type")):
+                    log.append(f"{tag} {fid}: pid {x.get('pid')} foul {o.get('by_team')} {o.get('by')} on "
+                               f"{o.get('on')} ({o.get('type')}) -> {new.get('by_team')} {new.get('by')} on "
+                               f"{new.get('on')} ({new.get('type')})")
+    return log
+
+
+def event_merge_main(argv):
+    """coach-sheets event-merge: copy --review into a new --out folder with the fact-check answers merged."""
+    import shutil
+    ap = argparse.ArgumentParser(prog="hoop-tape-miner coach-sheets event-merge", description=event_merge_main.__doc__)
+    ap.add_argument("--review", required=True, help="review dir with coach_part*.json (v2 trips)")
+    ap.add_argument("--events", required=True, help="event sheets dir with events.json and event_NN.answer.json")
+    ap.add_argument("--out", required=True, help="new review dir (not --review)")
+    ap.add_argument("--official", help="official.json: a new shooter is not taken beyond his box-score points")
+    a = ap.parse_args(argv)
+    src, ev_dir, out = Path(a.review), Path(a.events), Path(a.out)
+    if out.resolve() == src.resolve():
+        raise SystemExit("--out must be a new folder")
+    out.mkdir(parents=True, exist_ok=True)
+    for f in src.iterdir():
+        if f.is_file():
+            shutil.copy2(f, out / f.name)
+    windows = json.loads((ev_dir / "events.json").read_text(encoding="utf-8"))["windows"]
+    answers = {}
+    for p in sorted(ev_dir.glob("event_*.answer.json")):
+        answers[int(p.name.split("_")[1].split(".")[0])] = json.loads(p.read_text(encoding="utf-8"))
+    parts = {p.name: json.loads(p.read_text(encoding="utf-8")) for p in sorted(out.glob("coach_part*.json"))}
+    box = None
+    if a.official:
+        players = json.loads(Path(a.official).read_text(encoding="utf-8")).get("players") or {}
+        box = {t: {str(k): int(v.get("PTS") or 0) for k, v in (players.get(t) or {}).items()} for t in ("us", "them")}
+    log = merge_event_answers([x for v in parts.values() for x in v], windows, answers, box)
+    for name, v in parts.items():
+        (out / name).write_text(json.dumps(v, ensure_ascii=False, indent=1), encoding="utf-8")
+    (out / "event_merge.md").write_text(f"# Event fact-check merge ({len(answers)} answer files)\n\n"
+                                        + "".join(f"- {line}\n" for line in log), encoding="utf-8")
+    print(f"{len(answers)} answer files, {len(log)} changes -> {out}")
+
+
+def event_main(argv):
+    """coach-sheets event: 4 fps sheets + question files around official score events and reviewed fouls."""
+    import time
+    from .coach_eval import load_trips
+    ap = argparse.ArgumentParser(prog="hoop-tape-miner coach-sheets event", description=event_main.__doc__)
+    ap.add_argument("--run", required=True)
+    ap.add_argument("--video", required=True)
+    ap.add_argument("--review", required=True, help="review dir with coach_part*.json (v2 trips)")
+    ap.add_argument("--official", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--fps", type=float, default=4.0)
+    ap.add_argument("--pre", type=float, default=35.0)
+    ap.add_argument("--post", type=float, default=6.0)
+    ap.add_argument("--game", help="game.json for team colours (default: next to --official, if any)")
+    ap.add_argument("--limit", type=int, help="only the first N windows (smoke test)")
+    a = ap.parse_args(argv)
+    t_start = time.time()
+    run, out = Path(a.run), Path(a.out)
+    official = json.loads(Path(a.official).read_text(encoding="utf-8"))
+    game_path = Path(a.game) if a.game else Path(a.official).parent / "game.json"
+    if game_path.is_file():
+        use_game(json.loads(game_path.read_text(encoding="utf-8")))
+    if not Path(a.video).is_file():
+        raise SystemExit(f"video not found: {a.video}")
+    wins = event_windows(official, load_trips(Path(a.review)), a.pre, a.post)
+    wins = wins[:a.limit] if a.limit else wins
+    out.mkdir(parents=True, exist_ok=True)
+    tracks = pd.read_pickle(run / "tracks.pkl")
+    numbers = {int(k): v for k, v in json.loads((run / "player_numbers.json").read_text()).items()}
+    res = build_event_sheets(cv2.VideoCapture(a.video), tracks, numbers, wins, out, a.fps)
+    (out / "events.json").write_text(json.dumps(dict(fps=a.fps, pre=a.pre, post=a.post, windows=res), indent=1),
+                                     encoding="utf-8")
+    print(len(res), "windows", sum(len(w["sheets"]) for w in res), "sheets",
+          sum(len(w["events"]) for w in res), "events", f"{time.time() - t_start:.0f}s ->", out)
+
+
 def main(argv=None):
     import sys
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["event"]:
+        return event_main(argv[1:])
+    if argv[:1] == ["event-merge"]:
+        return event_merge_main(argv[1:])
     if argv[:1] == ["zoom"]:
         zp = argparse.ArgumentParser(prog="hoop-tape-miner coach-sheets zoom")
         for k in ("sheet", "tile", "x", "y", "w", "h", "out"):
