@@ -109,6 +109,10 @@ The agent runs `uv run hoop-tape-miner run <link>` and does the steps that need 
 - Explained video: send `film.zh.mp4` / `film.en.mp4` in your team chat.
 - Clips and videos show real players: share them with the team only (see [docs/privacy.md](docs/privacy.md)).
 
+## Personal training
+
+Film your own workout (shooting, finishing, dribbling) on a phone and get the same kind of page and explained video for it, plus a plan for next time whose targets the next session checks: `/train <videos> --plan "free throws, left-hand layups"` in Claude Code, or `uv run hoop-tape-miner train <videos> --player 17`. Pose (YOLO) finds every shot, finish and dribble block and measures knee bend, elbow angles and release timing; agents judge make or miss from rim filmstrips; the page shows percentages by zone and finish type, form for makes vs misses, and progress across sessions. Put the phone on a tripod with the rim and your whole body in frame, side-on or from behind. Training pages get their own private link and are never listed on the team hub. Details: [playbook](docs/playbook.md#personal-training-sessions).
+
 ## Commands
 
 | Stage | What it does |
@@ -126,6 +130,7 @@ The agent runs `uv run hoop-tape-miner run <link>` and does the steps that need 
 | `html` | report folder → one bilingual HTML page |
 | `publish` | pages → private-link website on Cloudflare, one stable link per report |
 | `film` | explained video: narration over clips, freeze frames, court diagrams and charts, with subtitles |
+| `train` | one personal training session: phone videos → session page, explained video, next session's plan (`train-new`, `train-scan`, `train-sheets`, `train-summary` are its stages) |
 | `official`, `recalib`, `report`, `replay`, `review`, `merge-reviews` | optional: league JSON import, re-run court mapping, CV figures, tactics-board replay, event review |
 
 Run `uv run hoop-tape-miner <stage> -h` for the options of each stage.

@@ -1,0 +1,27 @@
+{
+  "_comment": "One personal training session (hoop-tape-miner train-new writes this). Folder: <workspace>/players/<player>/training/<YYYY-MM-DD>[-n]/. Paths may be absolute or relative to the session folder. rim: rim boxes as frame fractions [x, y, w, h] (top-left, size) from a session time on; box null = rim not in view; [] = never in view. targets: copied from the previous session's plan.json (drills[].target); match filters reviewed reps by field.",
+  "kind": "training",
+  "player": "17",
+  "name": "Alex",
+  "date": "2026-10-20",
+  "title": "",
+  "sources": [
+    {"file": "C:/Users/me/Videos/IMG_0412.MOV", "start": 0.0, "duration": 612.4},
+    {"file": "C:/Users/me/Videos/IMG_0413.MOV", "start": 612.4, "duration": 905.1}
+  ],
+  "video": "D:/hoop-media/players/17/training/2026-10-20/session.mp4",
+  "run": "D:/hoop-media/players/17/training/2026-10-20/run",
+  "hex": "",
+  "plan": "free throws, left-hand layups, two-ball dribbling",
+  "targets": [
+    {"name": "free throws 70%", "match": {"zone": "ft"}, "attempts": 50, "pct": 0.7},
+    {"name": "left-hand layups 60%", "match": {"type": "layup-left"}, "attempts": 20, "pct": 0.6}
+  ],
+  "targets_from": "2026-10-13",
+  "rim": [
+    {"from": "00:00", "box": [0.47, 0.18, 0.06, 0.03]},
+    {"from": "10:12", "box": null}
+  ],
+  "rim_checked": true,
+  "narration": {"voices": {"zh": "zh-CN-YunxiNeural"}}
+}

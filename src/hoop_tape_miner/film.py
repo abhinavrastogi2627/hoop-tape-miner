@@ -380,7 +380,13 @@ def scene_events(sc: Scene, length: float, slow: float, clip_s: float, cues, lan
 
 
 def title_text(folder: Path, game: dict, h: int) -> str:
-    """'<us> vs <them>' plus date and final score (game.json result only) on a smaller second line."""
+    """'<us> vs <them>' plus date and final score (game.json result only) on a smaller second line.
+    Training sessions: session.json `title` (else '<name> · training') plus the date."""
+    gap = f"\\N{{\\fs{round(h * 0.02)}}} "  # a thin blank line between the title and the date
+    if gc.is_training(game):
+        head = game.get("title") or f"{game.get('name') or '#' + str(game.get('player', ''))} · training"
+        sub = str(game.get("date") or folder.name)
+        return ass_escape(head) + f"{gap}\\N{{\\fs{round(h * 0.045)}\\b0}}{ass_escape(sub)}"
     head = f"{gc.team_name(game, 'us')} vs {gc.team_name(game, 'them')}"
     pm = re.fullmatch(r"player-(\w+)", folder.name)
     if pm:
@@ -389,7 +395,6 @@ def title_text(folder: Path, game: dict, h: int) -> str:
     res = game.get("result") or {}
     score = f"{res['us']}–{res['them']}" if isinstance(res.get("us"), int) and isinstance(res.get("them"), int) else ""
     sub = " · ".join(x for x in (date, score) if x)
-    gap = f"\\N{{\\fs{round(h * 0.02)}}} "  # a thin blank line between the title and the date
     return ass_escape(head) + (f"{gap}\\N{{\\fs{round(h * 0.045)}\\b0}}{ass_escape(sub)}" if sub else "")
 
 
@@ -719,7 +724,10 @@ def main(argv=None):
         if not m:
             ap.error("--scenes takes A or A-B, e.g. 3-6")
         pick = (int(m[1]), int(m[2] or m[1]))
-    video = a.video or gc.load_game(folder).get("video")
+    # ffmpeg runs in a temp dir: --video is relative to the shell, a game.json path to the folder
+    video = Path(a.video).resolve() if a.video else gc.load_game(folder).get("video")
+    if video and not Path(video).is_absolute():
+        video = (folder / video).resolve()
     for lang in langs:
         build(folder, lang, Path(video) if video else None, a.height, a.font, pick, a.dry,
               Path(a.run) if a.run else None, a.crf)

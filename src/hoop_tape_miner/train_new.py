@@ -1,0 +1,132 @@
+"""Start a personal training session: session folder, session.json and one joined session video.
+
+usage: hoop-tape-miner train-new <phone video> [<phone video> ...] [--player 17] [--date 2026-10-20]
+           [--name "Alex"] [--plan "free throws, left-hand layups"] [--height 1080]
+
+The phone files are joined in the given order into `session.mp4` (rotation applied, 30 fps, H.264, long side
+--height px) in the media folder; their start offsets in the joined video are kept in session.json `sources`, so
+every time in the report can be traced back to a phone file. Targets from the previous session's plan.json are
+copied into `targets`, and the next train-summary checks them. Prints the session folder.
+--player defaults to team.json focus_player; --date to the first file's recording date (else its file date).
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from . import training as T
+from . import workspace
+
+LONG_SIDE = 1080
+
+
+def probe(p: Path) -> dict:
+    """width / height after rotation, duration (s) and recording date (YYYY-MM-DD or None) of a video."""
+    out = subprocess.run([os.environ.get("FFPROBE", "ffprobe"), "-v", "error", "-print_format", "json",
+                          "-show_format", "-show_streams", str(p)], capture_output=True, text=True, check=True).stdout
+    info = json.loads(out)
+    v = next(s for s in info["streams"] if s.get("codec_type") == "video")
+    w, h = int(v["width"]), int(v["height"])
+    rot = int(float((v.get("tags") or {}).get("rotate", 0) or 0))
+    for sd in v.get("side_data_list") or []:
+        if "rotation" in sd:
+            rot = int(float(sd["rotation"]))
+    if rot % 180:
+        w, h = h, w
+    created = (info.get("format", {}).get("tags") or {}).get("creation_time") or (v.get("tags") or {}).get("creation_time")
+    return dict(w=w, h=h, duration=float(info["format"]["duration"]), date=created[:10] if created else None)
+
+
+def target_size(w: int, h: int, long_side: int) -> tuple[int, int]:
+    """Scale so the long side is at most long_side; even numbers for H.264."""
+    k = min(1.0, long_side / max(w, h))
+    return int(round(w * k / 2)) * 2, int(round(h * k / 2)) * 2
+
+
+def join(videos: list[Path], out: Path, long_side: int = LONG_SIDE) -> list[dict]:
+    """Normalise every file to the first file's orientation and size, then concatenate; returns sources."""
+    infos = [probe(v) for v in videos]
+    W, H = target_size(infos[0]["w"], infos[0]["h"], long_side)
+    ffmpeg = os.environ.get("FFMPEG", "ffmpeg")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    sources, start = [], 0.0
+    with tempfile.TemporaryDirectory() as tmp:
+        parts = []
+        for i, (v, info) in enumerate(zip(videos, infos)):
+            part = Path(tmp) / f"p{i:03d}.mp4"
+            vf = (f"scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,setsar=1,"
+                  "fps=30")
+            print(f"[train-new] {v.name}: {info['duration']:.0f} s", flush=True)
+            subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-y", "-i", str(v), "-vf", vf, "-c:v", "libx264",
+                            "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k",
+                            "-ar", "48000", "-ac", "1", str(part)], check=True)
+            parts.append(part)
+            dur = probe(part)["duration"]
+            sources.append(dict(file=str(v.resolve()), start=round(start, 2), duration=round(dur, 2)))
+            start += dur
+        lst = Path(tmp) / "list.txt"
+        lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf8")
+        subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(lst),
+                        "-c", "copy", "-movflags", "+faststart", str(out)], check=True)
+    return sources
+
+
+def previous_targets(folder: Path) -> tuple[list[dict], str | None]:
+    """Targets of the latest earlier session's plan.json (drills[].target), and that session's name."""
+    for prev in reversed(T.earlier_sessions(folder)):
+        p = prev / "plan.json"
+        if p.exists():
+            plan = json.loads(p.read_text(encoding="utf8"))
+            return [d["target"] for d in plan.get("drills", []) if d.get("target")], prev.name
+    return [], None
+
+
+def create(videos: list[Path], player: str, date: str | None = None, name: str | None = None, plan: str = "",
+           long_side: int = LONG_SIDE, joiner=join) -> Path:
+    for v in videos:
+        if not v.is_file():
+            sys.exit(f"video not found: {v}")
+    date = date or probe(videos[0])["date"] or dt.date.fromtimestamp(videos[0].stat().st_mtime).isoformat()
+    sname = T.session_name(player, date)
+    folder = T.sessions_root(player) / sname
+    media = T.media_root_for(player) / sname
+    folder.mkdir(parents=True, exist_ok=True)
+    video = media / "session.mp4"
+    sources = joiner(videos, video, long_side)
+    targets, from_session = previous_targets(folder)
+    prof = workspace.profile()
+    s = dict(kind="training", player=str(player), name=name or "", date=date, title="",
+             sources=sources, video=str(video.resolve()), run=str((media / "run").resolve()),
+             hex=prof.get("hex") or "", plan=plan, targets=targets, targets_from=from_session,
+             rim=[], rim_checked=False)
+    (folder / "session.json").write_text(json.dumps(s, indent=2, ensure_ascii=False) + "\n", encoding="utf8")
+    print(f"[train-new] session {folder}")
+    print(f"[train-new] video {video} ({sum(x['duration'] for x in sources) / 60:.1f} min)")
+    if targets:
+        print(f"[train-new] {len(targets)} targets from {from_session}")
+    return folder
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="hoop-tape-miner train-new", description=__doc__.split("\n\n")[0])
+    ap.add_argument("videos", nargs="+", help="phone video files of one workout, in recording order")
+    ap.add_argument("--player", help="player number or slug (default: team.json focus_player)")
+    ap.add_argument("--date", help="session date YYYY-MM-DD (default: recording date of the first file)")
+    ap.add_argument("--name", help="player display name for the pages")
+    ap.add_argument("--plan", default="", help="what you meant to train, in your own words")
+    ap.add_argument("--height", type=int, default=LONG_SIDE, help=f"long side of session.mp4 in px (default {LONG_SIDE})")
+    a = ap.parse_args(argv)
+    player = a.player or workspace.profile().get("focus_player")
+    if not player:
+        ap.error("--player is required when team.json has no focus_player")
+    return create([Path(v) for v in a.videos], str(player), a.date, a.name, a.plan, a.height)
+
+
+if __name__ == "__main__":
+    main()

@@ -34,11 +34,15 @@ LANGS = [("zh", "zh-CN", "中文", "README.md"), ("en", "en", "EN", "README.en.m
 UI = {
     "zh": dict(us="我们", them="对手", half1="上半场", half2="下半场", final="终场", contents="目录", switch="切换语言",
                listen="听报告", listen_sub="约 {m} 分钟，可以边看边听", play="播放 / 暂停", seek="播放进度", speed="播放速度",
-               clip="片段", slow="慢放", missing="（片段还没剪：运行 hoop-tape-miner clips）"),
+               clip="片段", slow="慢放", missing="（片段还没剪：运行 hoop-tape-miner clips）",
+               training="个人训练", made="命中 / 出手", shots="投篮", finishes="终结", dribble="运球",
+               targets="目标达成", vs_last="对比上次", minutes="分钟", unclear="无法判断"),
     "en": dict(us="Us", them="Them", half1="1st half", half2="2nd half", final="Final", contents="Contents", switch="Switch language",
                listen="Listen to the report", listen_sub="About {m} min. Read along or just listen.", play="Play / pause",
                seek="Playback position", speed="Playback speed",
-               clip="Clip", slow="Slow-mo", missing="(clip not cut yet: run hoop-tape-miner clips)"),
+               clip="Clip", slow="Slow-mo", missing="(clip not cut yet: run hoop-tape-miner clips)",
+               training="Training", made="Made / attempts", shots="Shots", finishes="Finishes", dribble="Dribbling",
+               targets="Targets met", vs_last="vs last session", minutes="min", unclear="unclear"),
 }
 PLAY_ICON = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5.5v13l10.5-6.5z"/>'
              '<path class="i-pause" d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>')
@@ -61,7 +65,11 @@ def _num(v):
 
 def scoreboard(folder: Path):
     """Team names, colours and score from game.json; scores are None while the result is not filled in."""
-    game = json.loads(find_up(folder, "game.json").read_text(encoding="utf8"))
+    game = gc.load_game(folder)
+    if not game:
+        raise FileNotFoundError(f"game.json / session.json not found in {folder} or its parent")
+    if gc.is_training(game):
+        return training_scoreboard(folder, game)
     res = game.get("result") or {}
     fin = (_num(res.get("us")), _num(res.get("them")))
     ht = res.get("halftime") or {}
@@ -72,6 +80,58 @@ def scoreboard(folder: Path):
         h = gc.team(game, side).get("hex")
         colours[side] = (h, gc.mix(h, "#ffffff", 0.55)) if gc.is_hex(h) else DEFAULT_COLOURS[side]
     return dict(us=gc.team_name(game, "us"), them=gc.team_name(game, "them"), final=fin, h1=h1, h2=h2, colours=colours)
+
+
+BOARD = """<div class="score" data-result="{result}">
+      <div class="team us"><span class="name">{us_name}</span><span class="side">{us_label}</span></div>
+      <div class="pts" aria-label="{us_pts}–{them_pts}"><span class="{us_cls}">{us_pts}</span><span class="dash">–</span><span class="{them_cls}">{them_pts}</span></div>
+      <div class="team them"><span class="name">{them_name}</span><span class="side">{them_label}</span></div>
+    </div>
+    <div class="halves">{halves}</div>"""
+
+
+def training_scoreboard(folder: Path, s: dict) -> dict:
+    """Session band: the player, made / attempts and % over all reviewed reps (summary.json `headline`)."""
+    p = folder / "summary.json"
+    summ = json.loads(p.read_text(encoding="utf8")) if p.exists() else {}
+    h = s.get("hex")
+    colours = dict(DEFAULT_COLOURS)
+    if gc.is_hex(h):
+        colours["us"] = (h, gc.mix(h, "#ffffff", 0.55))
+    name = s.get("name") or f"#{s.get('player', '')}"
+    return dict(training=True, us=name, them="", date=s.get("date") or folder.name, summary=summ, colours=colours)
+
+
+def _pct(t: dict | None) -> str:
+    return f"{round(100 * t['pct'])}%" if t and t.get("pct") is not None else "–"
+
+
+def training_board(sb: dict, lab) -> str:
+    summ = sb["summary"]
+    tot = (summ.get("totals") or {})
+    allr = tot.get("all") or {}
+    stats = []
+    for key, t in (("shots", tot.get("shot")), ("finishes", tot.get("finish"))):
+        if t and (t.get("att") or t.get("unclear")):
+            got = f'{t["made"]}/{t["att"]} · {_pct(t)}' if t.get("att") else "–"
+            more = f' +{t["unclear"]} {lab("unclear")}' if t.get("unclear") else ""
+            stats.append(f'<span>{lab(key)}<b>{got}</b>{more}</span>')
+    drib = summ.get("dribble") or {}
+    if drib.get("seconds"):
+        stats.append(f'<span>{lab("dribble")}<b>{drib["seconds"] / 60:.1f}</b> {lab("minutes")}</span>')
+    tg = summ.get("targets") or []
+    if tg:
+        stats.append(f'<span>{lab("targets")}<b>{sum(t["status"] == "met" for t in tg)}/{len(tg)}</b></span>')
+    d = (summ.get("previous") or {}).get("delta_pct")
+    if d is not None:
+        stats.append(f'<span>{lab("vs_last")}<b>{"+" if d >= 0 else "−"}{abs(round(100 * d))}</b> pp</span>')
+    made = f'{allr["made"]}/{allr["att"]}' if allr.get("att") else "–"
+    return f"""<div class="score" data-result="training">
+      <div class="team us"><span class="name">{html.escape(sb["us"])}</span><span class="side">{lab("training")} · {html.escape(str(sb["date"]))}</span></div>
+      <div class="pts" aria-label="{_pct(allr)}"><span>{_pct(allr)}</span></div>
+      <div class="team them"><span class="name">{made}</span><span class="side">{lab("made")}</span></div>
+    </div>
+    <div class="halves">{"".join(stats)}</div>"""
 
 
 def data_uri(p: Path) -> str:
@@ -178,7 +238,7 @@ def listen_block(folder: Path, embed: bool):
         src = data_uri(files[c]) if embed else files[c].name
         # native controls stay visible when scripts are blocked (WeChat / mail file previews); the script hides them
         audios.append(f'<audio id="audio-{c}" class="native" data-lang="{c}"{hide(c)} controls preload="metadata" src="{src}"></audio>')
-        m = round(duration_s(files[c]) / 60)
+        m = max(1, round(duration_s(files[c]) / 60))
         labels.append(f'<span data-lang="{c}" lang="{attr}"{hide(c)}><b>{UI[c]["listen"]}</b>'
                       f'<small>{UI[c]["listen_sub"].format(m=m)}</small></span>')
     block = f"""<div class="listen">
@@ -216,13 +276,20 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
 
     def title_spans():
         return "".join(f'<span data-lang="{c}"{hide(c)}>{html.escape(titles[c])}</span>' for c, *_ in LANGS)
-    us, them = sb["final"]
-    known = None not in (us, them)
-    result = ("win" if us > them else "loss" if us < them else "tie") if known else "unknown"
-    halves = [f'<span>{lab(key)}<b>{a}–{b}</b></span>'
-              for key, (a, b) in (("half1", sb["h1"]), ("half2", sb["h2"])) if None not in (a, b)]
-    if known:
-        halves.append(f'<span>{lab("final")}<b>{us}–{them}</b></span>')
+    if sb.get("training"):
+        board = training_board(sb, lab)
+    else:
+        us, them = sb["final"]
+        known = None not in (us, them)
+        result = ("win" if us > them else "loss" if us < them else "tie") if known else "unknown"
+        halves = [f'<span>{lab(key)}<b>{a}–{b}</b></span>'
+                  for key, (a, b) in (("half1", sb["h1"]), ("half2", sb["h2"])) if None not in (a, b)]
+        if known:
+            halves.append(f'<span>{lab("final")}<b>{us}–{them}</b></span>')
+        board = BOARD.format(
+            result=result, us_cls="" if not known or us >= them else "lose", them_cls="" if not known or them >= us else "lose",
+            us_name=html.escape(sb["us"]), them_name=html.escape(sb["them"]), us_label=lab("us"), them_label=lab("them"),
+            us_pts=us if known else "", them_pts=them if known else "", halves="".join(halves))
     (us_hex, us_light), (them_hex, them_light) = sb["colours"]["us"], sb["colours"]["them"]
     buttons = "".join(f'<button type="button" data-set-lang="{c}" lang="{a}" aria-pressed="{str(c == "zh").lower()}">{n}</button>' for c, a, n, _ in LANGS)
     listen, mini = listen_block(folder, embed)
@@ -230,10 +297,7 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
     return TEMPLATE.format(
         page_title=html.escape(titles["zh"]), titles_js=json.dumps(json.dumps(titles, ensure_ascii=False)).replace("</", "<\\/"),
         ui_js=json.dumps(json.dumps(ui_js, ensure_ascii=False)),
-        us_cls="" if not known or us >= them else "lose", them_cls="" if not known or them >= us else "lose",
-        buttons=buttons, switch=UI["zh"]["switch"], heading=title_spans(), result=result,
-        us_name=html.escape(sb["us"]), them_name=html.escape(sb["them"]), us_label=lab("us"), them_label=lab("them"),
-        us_pts=us if known else "", them_pts=them if known else "", halves="".join(halves),
+        buttons=buttons, switch=UI["zh"]["switch"], heading=title_spans(), board=board,
         us_hex=us_hex, them_hex=them_hex, us_light=us_light, them_light=them_light,
         us_light_rgb=", ".join(map(str, gc.hex_to_rgb(us_light))),
         listen=listen, mini=mini, tocs="".join(tocs), articles="".join(arts),
@@ -403,12 +467,7 @@ td strong {{ color: var(--whistle); }}
 </div>
 <header class="board">
   <div class="board-inner">
-    <div class="score" data-result="{result}">
-      <div class="team us"><span class="name">{us_name}</span><span class="side">{us_label}</span></div>
-      <div class="pts" aria-label="{us_pts}–{them_pts}"><span class="{us_cls}">{us_pts}</span><span class="dash">–</span><span class="{them_cls}">{them_pts}</span></div>
-      <div class="team them"><span class="name">{them_name}</span><span class="side">{them_label}</span></div>
-    </div>
-    <div class="halves">{halves}</div>
+    {board}
     {listen}
   </div>
 </header>

@@ -33,6 +33,11 @@ STAGES = {
     "film": ("hoop_tape_miner.film", "film.<lang>.md -> explained video: narration over clips and charts, subtitled"),
     "html": ("hoop_tape_miner.render_html", "report folder (README.md + README.en.md) -> one bilingual index.html"),
     "publish": ("hoop_tape_miner.publish", "reports -> private-link website (Cloudflare Workers), one stable link per report"),
+    "train": ("hoop_tape_miner.train_run", "one personal training session end to end: phone videos -> page, film, next plan"),
+    "train-new": ("hoop_tape_miner.train_new", "start a training session: session folder + joined session.mp4"),
+    "train-scan": ("hoop_tape_miner.train_scan", "training: player pose, shot/finish candidates, dribble segments"),
+    "train-sheets": ("hoop_tape_miner.train_sheets", "training: rim probe, rep and dribble review sheets, briefs"),
+    "train-summary": ("hoop_tape_miner.train_summary", "training: reviewed reps -> summary.json, facts.md, figures"),
 }
 
 

@@ -3,6 +3,7 @@
 Turns one amateur basketball game into two deliverables: the team page and the focus player's page (bilingual HTML with narration audio and film clips, published as private links), and an explained video per language (a file the user sends themselves, never published).
 
 - When the user gives a league game link or a game folder, drive `uv run hoop-tape-miner run <link|folder>` in a loop as `docs/playbook.md` "One-command run" describes (Claude Code: `/game <link>`). Exit 3 = do the agent step it names, then run again; exit 1 = fix and run again; publish only with `--publish` after QA passes.
+- Personal training videos (one player's workout): drive `uv run hoop-tape-miner train <videos|session folder>` the same way, as `docs/playbook.md` "Personal training sessions" describes (Claude Code: `/train <videos>`). A session = `workspace/players/<player>/training/<date>/`.
 - Procedure and each step: `docs/playbook.md`. Stage details: `docs/pipeline.md`.
 - Team profile (our team, focus player, league secrets file, languages): `workspace/team.json`, from `templates/team.example.json`.
 - Writing: use the guides in `prompts/` (film review brief, coach report, player deep dive, narration, explained video; opponent dossier and court cues are optional extras).

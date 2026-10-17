@@ -275,6 +275,49 @@ Not part of the default run; make them when the user asks.
 | Event review for shot charts | `review --run "$RUN" --video "$V" --game "$GJ"`; reviewers follow `docs/review_protocol.md`, then `merge-reviews --run "$RUN" --review review` |
 | Single sendable file (offline, or where workers.dev is blocked) | `html "$G" --share --out "$PWD/workspace/share/<us>_vs_<them>_<date>.html"`: embeds audio and clips, strips local paths; re-run QA on it |
 
+## Personal training sessions
+
+One player's solo workout (shooting, finishing, dribbling) filmed on a phone -> a session page (makes / attempts by zone and finish type, form, dribbling, last session's targets, progress), an explained video and `plan.json`, the next session's drills with targets that the next run checks. Claude Code: `/train <videos> [--plan "what you meant to train"]` (`.claude/commands/train.md`). The loop is the same as the one-command run:
+
+```
+uv run hoop-tape-miner train <phone video...> --player 17 --plan "free throws, left-hand layups" > workspace/logs/train.log 2>&1
+uv run hoop-tape-miner train workspace/players/17/training/<date> > workspace/logs/train.log 2>&1   # every later run
+```
+
+| Step | Training step |
+|---|---|
+| video*, scan | 1-2 |
+| rim-probe, rim* | 3 |
+| sheets | 4 |
+| film-review* | 5 |
+| summary | 6 |
+| report*, clips | 7 |
+| listen-script*, narrate, html, qa* | 8 |
+| publish (only with `--publish`) | 9 |
+| film-script*, film | 10 |
+
+**Training step 1: record.** Phone on a tripod (or a fence), landscape, still for the whole session. The rim and the player's whole body in frame, side-on or from behind the shooter at about 45°; one player in frame. Several files are fine; they are joined in the given order. Say what you meant to train in `--plan`.
+
+**Training step 2: start and scan.** `train <videos>` runs `train-new` (session folder `workspace/players/<player>/training/<date>[-n]/`, `session.json`, joined `session.mp4`, targets copied from the last `plan.json`) and `train-scan` (YOLO pose at 15 fps, about real time on a GPU; the models download once). `--seed x,y` (frame fractions) picks the player when several people are in frame.
+
+**Training step 3: rim boxes.** View `run/train_review/rim_probe.jpg` (four frames across the session, grid lines every 0.1). In `session.json` set `rim` to the rim's box as frame fractions `[x, y, w, h]` (top-left, size), e.g. `[{"from": "00:00", "box": [0.47, 0.18, 0.06, 0.03]}]`. Add an entry with a later `from` when the camera moved, `"box": null` when the rim leaves the frame, or `[]` when it is never in view. Then set `"rim_checked": true`.
+
+**Training step 4: sheets.** `train-sheets` writes overview sheets (a frame every 10 s), rep sheets (set / release / follow-through crops, a rim filmstrip from +0.3 s to +2.1 s, a wide frame at +0.8 s) and dribble sheets, split into parts of 50 candidates with one brief each.
+
+**Training step 5: film review.** One subagent per `brief_part<N>.md` (at most 3 at once). Each writes `review_part<N>.json` (every candidate confirmed or rejected, make / miss / unclear, zone, spot, type, miss direction, form notes, drill blocks, dribble drills, reps the scan missed) and `memo_part<N>.md`. Do not read the sheets yourself. Re-run a part whose json does not parse or misses candidate ids.
+
+**Training step 6: summary.** `train-summary` merges the parts with the pose numbers into `summary.json`, `facts.md` and the figures. Every number in the report comes from `facts.md`.
+
+**Training step 7: report and plan.** Write `README.md` (中文), `README.en.md` and `plan.json` with `prompts/training_report.md`: the verdict, targets from last time, shooting, finishing, form, dribbling, progress and 3-5 drills for next time, each with a reason from this session and a checkable target. Mark 4-8 clips; `clips` cuts them.
+
+**Training step 8: narration, page, QA.** `listen.<lang>.md` (2-3 minutes, `prompts/narration.md`), then `narrate` and `html` run. The browser-check subagent checks the page in both languages, the audio and every clip and writes `qa.md` (first word PASS).
+
+**Training step 9: publish (optional).** Only when the user asks: run again with `--publish`. The page gets its own private link and is never listed on the team hub.
+
+**Training step 10: explained video.** `film.<lang>.md` (`prompts/film.md`, training notes in `prompts/training_report.md`): clips of typical makes and misses with freeze lines on the form point (`> 00:41.0 0.45,0.80 "knee drive"`), the zones and form figures, the plan as the last chapter. Check it with `film <session> --dry`; the run renders `film.<lang>.mp4`. Give the user the paths; it is never published.
+
+The next session: film it, run `train <videos>` again. Its `targets` come from this `plan.json`, the page shows met / missed / not trained for each, and the progress figure grows by one session.
+
 ## Working rules
 
 - One game per session. If the context gets large, write a short status note and start a fresh session.

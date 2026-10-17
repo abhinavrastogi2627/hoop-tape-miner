@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Personal training sessions: `train <phone videos>` (Claude Code: `/train`) turns one player's solo workout into a session page, an explained video and `plan.json` for next time. New stages `train-new` (joins the phone files), `train-scan` (YOLO pose and ball: shot and finish candidates with knee bend, elbow angles, dip-to-release and jump; dribble segments), `train-sheets` (rim probe, rep sheets with a rim filmstrip, briefs) and `train-summary` (percentages by zone, spot, type and hand, miss directions, form for makes vs misses, dribbling, last session's targets checked, progress over sessions, figures). Agents judge make or miss and write the report with `prompts/training_review_brief.md` and `prompts/training_report.md`. `html` shows a training band instead of the score, `film` a training title card, and `publish` gives a session its own link without listing it on the team hub.
 - One-command run: `run <league game url | game folder>` drives every stage in order, resumes from the outputs that exist, stops with exit 3 where the agent must judge (calibration points, cluster names, film review, writing, QA) and publishes only with `--publish`. Claude Code users type `/game <url>`.
 - `fetch` stage: reads a Glory League game (teams, rosters, final and halftime score, periods, box score, score flow) over its API, downloads the league video (resumable) and writes `game.json` and `official.json`. Our team, focus player, colours, languages and the league secrets file come from a team profile `workspace/team.json` (`templates/team.example.json`); heavy files can live under its `media_root`.
 - Calibration without a GUI: `calibrate --grid` writes frames with a pixel grid and a numbered landmark map for an agent to read; `calibrate --points` solves them and prints PASS/WEAK per frame with the worst points (exit 2 while any frame is weak).
@@ -22,6 +23,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- `film --video` with a relative path failed in ffmpeg; the path is now resolved first.
+- The listen label said "About 0 min" for audio under 30 s.
 - `calibrate --propagate` tracks targets before the start keyframe backward (they silently got the start frame's homography).
 - `recalib` no longer stops with a NameError at its first progress line.
 

@@ -72,6 +72,14 @@ class Game:
         """Report folders: the team page, plus the focus player's page."""
         return [self.folder] + ([self.folder / f"player-{self.focus}"] if self.focus else [])
 
+    def fill(self, how: str) -> str:
+        return fill(how, self)
+
+    def finished(self):
+        print("[run] done. Pages: " + ", ".join(str(d / "index.html") for d in self.reports()))
+        print("[run] explained video (send it yourself, it is not published): "
+              + ", ".join(str(self.folder / f"film.{l}.mp4") for l in self.langs))
+
     @classmethod
     def load(cls, folder: Path) -> "Game":
         gj = folder / "game.json"
@@ -313,8 +321,9 @@ def status(g: Game) -> list[tuple[str, str, bool]]:
 
 
 def drive(g: Game, until: str | None = None, redo: str | None = None, publish: bool = False,
-          dry: bool = False, runner=subprocess.run) -> int:
-    for s in STEPS:
+          dry: bool = False, runner=subprocess.run, steps: list[Step] | None = None) -> int:
+    """Walk `steps` (default: the game STEPS); `g` may be a Game subclass (train-run uses a Session)."""
+    for s in STEPS if steps is None else steps:
         if s.name == "publish" and not publish:
             if not s.done(g):
                 print("[run] publish skipped: re-run with --publish to deploy the pages as links")
@@ -322,7 +331,7 @@ def drive(g: Game, until: str | None = None, redo: str | None = None, publish: b
         if s.done(g) and s.name != redo:
             continue
         if s.kind == "agent":
-            print(f"[run] waiting for the agent: {s.name}\n{fill(s.how, g)}")
+            print(f"[run] waiting for the agent: {s.name}\n{g.fill(s.how)}")
             return WAITING
         if dry:
             for argv in s.args(g):
@@ -330,16 +339,14 @@ def drive(g: Game, until: str | None = None, redo: str | None = None, publish: b
             return 0
         if not run_cmd(s, g, runner):
             return 1
-        g = Game.load(g.folder)  # stages may have filled game.json
+        g = type(g).load(g.folder)  # stages may have filled game.json
         if s.expect_exit and not s.done(g):
             print(f"[run] {s.name} did not produce its output; see its log")
             return 1
         if s.name == until:
             print(f"[run] stopped after {until}")
             return 0
-    print("[run] done. Pages: " + ", ".join(str(d / "index.html") for d in g.reports()))
-    print("[run] explained video (send it yourself, it is not published): "
-          + ", ".join(str(g.folder / f"film.{l}.mp4") for l in g.langs))
+    g.finished()
     return 0
 
 
