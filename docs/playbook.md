@@ -279,7 +279,7 @@ Not part of the default run; make them when the user asks.
 | Extra | How |
 |---|---|
 | Opponent dossier `workspace/teams/<slug>/README.md` | `new-game --dossier` creates it; update it with `prompts/opponent_dossier.md` |
-| On-court cue loops | `prompts/court_cues.md` -> `workspace/players/<N>/cues.court.<lang>.md`, then `narrate --script <file> --chime --gap 6 --loud` |
+| On-court cue loops | `prompts/court_cues.md` -> `workspace/players/<N>/cues.court.<lang>.md`, then `narrate --script <file> --chime --gap 6 --loud` (during play: `--gap 0.4 --tight`, no chime) |
 | Tactics-board replay | `replay --run "$RUN" --out "$RUN/replay" --game "$GJ" --pid 13` |
 | Figures from CV (shot zones, heat maps) | `report --run "$RUN" --out "$RUN/report" --game "$GJ" [--events "$RUN/events.json" --coverage "$RUN/review_coverage.json"]` |
 | Event review for shot charts | `review --run "$RUN" --video "$V" --game "$GJ"`; reviewers follow `docs/review_protocol.md`, then `merge-reviews --run "$RUN" --review review` |

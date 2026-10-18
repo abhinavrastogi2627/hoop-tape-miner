@@ -13,4 +13,4 @@ Start with the [project README](../README.md) ([中文](../README.zh.md)) for wh
 | [research.md](research.md) | contributors | Open-source projects and papers this builds on, and what was adapted |
 | [optimization-backlog.md](optimization-backlog.md) | contributors | Measured speed and cost improvements, done and to do |
 
-Writing guides the agent uses for each report are in [`prompts/`](../prompts/). To contribute, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+Writing guides the agent uses for each report, and the coaching knowledge base the insights cite ([`coach_kb.md`](../prompts/coach_kb.md)), are in [`prompts/`](../prompts/). To contribute, see [CONTRIBUTING.md](../CONTRIBUTING.md).

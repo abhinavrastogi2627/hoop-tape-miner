@@ -55,7 +55,7 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 | `report` | `--run --out` [`--game --focus --lang en|zh --events --coverage`] | figures + `stats.json` (English labels by default) |
 | `momentum` | `--official --out` [`--game --lineup --players --lang en|zh --stretches --min-run --title`] | score-margin chart with detected scoring runs and on-court lanes |
 | `replay` (optional) | `--run --out` [`--pid --t0 --t1 --fps --game`] | 2D tactics-board clips (mp4) |
-| `narrate` | `FOLDER` or `--script FILE` [`--lang zh en --out --gap --chime --loud --rate`] | `listen.<lang>.mp3` per script, or one MP3 next to `--script` |
+| `narrate` | `FOLDER` or `--script FILE` [`--lang zh en --out --gap --chime --loud --rate --tight`] | `listen.<lang>.mp3` per script, or one MP3 next to `--script`; `--tight` trims TTS silence around each paragraph so `--gap` is the real pause (cue loops) |
 | `clips` | `FOLDER` [`--video --height --force`] | `clips/<from>-<to>.mp4` + poster for every `![caption](clip:mm:ss-mm:ss)` in the READMEs |
 | `film` | `FOLDER` [`--lang zh en --video --run --height 720 --crf 23 --font --scenes A-B --dry`] | `film.<lang>.mp4`: narration from `film.<lang>.md` over chapter cards, figures, stat scenes, animated court diagrams (`plays/*.json`) and clips of our video, with freeze frames that ring players from `run/tracks.pkl` and burned-in subtitles; speech cached in `.film-cache/` |
 | `html` | `FOLDER` [`--out index.html --share`] | bilingual `index.html` with clip players (`--share`: self-contained copy with audio and clips embedded) |

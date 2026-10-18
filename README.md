@@ -54,8 +54,8 @@ league link ──► fetch ──────────────► comput
 
 1. **Fetch:** the agent reads the game from the league site (teams, rosters, score, box score, the score after every basket) and downloads the game video.
 2. **Computer vision:** detects players and the ball in every frame, maps them onto the court, splits the two teams by jersey colour, reads jersey numbers, and works out lineups and possessions. The agent calibrates the court itself by reading frames with a grid drawn on them; nobody has to click points.
-3. **Film review:** the game is cut into annotated frame sheets. Subagents go through them with a coach's checklist covering transition defence, ball pressure, shot selection and more.
-4. **Facts first, then writing:** reviews are merged into fact sheets (plus-minus, stints, patterns, clips). The pages are written from those facts using the guides in [`prompts/`](prompts/).
+3. **Film review:** the game is cut into annotated frame sheets. Subagents go through them with a coach's checklist covering transition defence, ball pressure, shot selection and more. Every possession they log is checked against a fixed schema (who shot, made or missed, which foul, with video times), and the shots and fouls are scored against the league's box score, so wrong facts show up before anything is written.
+4. **Facts first, then coaching:** reviews are merged into fact sheets (plus-minus, stints, patterns, clips), plus numbers measured from the tracking for each possession (players back on defence two seconds in, spacing, standing still). A writer agent turns patterns seen on at least two possessions into coaching insights: what happened, **why** (from a coaching knowledge base paraphrased from the FIBA and Jr. NBA coaching manuals, with page references), one rule, one drill and a measurable target for the next game. A critic agent re-opens the film for every insight and drops what it cannot see. The pages are written from those, using the guides in [`prompts/`](prompts/).
 5. **Render and share:** narration (Microsoft Edge neural voices), clips of the key plays, the HTML pages (published as links) and the explained video.
 
 One command drives all of it: `hoop-tape-miner run`. It knows which file each step produces, so it resumes where it stopped and only pauses where the agent has to look or write. Full details: [docs/pipeline.md](docs/pipeline.md).
@@ -123,10 +123,14 @@ Film your own workout (shooting, finishing, dribbling) on a phone and get the sa
 | `calibrate` | court calibration: `--grid` writes frames to read, `--points` solves and checks them |
 | `extract` → `embed` → `tracks` → `jersey` | computer vision: detections, team split, tracking, jersey numbers |
 | `analyze` | identities, possessions, tactical metrics |
-| `coach-sheets` → `coach-summary`, `plusminus` | film-review sheets, and the numbers from the agents' reviews |
+| `coach-sheets` → `coach-summary`, `plusminus` | film-review sheets (also fact-check sheets around each official score and foul), and the numbers from the agents' reviews |
+| `coach-check` | validate the film review against the possession schema (`--migrate` converts old reviews) |
+| `coach-features` | per-possession numbers from the court tracks: players back, spacing, paint crowd, standing still |
+| `coach-insights` | check the coaching insights (evidence times, knowledge-base entries, numbers, critic verdict); `ab` builds a blind A/B rating sheet |
+| `coach-eval` | score a film review against the league box score and lint the coaching advice for evidence, reasons, drills and targets |
 | `momentum` | score-margin chart with scoring runs |
 | `clips` | cut the film clips a report marks (`![caption](clip:07:24-07:33)`) |
-| `narrate` | narration script → MP3 |
+| `narrate` | narration script → MP3; also on-court cue loops (`--chime --gap`, `--tight` for exact pauses) |
 | `html` | report folder → one bilingual HTML page |
 | `publish` | pages → private-link website on Cloudflare, one stable link per report |
 | `film` | explained video: narration over clips, freeze frames, court diagrams and charts, with subtitles |
@@ -141,7 +145,9 @@ Run `uv run hoop-tape-miner <stage> -h` for the options of each stage.
 .claude/commands/game.md   the /game command for Claude Code
 AGENTS.md                  instructions for any agent (CLAUDE.md points here)
 docs/playbook.md           the procedure the agent follows, link → pages + video
-prompts/                   writing guides: film review brief, coach report, player deep dive, narration, explained video
+prompts/                   writing guides (film review brief, insights writer and critic, coach report, player
+                           deep dive, narration, explained video, training) and the coaching knowledge base
+                           (coach_kb.md)
 templates/                 team.json, game.json and opponent dossier skeletons
 src/hoop_tape_miner/       the pipeline (one module per stage; run.py drives them)
 workspace/                 YOUR data: team profile, games, reports (gitignored)
@@ -155,7 +161,9 @@ workspace/                 YOUR data: team profile, games, reports (gitignored)
 
 **My league has no box score, or isn't Glory League.** That's fine. Start with `new-game`, put the final score in `game.json`, and the report is built from the film review alone. If your league publishes data, convert it to the `official.json` shape, or add a `fetch` for it.
 
-**How accurate is it?** The vision gives positions and possessions. The judgement comes from the film review, which flags anything uncertain (an unreadable jersey, for example) as "likely". Check the clips it points to before you act on them.
+**How accurate is it?** The vision gives positions and possessions. The judgement comes from the film review, which flags anything uncertain (an unreadable jersey, for example) as "likely". `coach-eval` scores each review against the league box score (points and fouls per player), so you can see how far to trust it; jerseys a few pixels tall are the main source of wrong shooters. Check the clips it points to before you act on them.
+
+**Where does the coaching advice come from?** From [`prompts/coach_kb.md`](prompts/coach_kb.md): one entry per common amateur problem (transition defence, press break, spacing, help defence, closeouts, rebounding, fouls, shot selection, pick-and-roll, late clock), each paraphrased from the free FIBA WABC and Jr. NBA coaching manuals with page references. Rules and numbers the manuals don't give are labelled as the team's own choices and trial values. Every insight must cite an entry, and the critic checks it against the film.
 
 **Which languages?** The pages, narration and video come in English and Chinese.
 
