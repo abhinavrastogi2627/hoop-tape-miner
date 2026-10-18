@@ -23,6 +23,8 @@ A short MP3 a player loops on earbuds before the game, on the bench or at halfti
 uv run hoop-tape-miner narrate --script workspace/players/<N>/cues.court.<lang>.md --chime --gap 6 --loud
 ```
 
+Without `--tight` each gap is about a second longer than `--gap` (the voice's own lead-in and tail). For a loop played *during* practice or a scrimmage, use no chime, `--gap 0.4 --tight --rate +0%`: the next point follows within half a second.
+
 ## Warm-up version: rules
 
 1. Under two minutes. Opening line: "Number N, listen once before you go on. Six phrases today."

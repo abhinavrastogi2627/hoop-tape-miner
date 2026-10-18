@@ -6,7 +6,8 @@ usage:
   hoop-tape-miner narrate --script cues.zh.md [--gap 6 --chime --loud --rate -5%]
       any single script -> cues.zh.mp3 next to it (language from the .zh/.en suffix). --chime plays a short
       two-tone bell before every paragraph and --gap leaves silence after it, which makes a loop you can
-      listen to on court; --loud normalises to -14 LUFS so it cuts through gym noise.
+      listen to on court; --loud normalises to -14 LUFS so it cuts through gym noise; --tight trims the
+      silence the TTS voice leaves around each paragraph, so --gap is the real pause (e.g. --gap 0.4).
 
 Uses edge-tts (Microsoft neural voices, needs internet: the script text is sent to Microsoft's TTS
 service) and ffmpeg ($FFMPEG overrides the binary). Lines starting with '#' are notes for the writer and are
@@ -78,7 +79,18 @@ def chime(out: Path) -> Path:
     return out
 
 
-def stitch(parts: list[Path], out: Path, tmp: Path, gap: float = PAUSE_S, bell: bool = False, loud: bool = False):
+def trim(part: Path) -> Path:
+    """Cut the lead-in and tail silence edge-tts puts around every paragraph (about half a second each)."""
+    out = part.with_name(part.stem + ".trim.mp3")
+    edge = "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05"
+    ffmpeg("-i", str(part), "-af", f"{edge},areverse,{edge},areverse", *MP3, str(out))
+    return out
+
+
+def stitch(parts: list[Path], out: Path, tmp: Path, gap: float = PAUSE_S, bell: bool = False, loud: bool = False,
+           tight: bool = False):
+    if tight:
+        parts = [trim(p) for p in parts]
     pause = silence(gap, tmp / "pause.mp3")
     ding = chime(tmp / "chime.mp3") if bell else None
     seq = []
@@ -93,13 +105,13 @@ def stitch(parts: list[Path], out: Path, tmp: Path, gap: float = PAUSE_S, bell: 
 
 
 def render(src: Path, out: Path, lang: str, gap: float, bell: bool, loud: bool, rate: str | None,
-           voice_table: dict | None = None):
+           voice_table: dict | None = None, tight: bool = False):
     paras = paragraphs(src.read_text(encoding="utf8"))
     voice, default_rate = (voice_table or VOICES)[lang]
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
         parts = asyncio.run(speak(paras, voice, rate or default_rate, tmp))
-        stitch(parts, out, tmp, gap, bell, loud)
+        stitch(parts, out, tmp, gap, bell, loud, tight)
     print("wrote", out, f"{out.stat().st_size / 1e6:.1f} MB,", len(paras), "paragraphs")
 
 
@@ -113,18 +125,19 @@ def main(argv=None):
     ap.add_argument("--chime", action="store_true", help="short bell before each paragraph")
     ap.add_argument("--loud", action="store_true", help="normalise loudness to -14 LUFS")
     ap.add_argument("--rate", help='speaking rate, e.g. "-5%%"')
+    ap.add_argument("--tight", action="store_true", help="trim TTS silence around each paragraph so --gap is exact")
     a = ap.parse_args(argv)
     if a.script:
         vt = voices(load_game(a.script.parent))
         lang = next((c for c in vt if a.script.name.endswith(f".{c}.md")), a.lang[0])
-        render(a.script, a.out or a.script.with_suffix(".mp3"), lang, a.gap, a.chime, a.loud, a.rate, vt)
+        render(a.script, a.out or a.script.with_suffix(".mp3"), lang, a.gap, a.chime, a.loud, a.rate, vt, a.tight)
         return
     if not a.folder:
         ap.error("give a report folder or --script")
     folder = Path(a.folder)
     vt = voices(load_game(folder))
     for lang in a.lang:
-        render(folder / f"listen.{lang}.md", folder / f"listen.{lang}.mp3", lang, a.gap, a.chime, a.loud, a.rate, vt)
+        render(folder / f"listen.{lang}.md", folder / f"listen.{lang}.mp3", lang, a.gap, a.chime, a.loud, a.rate, vt, a.tight)
 
 
 if __name__ == "__main__":
