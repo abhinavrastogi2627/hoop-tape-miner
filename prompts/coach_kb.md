@@ -2,14 +2,16 @@
 
 Purpose: a fixed set of coaching entries that turn what the film review measured into an explanation (why it happened), an in-game rule, a drill and a next-game target. Each entry covers one recurring amateur problem.
 
-Audience: an amateur adult team (rec league, about one 90-minute practice a week, 8-10 players at practice, short benches, mixed skill). Drills are adapted to that: small groups, few rules, game-like reps, no specialist roles assumed.
+Audience: an amateur adult team (players around 30, rec league, about one 90-minute practice a week, 8-10 players at practice, short benches, mixed skill). Drills are adapted to that: small groups, few rules, game-like reps, no specialist roles assumed.
 
 How agents use it:
 - The film reviewer points a trip's `coach_note` at the matching entry's **Symptom** when the trip shows it.
 - The insights writer cites entries by slug (`kb: ["transition-defence"]`), takes the mechanism from **Why it happens**, checks the film for the items in **What to check on film**, and copies the rule, drill and target only when the evidence supports them. If a symptom is not in the data, do not use the entry.
 - The critic checks that every claim using an entry shows its symptom in at least two trips.
 - Field names refer to the trip schema v2 (`prompts/film_review_brief.md`) and to the track features (`coach_features.py`: `numbers_back_2s`, `off_spacing_m`, `off_hull_m2`, `paint_crowd`, `standstill_share`, `cross_half_s`). Feature values may be `null`; a null is "unknown", never zero.
-- Targets are starting points. Re-set the number after each game from what our team actually managed (aim for a clear step, not perfection).
+- Trial values: every number in a **Next-game target** and in a drill's **Success measure** is our own trial value, not taken from the sources (the manuals give no numeric targets). Re-set it after each game from what our team actually managed (aim for a clear step, not perfection).
+- "(our rule)" marks a rule, role split or drill variant that we chose ourselves; the cited pages support the principle, not that detail. Present these to the team as our choice, not as "the book says".
+- Feature-based symptoms (`cross_half_s`, `off_spacing_m`, `numbers_back_2s`) are proxies measured from the court tracks, not referee calls: `cross_half_s` is the time from the start of the trip until four of our players are over half court, not when the ball crossed, so it says nothing about the 8-second rule.
 
 Sources: entries are paraphrased in our own words from professional coaching material, with at most one short quoted sentence per entry. Page numbers are PDF pages of the local library copy (`<coach_library>/<slug>/`, the `coach_library` folder of the team profile; page N = text after the (N-1)th form feed); the printed page number in the manuals is usually 2 lower. Library slugs: `fiba-wabc-level1/2/3` (FIBA WABC Coaches Manual levels 1-3), `jrnba-allstar-plans` and `jrnba-mvp-plans` (Jr. NBA practice plans). Web sources are cited by URL. The full texts are not in this repo and must not be copied into it.
 
@@ -27,7 +29,7 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **What to check on film:** At our shot release, who is above the free-throw line? Two seconds after the change of possession, how many of us are on our own half and who is under the rim? Did the first man back stop at the basket or chase the ball? Was the foul a chase from behind on a layup (and-one risk)? Did the outlet pass go uncontested?
 
-**In-game rule:** When the shot goes up, the two players furthest from the rim (usually the guards) are "safeties" and sprint to the top of the key / own half; the first one back runs to the rim, not to the ball, and calls who takes the ball. Nobody chases a layup from behind: run to the rim or concede the two, no swipe.
+**In-game rule:** When the shot goes up, the two players furthest from the rim (usually the guards) are "safeties" and sprint to the top of the key / own half; the first one back runs to the rim, not to the ball, and calls who takes the ball. Our rule: nobody swipes at a layup from behind; run to the rim and contest straight up, or concede the two.
 
 **Drill:** Line-Up Transition (jrnba-mvp-plans). Setup: two teams of 4-5, one on the baseline, one on the free-throw line extended facing them; coach passes to a baseline player, that team attacks the far basket; the defender opposite the receiver must touch the baseline before getting back, so the defence starts one player short. Reps: 4 stops per team, then swap lines; 10-12 minutes. Success measure: defence stops the ball before half court and has someone under the rim on every rep; no layup conceded on 3 of 4 reps. Follow with 3-on-2 Trailer Game (jrnba-allstar-plans, a third defender sprints in from half court) to games of 5.
 
@@ -37,43 +39,43 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 ### KB-press-break
 
-**Symptom (observable):** Our trips with `pickup_point` full, 3/4 or half end in `result: turnover` with `turnover_cause: steal_on_ball`, `lost_dribble` or `violation`, and `cross_half_s` is long (for example over 8 s); `initiator` is the same single ball-handler on most trips; `ball_stops` >= 1 before half court; the turnover has `turnover_lead_to: yes`.
+**Symptom (observable):** Our trips with `pickup_point` full, 3/4 or half end in `result: turnover` with `turnover_cause: steal_on_ball`, `lost_dribble` or `violation`; `cross_half_s` is long compared with our unpressed trips (a track proxy, not an 8-second call); `initiator` is the same single ball-handler on most trips; `ball_stops` >= 1 before half court; the turnover has `turnover_lead_to: yes`.
 
-**Why it happens:**
-- One ball-handler and no outlet: the other four run away or stand still, so the defence can double him with no risk.
-- The dribbler keeps the ball in the trap instead of passing out of it; dribbling straight ahead into the second defender.
-- Receivers stand in the defender's shadow rather than in a gap, so there is no safe pass.
-- The ball is caught too close to the baseline or sideline, leaving no room to back out.
+**Why it happens:** First decide which press it was; the right answer is opposite for the two kinds.
+- Trap or zone press (defenders guard areas and two jump the ball): the dribbler keeps the ball in the trap instead of passing out of it, or dribbles straight ahead into the second defender; receivers stand in a defender's shadow instead of a gap, so there is no safe pass; nobody is level, in the middle or deep, so the ball has fewer than three options.
+- Man-to-man press (each defender picks up a man): the other four stay near the ball or come back toward it, which brings their defenders close enough to trap; clearing out would leave the dribbler 1-on-1 with no trap possible. When our main ball-handler is denied, nobody else is trusted to bring it up.
+- Either press: the ball is caught too close to the baseline or sideline, leaving no room to back out.
 
-**What to check on film:** When pressure picked up, where were the other four (behind the ball, level, ahead in a gap, or far downcourt)? Was there a receiver within one pass on the same side, opposite, and in the middle? Did the dribbler retreat or try to split? Who was open when the second defender left his man?
+**What to check on film:** Which press was it: did defenders pick up men all over the floor (man-to-man) or guard areas and send two at the ball (trap or zone)? Against a trap: was there a receiver within one pass on the same side, opposite and in the middle, and who was open when the second defender left his man? Against man-to-man: did the other four clear to the front court, or stay near the ball so their defenders could help? Did the dribbler retreat at an angle or try to split?
 
-**In-game rule:** Against pressure, always three options for the ball: one player level on the other side (reversal), one ahead in the middle gap, one deep. When the second defender comes, pass to the man he left; when trapped, take two retreat dribbles at an angle and then pass. Pass over half court rather than dribbling into the half-court trap. A second ball-handler must be on the floor in every lineup.
+**In-game rule:** Read the press first. Against a trap or zone press: three options for the ball (one level on the other side for the reversal, one in the middle gap, one deep); when the second defender comes, pass to the man he left; when trapped, retreat dribble at an angle (not straight back), then pass; pass over half court rather than dribble into the half-court trap. Against a man-to-man press: the other four clear out to the front court so the ball-handler plays 1-on-1 with no one near to trap; if he cannot get free, the centre or forward cuts back to receive, or another player brings the ball up. Our rule: a second ball-handler is on the floor in every lineup.
 
-**Drill:** Half-Court Line Battles (jrnba-allstar-plans) to warm up, then a 5-area press-break game (fiba-wabc-level1). Setup: pairs in lanes from baseline to half court, offence must get the ball across, defender live, 4 minutes; then 5 offence vs 3-4 defenders spread through 5 zones of the backcourt, offence must cross half court within 8 s using at least two passes. Reps: 6-8 possessions per group, switch; 15 minutes. Success measure: at least 5 of 6 possessions cross half court without a turnover, with at least two passes, and the ball-handler never picks up the dribble in a trap.
+**Drill:** Half-Court Line Battles (jrnba-allstar-plans) to warm up, then a 5-area press-break game (fiba-wabc-level1). Setup: pairs in lanes from baseline to half court, offence must get the ball across, defender live, 4 minutes; then 5 offence vs defenders spread through 5 areas of the backcourt (the source starts with one defender in each area and adds more; with 8-10 at practice we start with 3-4, our scaled-down version), offence must cross half court within 6 s using at least two passes; every third possession the defence switches to a man-to-man press and the offence must clear out. Reps: 6-8 possessions per group, switch; 15 minutes. Success measure: at least 5 of 6 possessions cross half court without a turnover, and the ball-handler never picks up the dribble in a trap.
 
-**Next-game target:** On trips where the opponent picks up at full, 3/4 or half court: turnovers (`turnover_cause` steal_on_ball / lost_dribble / violation) <= 1 per half; `cross_half_s` median under 8 s; at least two different `initiator` jerseys bring the ball up in each half.
+**Next-game target:** On trips where the opponent picks up at full, 3/4 or half court: turnovers (`turnover_cause` steal_on_ball / lost_dribble / violation) <= 1 per half; `cross_half_s` median lower than in the reference game; at least two different `initiator` jerseys bring the ball up in each half.
 
-**Source:** fiba-wabc-level1 pp. 365-368 (retreat dribble, move receivers into gaps, pass over half way, three passing options, purposeful movement) and p. 371 (5-area framework for practising against pressure); fiba-wabc-level2 p. 102 (best pass against a double team is to the player the second defender left); jrnba-allstar-plans p. 34 (Half-Court Line Battles); https://www.coachesclipboard.net/BasketballPressOffenses.html.
+**Source:** fiba-wabc-level1 pp. 365-368 (zone or trap press: retreat dribble at an angle, catch no closer to the baseline than the free-throw line, receivers in gaps, three passing options, pass over half way), p. 371 (5-area framework for practising against pressure), pp. 372-373 (man-to-man press: clear the court so the dribbler plays 1-on-1 with no trap, or let a different player bring it up; 8 seconds to reach the front court); fiba-wabc-level2 p. 102 (best pass against a double team is to the player the second defender left); jrnba-allstar-plans p. 34 (Half-Court Line Battles); https://www.coachesclipboard.net/BasketballPressOffenses.html. Quote: "There is no defender available to trap or help." (fiba-wabc-level1 p. 373, after the other three clear out).
 
 ### KB-half-court-spacing
 
 **Symptom (observable):** Our half-court trips (`entry: halfcourt_set` or `early_offense`) show low `off_spacing_m` (players bunched), high `paint_crowd`, high `standstill_share`; `primary_action: isolation` or `none/stagnant`; `ball_reversals` 0, `paint_touches` 0-1, `ball_stops` >= 1; the shot is `contested` or `heavily_contested`, often by 2-3 defenders.
 
-**Why it happens:**
+**Why it happens:** (our observations on adult rec film; the manual explains crowding only for young players)
 - Players drift toward the ball to "help", which brings their defenders into the driving lane.
 - No agreed spots, so two players fill the same space and one corner stays empty.
 - The ball-handler attacks before the floor is set, into a crowded paint.
 - Players spot up inside the arc, so their defenders can help and recover in one step.
+- Less confident ball-handlers dribble with their eyes down and only make short passes, so teammates come close to help them; the manual gives this as the reason young players crowd the ball (fiba-wabc-level1 p. 246), and it still fits our weaker handlers.
 
 **What to check on film:** At the moment of the drive or isolation, how many of our players were within 3-4 m of each other? Were both corners filled? How many defenders were in the paint when the drive started? Did anyone relocate when the ball moved?
 
-**In-game rule:** Four out, one in (or five out): fill both corners and both wings at the three-point line, one player at the top or in the dunker spot; one player per spot. If your defender helps, you move to the open spot in his line of sight, never toward the ball. No drive starts until two corners are filled.
+**In-game rule:** One player per spot, and every cut goes into the key and comes back out to an empty spot (from the manual's spacing rules). Our rule: four out, one in (the manual's spots are five out): fill both corners and both wings at the three-point line, one player at the top or in the dunker spot. Our rule: if your defender helps, move to the open spot in his line of sight, never toward the ball, and no drive starts until both corners are filled.
 
 **Drill:** 2-on-1 / 3-on-2 Bunch Spacing Game (jrnba-allstar-plans) progressed to spot-based 4-on-4 (fiba-wabc-level1 "head-hands-feet" spots marked with cones). Setup: start all players bunched, play goes live on the first touch, offence must spread out immediately; then 4-on-4 half court with cones on the five perimeter spots, one player per spot. Reps: 3-4 possessions per group in the bunch game (5 min), then 4-on-4 for 10 minutes. Success measure: coach freezes play at random; at least 4 of 5 freezes show no two offensive players within about 3 m of each other and both corners filled.
 
 **Next-game target:** On our half-court trips, `off_spacing_m` mean at least 1 m higher than in the reference game and `paint_crowd` lower; `primary_action` isolation or none/stagnant on fewer than 30 % of half-court trips; `standstill_share` below the reference game's value.
 
-**Source:** fiba-wabc-level1 pp. 310-311 (basic floor spacing, head-hands-feet spots, one player per spot, cuts go into the key and come out), p. 246 (why players crowd the ball); fiba-wabc-level3 p. 202 (lifted middle pick-and-roll: three players on the perimeter create space to attack the rim); jrnba-allstar-plans p. 5 (2 on 1 Bunch Spacing Game).
+**Source:** fiba-wabc-level1 pp. 310-311 (basic floor spacing, head-hands-feet spots, one player per spot, cuts go into the key and come out), p. 246 (why young players crowd the ball: short passing range, eyes down when dribbling); fiba-wabc-level3 p. 202 (lifted middle pick-and-roll: three players on the perimeter create space to attack the rim); jrnba-allstar-plans p. 5 (2 on 1 Bunch Spacing Game).
 
 ### KB-off-ball-cuts
 
@@ -93,7 +95,7 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **Next-game target:** On our half-court trips, mean `ball_reversals` >= 1.0 (and at least one reversal on 50 % of trips), mean `paint_touches` >= 1.0, `primary_action: cut` or `off_ball_screen` on at least 15 % of trips, `standstill_share` below the reference game's value.
 
-**Source:** fiba-wabc-level1 pp. 311-312 (v-cut, back cut when the defender is in the passing lane, pass and cut / give and go), p. 315 (replacing the cutter keeps the floor spaced), pp. 256-257 (shell drill stages: 5 ball reversals, must reverse twice and penetrate before shooting), p. 319 (ball reversal makes defenders move and opens drives); jrnba-mvp-plans p. 24 (4 on 4 Shell to Rebound).
+**Source:** fiba-wabc-level1 pp. 311-312 (v-cut, back cut when the defender is in the passing lane, pass and cut / give and go), p. 315 (replacing the cutter keeps the floor spaced), pp. 256-257 (shell drill stages: 5 ball reversals, must reverse twice and penetrate before shooting), p. 319 (ball reversal makes defenders move and opens drives), p. 325 (pass and screen away); jrnba-mvp-plans pp. 24-25 (4 on 4 Shell to Rebound).
 
 ### KB-drive-help
 
@@ -103,17 +105,17 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 - Help defenders sit too close to their own man (denial everywhere), so they are too far away to stop a drive.
 - No one owns the rim: the post defender is pulled out, and the next player does not "help the helper".
 - Help arrives after the driver has gathered, so the only option is a foul (and often an and-one).
-- On-ball defenders get beaten straight-line because they expect help that is not there.
+- On-ball defenders get beaten straight-line because they count on help that is not there (our observation; the manual warns that a sagging defence can teach on-ball defenders to rely on help instead of containing).
 
 **What to check on film:** When the drive started, where were the help defenders (inside the "pack line" about 5 m from the rim, or on their man)? Who was the first helper and was he set before the driver reached the key? Did anyone rotate to the helper's man? Was the foul a late arm from the side or behind?
 
-**In-game rule:** Off the ball, sag to the pack line (both feet inside about 5 m from the rim, halfway between your man and the ball) and see both. The closest defender stops the ball early, before the gather, with chest and vertical arms; the next one rotates to the rim ("help the helper"). If you are late, let the shot go: no swipe from the side or behind.
+**In-game rule:** Off the ball, sag to the pack line (both feet inside about 5 m from the rim, halfway between your man and the ball) and see both. The closest defender stops the ball early, before the gather, with chest and vertical arms; the next one rotates to the rim ("help the helper") and the defender above rotates to the top to cover both open players. Our rule: if you are late, let the shot go: no swipe from the side or behind. Caveat from the source: sagging means every helper must close out on the kick-out, and a team that shoots well from outside can beat it; use the pack line only together with closeout practice (KB-closeouts), and sag less off a known shooter.
 
-**Drill:** 3-on-3 from Help the Helper (jrnba-mvp-plans), then Disadvantage Shell Drill (fiba-wabc-level1). Setup: each possession starts with a baseline drive, a help defender must stop the ball and the third defender rotates to the rim, then live; in the shell version the ball defender starts beaten so the team must rotate. Reps: games to 3 stops, 3 groups rotating (8-10 minutes), then 4-on-4 disadvantage shell for 8 minutes with a point to the offence for every paint touch. Success measure: help is set (feet outside the restricted arc, vertical) before the driver gathers on at least 4 of 5 drives; zero reach-in fouls in the drill.
+**Drill:** 3-on-3 from Help the Helper (jrnba-mvp-plans), then Disadvantage Shell Drill (fiba-wabc-level1). Setup: each possession starts with a baseline drive, a help defender must stop the ball and the third defender rotates to the rim, then live; in the shell version the ball defender starts beaten so the team must rotate. Reps: games to 3 stops (our format; the source plays 6-minute make-it-take-it games), 3 groups rotating (8-10 minutes), then 4-on-4 disadvantage shell for 8 minutes with a point to the offence for every paint touch. Success measure: help is set (feet outside the restricted arc, vertical) before the driver gathers on at least 4 of 5 drives; zero reach-in fouls in the drill.
 
 **Next-game target:** Opponent drives: `help_rotation: good` on at least 60 % of trips with a drive, `foul.type: shooting_on_drive` by us <= 3 per game, and opponent `shot.zone: rim` makes in the half court below the reference game's count.
 
-**Source:** fiba-wabc-level1 pp. 260-261 (help and recover, step with both feet, do not reach), p. 267 ("Basket-High-Ball" rotation activity), p. 268 (Disadvantage Shell Drill); fiba-wabc-level3 pp. 83-84 (pack line defence: protect against dribble penetration, help position halfway between man and ball); jrnba-mvp-plans p. 12 (3 on 3 From Help the Helper).
+**Source:** fiba-wabc-level1 pp. 260-261 (help and recover, step with both feet, do not reach), pp. 263-265 (helping the helper: secondary rotation to protect the basket, the top defender covers two players), p. 267 ("Basket-High-Ball" rotation activity), p. 268 (Disadvantage Shell Drill); fiba-wabc-level3 pp. 83-85 (pack line defence: protect against dribble penetration, help position halfway between man and ball; weaknesses: constant closeouts, good perimeter shooters, not before players can close out and contain); jrnba-mvp-plans pp. 12-13 (3 on 3 From Help the Helper).
 
 ### KB-closeouts
 
@@ -133,7 +135,7 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **Next-game target:** Opponent catch-and-shoot or kick-out trips: `closeout: good` on at least 60 % of trips where a closeout happened; `ran_past` <= 2 per game; opponent `shot.contested: open` threes fewer than in the reference game.
 
-**Source:** fiba-wabc-level1 pp. 140-142 (closing out: fly with the ball, sprint, chop steps, two hands high, call "ball", practise contested; close-out activities 1-4); fiba-wabc-level2 pp. 91-92 (closing out a shooter: run past the shooting shoulder without fouling; Close Out Shooter activity); fiba-wabc-level3 pp. 194-195 (corner kick-outs force the longest closeouts); jrnba-allstar-plans p. 41 (2 Person Close-Out to Live Game).
+**Source:** fiba-wabc-level1 pp. 140-142 (closing out: fly with the ball, sprint, chop steps, two hands high, call "ball", practise contested; close-out activities 1-4); fiba-wabc-level2 p. 90 (close out short against a driver), pp. 91-92 (closing out a shooter: run past the shooting shoulder without fouling; Close Out Shooter activity); fiba-wabc-level3 pp. 194-195 (corner kick-outs force the longest closeouts); jrnba-allstar-plans p. 41 (2 Person Close-Out to Live Game).
 
 ### KB-defensive-rebounding
 
@@ -166,13 +168,13 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **What to check on film:** At release, how many of us went to the glass, how many to the top / half court? Who was the safety and did he stay? Did the crashers who lost the rebound sprint back right away?
 
-**In-game rule:** Two crash (the two bigs or the two closest to the rim), one goes to the free-throw line as a "half" rebounder for long misses, two get back (the shooter only crashes if he is a big). If the crash fails, the crashers sprint back immediately, no complaints to the referee.
+**In-game rule:** From the source: give every player a rebounding job before the shot goes up, either into the key to rebound or to the top of the key to stop the break, and anticipate the shot so you get there early. Our rule for the split: two crash (the two bigs or the two closest to the rim), one goes to the free-throw line as a "half" rebounder for long misses, two get back (the shooter crashes only if he is a big). If the crash fails, the crashers sprint back immediately, no complaints to the referee.
 
 **Drill:** Play-to-a-finish scrimmage with rebounding roles (fiba-wabc-level1). Setup: 5-on-5 half court, possession does not end with the shot but only with a made basket or the defence securing the ball and crossing half court; coach awards a point to every player who reached his assigned crash or safety spot, not only to the rebounder. Reps: 8-10 possessions per side, 12 minutes. Success measure: on at least 80 % of shots the team has 2 crashing and 2 back; offensive rebounds won on at least a quarter of misses.
 
 **Next-game target:** On our missed shots: `oreb_crash.n` 2 on at least 60 % of misses (not >= 3 unless `numbers_back_2s` >= 2), and `numbers_back_2s` >= 3 on at least 80 % of the following opponent trips; our offensive rebound share (`oreb_crash.got: us`) no lower than the reference game.
 
-**Source:** fiba-wabc-level1 pp. 375-376 (rebounding and defensive transition: anticipate the shot, assign rebounding pathways, reward moving to a rebounding spot, play activities on to a score or defensive control), p. 270 (on a shot, each player goes either into the key to rebound or to the top of the key to defend the break).
+**Source:** fiba-wabc-level1 pp. 375-376 (rebounding and defensive transition: anticipate the shot, assign rebounding pathways, reward moving to a rebounding spot, play activities on to a score or defensive control), p. 270 (on a shot, each player goes either into the key to rebound or to the top of the key to defend the break). The 2-1-2 split and the "half" rebounder are our own team rule, not in these pages.
 
 ### KB-foul-discipline
 
@@ -188,11 +190,11 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **In-game rule:** No reach, no swipe: defend with the feet and keep hands up and vertical (inside your own cylinder). If you are beaten, run to the rim and contest straight up, or let it go; never foul a layup from behind. In the bonus, every "50/50 reach" is two free throws for them.
 
-**Drill:** "No grab" scrimmage (fiba-wabc-level3). Setup: 5-on-5 or 4-on-4 half court with one simple rule: a defender may intercept passes but may not take the ball from an offensive player's hands; every reach, swipe or contact from behind gives the offence a point and the ball back. Reps: two 5-minute games, 10 minutes total. Success measure: at most 1 reach / from-behind call per team per 5 minutes; stops still achieved on at least half the possessions.
+**Drill:** "No grab" scrimmage (fiba-wabc-level3). Setup: 5-on-5 or 4-on-4 half court with one simple rule: a defender may intercept passes but may not take the ball from an offensive player's hands; every reach, swipe or contact from behind gives the offence a point and the ball back (the penalty scoring is our rule). Reps: two 5-minute games, 10 minutes total. Success measure: at most 1 reach / from-behind call per team per 5 minutes; stops still achieved on at least half the possessions.
 
 **Next-game target:** Our fouls with `foul.type: reach_in` or a `foul.cause` mentioning "from behind" <= 1 per half; opponent `foul_ft` trips plus and-ones fewer than in the reference game; opponent FT attempts / FGA (Oliver's free-throw factor) lower than in the reference game.
 
-**Source:** fiba-wabc-level3 p. 151 (late-clock fouls from reaching; the "no grab" practice rule); fiba-wabc-level2 p. 95 (do not reach beyond your cylinder or hit the shooter before he lands), p. 102 (hands high and active, not reaching for the ball); fiba-wabc-level1 p. 272 (resist reaching on the outlet, it often results in a foul); FIBA Official Basketball Rules, Art. 33 (cylinder, verticality, legal guarding position), https://about.fiba.basketball/en/our-sport/official-basketball-rules; Dean Oliver's four factors (free throws factor FT/FGA), https://www.basketball-reference.com/about/factors.html.
+**Source:** fiba-wabc-level3 p. 151 (late-clock fouls from reaching; the "no grab" practice rule), p. 155 (after 4 team fouls in a quarter every foul gives two free throws; fouling the last man on a break without playing the ball is unsportsmanlike); fiba-wabc-level2 p. 95 (do not reach beyond your cylinder or hit the shooter before he lands), p. 102 (hands high and active, not reaching for the ball); fiba-wabc-level1 p. 272 (resist reaching on the outlet, it often results in a foul); FIBA Official Basketball Rules, Art. 33 (cylinder, verticality, legal guarding position), https://about.fiba.basketball/en/our-sport/official-basketball-rules; Dean Oliver's four factors (free throws factor FT/FGA), https://www.basketball-reference.com/about/factors.html.
 
 ### KB-shot-selection
 
@@ -208,11 +210,11 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **In-game rule:** Good shots for us: layups, open catch-and-shoot threes (corners first), free throws. A contested mid-range pull-up is a last resort. Drive to get two feet in the key, jump stop, then score or kick to the corner. One paint touch before any contested jumper. A shot is good only if we have rebounders and a safety (see KB-offensive-rebounding-balance).
 
-**Drill:** Paint-touch scoring scrimmage (fiba-wabc-level1 shell stage 2 rules plus shot points). Setup: 4-on-4 or 5-on-5 half court; layups and open corner threes score normal points, any shot after a paint touch scores +1 bonus, a contested pull-up jumper with no paint touch scores 0 even if made. Finish each block with Free Throw Golf (jrnba-allstar-plans: 2 FTs at a time, 10 each, lowest misses wins). Reps: 10 minutes scrimmage, 5 minutes free throws. Success measure: at least 60 % of shots in the scrimmage come at the rim, from the corners or after a paint touch; team FT 70 % or better in the golf game.
+**Drill:** Paint-touch scoring scrimmage (our design, built on the idea of fiba-wabc-level1 shell stage 2, where the offence must penetrate the key before any shot). Setup: 4-on-4 or 5-on-5 half court; layups and open corner threes score normal points, any shot after a paint touch scores +1 bonus, a contested pull-up jumper with no paint touch scores 0 even if made. Finish each block with Free Throw Golf (jrnba-allstar-plans: 2 FTs at a time, 10 each; a swish scores -2, any other make -1, a miss +1; lowest total wins). Reps: 10 minutes scrimmage, 5 minutes free throws. Success measure: at least 60 % of shots in the scrimmage come at the rim, from the corners or after a paint touch; team FT 70 % or better in the golf game.
 
 **Next-game target:** Share of our shots with `shot.zone: rim` or `shot.type: three_catch` with `contested: open` higher than in the reference game; `heavily_contested` shots <= 15 % of attempts; at least one `paint_touches` before 60 % of our half-court shots; team FT made / attempted higher than in the reference game.
 
-**Source:** fiba-wabc-level3 pp. 193-195 (shot value of twos vs threes, corner three created by penetration and kick-outs, mostly assisted); fiba-wabc-level1 p. 321 (dribble penetration: both feet in the key, jump stop, be a scorer first, receiver spots), p. 375 (rebounders present decide whether a shot is a good option); jrnba-allstar-plans pp. 25-26 (Free Throw Golf); https://www.coachesclipboard.net/basketball-shot-selection.html; Dean Oliver's four factors, shooting weighs most, https://www.basketball-reference.com/about/factors.html.
+**Source:** fiba-wabc-level3 pp. 193-195 (shot value of twos vs threes, corner three created by penetration and kick-outs, mostly assisted); fiba-wabc-level1 p. 257 (shell stage 2: penetrate the key before shooting), pp. 321-323 (dribble penetration: both feet in the key, jump stop, be a scorer first; receiver spots, the player opposite flares for the shot), p. 375 (rebounders present decide whether a shot is a good option); jrnba-allstar-plans pp. 25-26 (Free Throw Golf); https://www.coachesclipboard.net/basketball-shot-selection.html; Dean Oliver's four factors, shooting weighs most, https://www.basketball-reference.com/about/factors.html.
 
 ### KB-pick-and-roll
 
@@ -226,13 +228,13 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **What to check on film:** On each ball screen, what did the ball defender do (over, under, stuck) and the screener's defender (show, drop, nothing)? Who picked up the roller? On our ball screens: did the screener make contact, then roll or pop, and was the help side spaced?
 
-**In-game rule:** One simple coverage for the whole game: the screener's defender shows hard for one dribble and recovers, the ball defender goes over the screen against a shooter and under against a non-shooter, and the lowest weak-side defender tags the roller. On offence: the screener sprints into the screen, sets it with contact, and either rolls to the rim or pops to the three-point line; the other three space out (lifted, both corners filled).
+**In-game rule:** One simple coverage for the whole game (the source says agreement matters more than which coverage): the screener's defender shows hard and recovers to the screener (our rule: hold the show for about one dribble), the ball defender goes over the screen against a shooter and under against a non-shooter, and the weak-side defenders sag into the key, the lowest one bumping ("tagging") the roller. On offence: the screener sprints into the screen, sets it with contact, and either rolls to the rim or pops to the three-point line; the other three space out (lifted, both corners filled).
 
 **Drill:** 3-on-3 Dictated Pick and Roll (jrnba-mvp-plans). Setup: teams of 3, each possession must start with a ball screen at the top, then live; make-it-take-it; defence calls the coverage aloud ("show", "over"/"under", "tag"). Reps: games to 3 makes, rotate teams; 12 minutes on two baskets. Success measure: the defence executes the called coverage (no two defenders on the ball, roller tagged) on at least 4 of 5 possessions; the offence gets a paint touch or an open shot from the screen on most possessions.
 
 **Next-game target:** Opponent ball screens: `pnr_coverage: none/blown` on at most 20 % of their PnR trips; opponent PnR trips ending in an open rim shot <= 2 per game. Our PnR trips: at least one `paint_touches` on 60 % of them.
 
-**Source:** fiba-wabc-level3 pp. 96-98 (defending on-ball screens: decisive, coordinated; screen defender steps vertically; over vs under by shooter; weak side sags into the key on side PnR), pp. 201-202 (pick and roll offence: screener sets up, sprints into the screen, angle, then roll or pop; other players replace and space); jrnba-mvp-plans p. 43 (3 on 3 Dictated Pick & Roll).
+**Source:** fiba-wabc-level3 pp. 96-100 (defending on-ball screens: decisive, coordinated, the team acting in unison matters more than the tactic; screen defender steps vertically; over vs under by shooter; weak side sags into the key; p. 100 the screener's defender shows strongly and recovers), pp. 201-202 (pick and roll offence: screener sets up, sprints into the screen, angle, then roll or pop; other players replace and space); fiba-wabc-level1 p. 298 (screener's defender steps out to "show their number", then recovers); jrnba-mvp-plans p. 43 (3 on 3 Dictated Pick & Roll; calling the coverage aloud is our addition).
 
 ### KB-late-clock-end-of-period
 
@@ -246,10 +248,10 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **What to check on film:** With under 10 s on the shot clock or under a minute in the period: who had the ball, how many passes and paint touches, and was the final shot the one we wanted? Did we foul on defence late in the clock? Did anyone signal the time and score?
 
-**In-game rule:** Under 10 s on the shot clock: ball to our best decision-maker, a ball screen or a drive with two in the corners, and shoot before 3 s remain. Last possession of a period: shoot with about 5 s left so there is time for a rebound; down 3, look for a three, up 3, do not foul a shooter. On defence late in the clock: no reaching; the clock is our extra defender.
+**In-game rule:** Under 10 s on the shot clock: ball to our best decision-maker, who drives with two players in the corners; a ball screen only if both players in it run it well, because for a less experienced team it mostly brings a second defender to the ball (the source's warning). Our rule: the shot is up before 3 s remain. Last possession of a period: run the clock down and shoot with 5-7 s left so there is time for a rebound; down 3, look for a three; up 3, do not foul a shooter (our choice of the two options the source describes; fouling before the shot is the other). On defence late in the clock: no reaching; the clock is our extra defender.
 
-**Drill:** 5-on-5 Situational (jrnba-allstar-plans) with late-clock starts (fiba-wabc-level3). Setup: scrimmage segments that start with a set situation (for example "12 s on the shot clock, ball on the wing", "down 2, 30 s left, our ball", "up 1, their ball"); the coach counts the last 10 s aloud; the defence plays with the "no grab" rule. End with 10 free throws per player under fatigue (after a sprint). Reps: 3 situations per side, 12-15 minutes. Success measure: the offence gets a shot off before the clock ends with at least one paint touch on 4 of 6 reps; the defence commits 0 reach-in fouls.
+**Drill:** 5-on-5 Situational (jrnba-allstar-plans) with late-clock starts (fiba-wabc-level3). Setup: scrimmage segments that start with a set situation (for example "12 s on the shot clock, ball on the wing", "down 2, 30 s left, our ball", "up 1, their ball"); the coach counts the last 10 s aloud; the defence plays with the "no grab" rule. Our addition: end with 10 free throws per player under fatigue (after a sprint). Reps: 3 situations per side, 12-15 minutes. Success measure: the offence gets a shot off before the clock ends with at least one paint touch on 4 of 6 reps; the defence commits 0 reach-in fouls.
 
 **Next-game target:** In the last minute of each period and in late-clock trips: turnovers <= 1 per game, no `result: end_period` without a shot when we need points, our reach-in fouls 0; at least one `paint_touches` on 60 % of these trips.
 
-**Source:** fiba-wabc-level3 p. 151 (late shot clock defence: team rules, the clock as a defender, no-grab rule), pp. 234-235 (late shot clock offence: clock awareness drills, structures, who should shoot), p. 236 (last possession plays: shooting time, 2- and 3-point options, not fouling when up 3); jrnba-allstar-plans p. 29 (5 on 5 Situational).
+**Source:** fiba-wabc-level3 p. 151 (late shot clock defence: team rules, the clock as a defender, no-grab rule), pp. 234-235 (late shot clock offence: clock awareness drills, structures, the ball to the best decision-maker; a ball screen can backfire with an inexperienced team), p. 236 (last possession: run the clock to 5-7 s before shooting to leave time for a rebound; 2- and 3-point options; not fouling when up 3), p. 155 (the opposite option: fouling when up 3); jrnba-allstar-plans p. 29 (5 on 5 Situational).

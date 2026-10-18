@@ -24,6 +24,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Default deliverables are the team page, the focus player's page (with narration and clips) and the explained video; the opponent dossier, court cues, replay, CV figures, event review and the single-file share are optional extras. `new-game` creates the opponent dossier only with `--dossier`.
 - The playbook starts with the one-command run; step numbers changed.
 - HTML pages carry `noindex, nofollow`.
+- Coaching knowledge base checked page by page against its sources: the press-break entry now separates trap/zone presses (three passing options) from man-to-man presses (clear out, or a forward cuts back), page references were corrected (pick-and-roll show, help the helper, pack-line weaknesses, last-possession timing), Free Throw Golf scoring was fixed, and the team's own rules and all target and success numbers are labelled as "our rule" / trial values. The audience is an adult rec team.
 
 ### Fixed
 

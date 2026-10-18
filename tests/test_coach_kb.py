@@ -42,3 +42,9 @@ def test_kb_entries_complete():
         for label in LABELS:
             assert fields.get(label), f"KB-{slug}: missing or empty {label}"
         assert PAGE_OR_URL.search(fields["Source"]), f"KB-{slug}: Source needs a page ref or URL"
+
+
+def test_kb_header_marks_own_numbers_and_rules():
+    head = KB.read_text(encoding="utf-8").split("### KB-", 1)[0]
+    assert "our own trial value" in head, "header must say targets and success measures are our trial values"
+    assert '"(our rule)"' in head, "header must explain how our own rules are marked"
