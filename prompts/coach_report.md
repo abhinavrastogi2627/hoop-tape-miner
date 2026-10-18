@@ -4,7 +4,8 @@ Audience: the players and coach of an amateur team, reading on a phone, often in
 
 ## Inputs (read these, not the raw sheets)
 
-- `game.json`, `run/official.json` (if any), `run/review_v1/summary.json`, `run/review_v1/plusminus.json`, `players_facts.md`, focus players' `player<N>_facts.md`, the `memo_part<N>.md` files, the momentum figure (`hoop-tape-miner momentum`).
+- `game.json`, `run/official.json` (if any), `run/review_v1/summary.json`, `run/review_v1/plusminus.json`, `run/review_v1/insights.json` (critic-checked coaching insights), `players_facts.md`, focus players' `player<N>_facts.md`, the `memo_part<N>.md` files, the momentum figure (`hoop-tape-miner momentum`).
+- **Conclusions and practice come from `insights.json`.** Sections 3, 4 and 5 and each focus player's **Fix** / **Practice** are built from its insights (team insights: `player` null; focus player: `player` = jersey), in its order: `claim` (with its counts), `why`, `rule`, `drill`, `target_next_game`, and the `evidence` / `counter_examples` times as clips or clip links. Do not add a conclusion, rule or drill that is not in it; if something important is missing, say so instead of inventing it. Memos give colour and the narrative of sections 1-2, not new conclusions.
 - Every number and every video time in the report must come from these files. If a fact is not there, leave it out or mark it "likely".
 
 ## Section skeleton
@@ -43,19 +44,19 @@ Sources: **official** = <league feed, what it records>; **film** = review of N p
 ### How they defend
 
 ## 3. How we played and what went wrong
-Numbered list, each item with a count and 1-3 video times. End with "What worked (keep doing it)".
+Numbered list, one item per team insight in `insights.json` order: the claim with its count, then why it happened (the insight's `why`, in plain words), with 1-3 video times from its `evidence` (the clearest one as a clip). Low-confidence insights say "likely". End with "What worked (keep doing it)", from the insights' `counter_examples` and the plays the memos praise.
 Film clips (see "Film clips" below) go under the decisive-run table, the scouting weapons, our recurring mistakes and what worked.
 
 ## 4. Game plan for the next game against {them_team}
-**Defence (top priority)** · **Offence** · **Rotation**: numbered, each rule one line, phrased as an instruction.
+**Defence (top priority)** · **Offence** · **Rotation**: numbered, each rule one line, phrased as an instruction: the insights' `rule` fields, grouped; add scouting rules from section 2 only when the film shows them.
 
 ## 5. Team practice priorities (in order)
-Table: #, focus, drill, measurable target.
+Table: #, focus, drill, measurable target: one row per team insight (its `drill` and `target_next_game`), in `insights.json` order.
 
 ## 6. Player-by-player review and practice plan
 - 2-3 notes (minutes are estimates; official sheet limits; team problems are not one player's fault).
 - Summary table: #, official line, est. minutes (video), one line.
-- One H3 per player who played, most minutes first: **Went well** (first, with times) · **Fix** (with times) · **Practice** (two drills, each with a measurable target).
+- One H3 per player who played, most minutes first: **Went well** (first, with times) · **Fix** (with times) · **Practice** (two drills, each with a measurable target). For a focus player, **Fix** and **Practice** come from that player's insights (`player` = jersey).
 - Roster players the film cannot identify: one short line inviting them to say when they played.
 ```
 
@@ -106,5 +107,6 @@ Skip plays the film does not show clearly (camera off the ball, players hidden),
 
 - Recount every total you state against `official.json` / `game.json`.
 - Check that every video time you cite exists in the facts sheets.
+- Every item in sections 3-5 traces to an insight in `insights.json` (same claim, rule, drill, target).
 - Grep both files for `P0`, `pid`, `trip`, `.json`, `run/`: none should remain.
 - Both files carry the same `clip:` windows (`hoop-tape-miner clips` lists them); every clip shows the play its caption describes.

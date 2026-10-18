@@ -37,7 +37,7 @@ Steps in order (agent steps marked *):
 | extract, embed, montage | 4 |
 | clusters*, tracks, jersey, analyze | 5 |
 | official* | 6 |
-| coach-sheets, film-review*, summary* | 7 |
+| coach-sheets, film-review*, features, summary*, insights* | 7 |
 | momentum | 8 |
 | facts* | 9 |
 | reports*, clips | 10 |
@@ -57,6 +57,7 @@ V=<video>                                        # game.json "video"
 ```
 
 - Workspace root = `$HOOP_WORKSPACE`, else `./workspace` (gitignored). Nothing in it is ever committed.
+- The review folder is `$RUN/review_v1` (written `review_v1` below). To re-write a game's reports from a new review of the same run (for example after `coach-sheets event-merge`) without touching the old ones, copy `game.json` and `official.json` into a new game folder and set `"review_dir": "<folder name under $RUN, or absolute path>"` there.
 - Times in reports are **video times** (mm:ss of the file), never the game clock.
 - Long runs: redirect to `workspace/logs/<stage>.log` and read only the tail (`tail -n 20`).
 
@@ -159,7 +160,8 @@ uv run hoop-tape-miner coach-sheets --run "$RUN" --game "$GJ" --out "$RUN/review
 
    Writes `p<pid>_<k>.jpg` sheets, `manifest.json`, `part<N>.json`, `lineup_intervals.json` and `brief_part<N>.md` (filled from `prompts/film_review_brief.md`). Read one brief: no `{...}` left, team names and jersey colours right. To fix values, edit `$GJ` and re-run with `--skip-sheets`.
 2. Launch one subagent per part, **at most 3 at once**. Each gets only its `brief_part<N>.md` path. It reads every sheet of its part, writes `coach_part<N>.json`, `memo_part<N>.md`, `notes_part<N>.txt` into `$RUN/review_v1`, and replies in at most 8 lines. Do not read the sheets yourself. Close-ups: `uv run hoop-tape-miner coach-sheets zoom SHEET TILE X Y W H OUT [--scale 3]`.
-3. Check every `coach_part<N>.json` parses and covers all pids of its part; re-run a part that does not.
+3. Check every `coach_part<N>.json` passes `uv run hoop-tape-miner coach-check --review "$RUN/review_v1"` (trip schema v2; reviewers run it themselves) and covers all pids of its part; re-run a part that does not. Old v1 reviews: `coach-check --review <v1> --migrate <v2 folder>`.
+   Then `run` measures per-trip numbers from the court tracks (step `features`): `uv run hoop-tape-miner coach-features --run "$RUN" --review "$RUN/review_v1"` writes `features.json` and `ball_quality.json`.
 4. Aggregate. Choose the game's stretches (start, decisive run, comeback, finish) from the score flow first:
 
 ```
@@ -171,6 +173,14 @@ uv run hoop-tape-miner plusminus --lineup "$RUN/review_v1/lineup_intervals.json"
 ```
 
    CV lineups are fragmentary. For the focus player, write `film_stints.json` (same shape, `{"us#<N>": [[t0, t1], ...]}`) from substitutions seen in the memos and notes; later `--lineup` files override earlier ones. `--event-times` maps feed times to the real basket times when the feed lags.
+
+5. Coaching insights with a critic (run step `insights`). Launch the writer subagent with `prompts/coach_insights.md` and the review folder: it reads the trips, `summary.json`, `plusminus.json`, `official.json`, `features.json` (if present), `prompts/coach_kb.md` and the memos, and writes `$RUN/review_v1/insights.json` (3-6 team insights and 1-3 per focus player, each a pattern on at least two trips with a KB mechanism, a rule, a drill and a measurable target). Then launch the critic subagent with `prompts/coach_critic.md`: it re-opens the cited sheets, checks counts against `summary.json` and `official.json`, sets `critic.verdict` on each insight and moves dropped ones to `insights_dropped.json`. Finally:
+
+```
+uv run hoop-tape-miner coach-insights check --review "$RUN/review_v1"
+```
+
+   Send the errors back to the writer until it prints PASS. The report's conclusions and practice plan (step 10) come from this file. To compare with the memo conclusions, `coach-insights ab --review "$RUN/review_v1" --out "$RUN/review_v1/eval/ab_insights.md"` writes a blind A/B rating sheet (the key goes to `ab_insights.key.json`; do not show it to the rater).
 
 ## 8. Figures
 

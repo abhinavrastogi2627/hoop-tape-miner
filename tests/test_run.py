@@ -21,14 +21,30 @@ def game(tmp_path, monkeypatch):
          "us": {"team": "Night Owls", "label": "Dark", "focus_player": "17"},
          "them": {"team": "Red Foxes", "label": "Light"}, "rosters": {"us": [], "them": []}}
     (folder / "game.json").write_text(json.dumps(g), encoding="utf8")
+    kb = tmp_path / "coach_kb.md"
+    kb.write_text("### KB-transition-defence\n", encoding="utf8")
+    monkeypatch.setattr(R, "KB", kb)
     return folder
 
 
+VALID_TRIP = {"schema": 2, "pid": 1, "trip": 1, "t0": 1.0, "t1": 9.0, "offence": "us", "result": "unclear",
+              "shot": None, "fts": None, "foul": None, "evidence": {}, "confidence": "low"}
+
+
+VALID_INSIGHT = {"id": "T1", "kb": ["transition-defence"], "claim": "c", "why": "w", "rule": "r", "drill": "d",
+                 "target_next_game": "t", "evidence": [{"t": 2.0, "what": "a"}, {"t": 8.0, "what": "b"}],
+                 "counter_examples": [], "numbers": {}, "confidence": "low",
+                 "critic": {"verdict": "keep", "note": "checked"}}
+
+
 def touch(folder: Path, *rel: str):
+    """Create placeholder files; coach_part*.json get one valid v2 trip, insights.json one valid insight."""
     for r in rel:
         p = folder / r
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("{}" if p.suffix == ".json" else "x", encoding="utf8")
+        body = (json.dumps([VALID_TRIP]) if p.name.startswith("coach_part") else
+                json.dumps([VALID_INSIGHT]) if p.name == "insights.json" else "{}" if p.suffix == ".json" else "x")
+        p.write_text(body, encoding="utf8")
 
 
 class Runner:
@@ -48,6 +64,50 @@ def test_status_lists_every_step_in_order(game):
     assert names == R.NAMES
     assert names.index("calibrate") < names.index("extract") < names.index("film-review") < names.index("html")
     assert names[-2:] == ["film-script", "film"]
+
+
+def test_insights_step_order(game):
+    names = R.NAMES
+    assert names.index("summary") < names.index("insights") < names.index("facts")
+    touch(game, "run/review_v1/manifest.json", "run/review_v1/part1.json", "run/review_v1/coach_part1.json",
+          "run/review_v1/summary.json")
+    g = R.Game.load(game)
+    done = {n: ok for n, _, ok in R.status(g)}
+    assert done["summary"] and not done["insights"]
+    (g.review / "insights.json").write_text(json.dumps([dict(VALID_INSIGHT, kb=["nope"])]), encoding="utf8")
+    assert not R.insights_done(g)
+    touch(game, "run/review_v1/insights.json")
+    assert R.insights_done(g)
+    how = next(s.how for s in R.STEPS if s.name == "insights")
+    assert "coach_insights.md" in how and "coach_critic.md" in how and "coach-insights check" in how
+
+
+def test_review_dir_override(game):
+    g = R.Game.load(game)
+    assert g.review == g.run / "review_v1"
+    g.game["review_dir"] = "review_v3"
+    assert g.review == g.run / "review_v3"
+    g.game["review_dir"] = str(game / "elsewhere")
+    assert g.review == game / "elsewhere"
+
+
+def test_lineup_falls_back_to_run_folder(game):
+    g = R.Game.load(game)
+    touch(game, "run/lineup_intervals.json")
+    assert g.lineup == g.run / "lineup_intervals.json"
+    touch(game, "run/review_v1/lineup_intervals.json")
+    assert g.lineup == g.review / "lineup_intervals.json"
+
+
+def test_features_step_runs_after_film_review(game):
+    names = R.NAMES
+    assert names.index("film-review") < names.index("features") < names.index("insights")
+    g = R.Game.load(game)
+    step = next(s for s in R.STEPS if s.name == "features")
+    assert step.kind == "cmd" and not step.done(g)
+    assert step.args(g)[0][:1] == ["coach-features"] and str(g.review) in step.args(g)[0]
+    touch(game, "run/review_v1/features.json")
+    assert step.done(g)
 
 
 def test_first_cmd_writes_grid_then_waits_for_agent_calibration(game, capsys):
@@ -95,12 +155,24 @@ def test_film_review_waits_until_every_part_has_a_coach_json(game):
     assert R.parts_done(g)
 
 
+def test_parts_done_requires_valid(game):
+    touch(game, "run/review_v1/manifest.json", "run/review_v1/brief_part1.md")
+    bad = dict(VALID_TRIP, result="made2 + FT 1/1 (and-one)")
+    (game / "run/review_v1/coach_part1.json").write_text(json.dumps([bad]), encoding="utf8")
+    g = R.Game.load(game)
+    assert not R.parts_done(g)
+    (game / "run/review_v1/coach_part1.json").write_text("[{", encoding="utf8")
+    assert not R.parts_done(g)
+    touch(game, "run/review_v1/coach_part1.json")
+    assert R.parts_done(g)
+
+
 def finished_until_html(folder: Path):
     touch(folder, "run/calib/keyframes.json", "run/detections.pkl", "run/camera.npz", "run/embeddings.npz",
           "run/cluster_names.json", "run/tracks.pkl", "run/jersey.json", "run/possessions.pkl",
           "run/possession_metrics.pkl", "run/official.json", "run/review_v1/manifest.json",
-          "run/review_v1/part1.json", "run/review_v1/coach_part1.json", "run/review_v1/summary.json",
-          "run/review_v1/players_facts.md", "run/review_v1/player17_facts.md")
+          "run/review_v1/part1.json", "run/review_v1/coach_part1.json", "run/review_v1/summary.json", "run/review_v1/features.json",
+          "run/review_v1/insights.json", "run/review_v1/players_facts.md", "run/review_v1/player17_facts.md")
     for d in ("", "player-17/"):
         touch(folder, *(d + f for f in ("README.md", "README.en.md", "listen.zh.md", "listen.en.md",
                                         "listen.zh.mp3", "listen.en.mp3")))

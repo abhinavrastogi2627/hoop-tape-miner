@@ -26,20 +26,40 @@ def _num(v):
     return v if isinstance(v, (int, float)) else 0
 
 
+def _head(x):
+    """Result keyword: the v2 enum value, or the first word of a v1 free-text result."""
+    return str(x.get("result")) if x.get("schema") == 2 else str(x.get("result")).split(" ")[0].split("(")[0]
+
+
+def _scored(x):
+    """v2: made2/made3, or foul_ft with at least one FT made; v1: result starts with made or FT."""
+    if x.get("schema") == 2:
+        fts = x.get("fts") if isinstance(x.get("fts"), dict) else {}
+        return x.get("result") in ("made2", "made3") or (x.get("result") == "foul_ft" and (fts.get("made") or 0) > 0)
+    return str(x.get("result")).startswith(("made", "FT"))
+
+
+def _foul_team(x, f):
+    if x.get("schema") == 2:
+        return f.get("by_team") or "unclear"
+    who = str(f.get("who", "")).lower()
+    return "us" if who.startswith("us") or (x.get("offence") == "them" and not who.startswith("them")) else "them"
+
+
 def summarise(trips):
     out = {}
     for side in ("us", "them"):
         off = [x for x in trips if x.get("offence") == side]
-        res = Counter(str(x.get("result")).split(" ")[0].split("(")[0] for x in off)
+        res = Counter(_head(x) for x in off)
         trans = [x for x in off if x.get("entry") in ("transition", "early_offense")]
         out[side] = {
             "trips": len(off),
             "results": dict(res),
             "turnovers": sum(1 for x in off if str(x.get("result")).startswith("turnover")),
             "transition_trips": len(trans),
-            "transition_scores": sum(1 for x in trans if str(x.get("result")).startswith(("made", "FT"))),
+            "transition_scores": sum(1 for x in trans if _scored(x)),
             "halfcourt_scores": sum(1 for x in off if x.get("entry") not in ("transition", "early_offense")
-                                    and str(x.get("result")).startswith(("made", "FT"))),
+                                    and _scored(x)),
             "primary_action": dict(Counter(x.get("primary_action") for x in off).most_common(6)),
             "avg_paint_touches": round(sum(_num(x.get("paint_touches")) for x in off) / max(len(off), 1), 2),
             "avg_ball_stops": round(sum(_num(x.get("ball_stops")) for x in off) / max(len(off), 1), 2),
@@ -51,9 +71,7 @@ def summarise(trips):
     for x in trips:
         f = x.get("foul")
         if isinstance(f, dict):
-            who = str(f.get("who", "")).lower()
-            team = "us" if who.startswith("us") or (x.get("offence") == "them" and not who.startswith("them")) else "them"
-            fouls[f"{team}:{f.get('type')}"] += 1
+            fouls[f"{_foul_team(x, f)}:{f.get('type')}"] += 1
     out["fouls"] = dict(fouls)
     return out
 

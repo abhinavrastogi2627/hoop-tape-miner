@@ -7,7 +7,8 @@
     "focus_player": "Jersey number (string) of the player who gets a personal page, copied to game.json us.focus_player.",
     "media_root": "Folder for heavy files (videos, run/, raw league data): <media_root>/teams/<opponent-slug>/<date>/. null = inside the game folder.",
     "league": "kind = league site (only glory for now); secrets = KEY=VALUE file with GLORY_EMAIL / GLORY_PASSWORD, kept outside the repo. Env GLORY_EMAIL / GLORY_PASSWORD win over the file.",
-    "languages": "Report languages, e.g. [\"zh\", \"en\"]."
+    "languages": "Report languages, e.g. [\"zh\", \"en\"].",
+    "coach_library": "Optional folder of coaching texts outside the repo (legal manuals and books as text). The insights writer may grep it for a supporting passage; null = use prompts/coach_kb.md only."
   },
   "team": "Our Team",
   "label": "Dark jerseys",
@@ -18,5 +19,6 @@
     "kind": "glory",
     "secrets": "~/.secrets/gloryleague.env"
   },
-  "languages": ["zh", "en"]
+  "languages": ["zh", "en"],
+  "coach_library": null
 }
