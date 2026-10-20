@@ -159,6 +159,8 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **Source:** fiba-wabc-level1 pp. 201-202 (layup teaching sequence; land the baseline-side foot on the block and shoot with the same-side hand; pick the ball up with the feet in the air); fiba-wabc-level2 p. 139 (jump-stop and two-step layups, same hand as the side, reach high, lift the same-side knee, jump up not long; Euro step), p. 140 (outside-foot and inside-foot layups, floater, wrong-foot layup), pp. 141-142 (hook and scoop), p. 143 (reverse layup, the rim protects the ball). Quote: none.
 
+**See also:** MV-layup-penultimate (long, low penultimate step), MV-one-foot-takeoff, MV-landing in `prompts/movement_kb.md`.
+
 ### KB-finishing-contact
 
 **Symptom (observable):** Finishes miss when someone is there: `miss: blocked` or many `rim` misses with `form` notes "contact", "brings the ball low", "fades away", "lands off balance"; `form_finish` `jump` lower on misses than makes; in game-like blocks (trainer defending) `category: finish` pct far below unopposed layups.
@@ -198,6 +200,8 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 **Next-session target:** dribbling is not in the shot targets; set in the report: 6 minutes of handling with `losses` <= 2 and "head up" noted on every segment. Add a related finish target, e.g. `{"name": "Left-hand drive to layup", "match": {"type": "layup-left"}, "attempts": 20, "pct": 0.60}`.
 
 **Source:** fiba-wabc-level1 p. 195 (push with the wrist, don't look at the ball, keep it below the knee, use the hesitation dribble), p. 196 (fingers spread, push the ball with force, either hand, dribble with the hand away from the defender; Punch and Retreat, 30 s, count touches), p. 197 (speed dribble relay; Dribble Chicken: quick first step, attack the hips), p. 198 (dribble mirror, Bongo drums with several balls). Quote: "see with your fingers" (fiba-wabc-level1 p. 196).
+
+**See also:** MV-speed-dribble (full-court push dribble) in `prompts/movement_kb.md`.
 
 ### KB-triple-threat-jab-first-step
 
@@ -278,6 +282,8 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **Source:** fiba-wabc-level1 p. 236 (maximal efforts last 5-10 s, play phases rarely exceed 3 min, fitness is performing in the last quarter as at the start, aerobic work but not at the expense of explosiveness), p. 237 (long steady runs are not useful; interval training and on-court activities of 2-3 min; explosive work every session); fiba-wabc-level2 p. 162 (too much aerobic work can cost speed), p. 172 (aerobic intervals of 15-30 s hard and 15-30 s at 50-70 %, 1:1, more than 15 reps and at least 10 min; small-sided games); Stojanović et al. 2018, Sports Med 48(1):111-135, DOI 10.1007/s40279-017-0794-z, abstract via Europe PMC (about 5-6 km per 40 min of live play, mean intensity above lactate threshold at about 85 % HRmax, fewer vigorous activities in the fourth quarter); Petway et al. 2020, PLoS One 15(3):e0229212, https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0229212 (match demands review; distance, heart rate and accelerations by level). Quote: "Temporal comparisons show a reduction in vigorous activities in the fourth quarter." (Stojanović et al. 2018).
 
+**See also:** FR-energy-by-day, FR-game-day in `prompts/fuel_recovery_kb.md`.
+
 ### KB-repeated-sprint-cod
 
 **Symptom (observable):** Proxy. Conditioning blocks show slower runs or fewer touches in later bouts; `form` notes "rounds the cut", "slows down 3-4 steps early", "stands up in the turn"; finishes after a sprint (`category: finish` late in a sprint block) worse than rested finishes.
@@ -296,6 +302,8 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 **Next-session target:** not a shot target; record bouts and times in `blocks` notes. If shots follow, add `{"name": "Layups after sprints", "match": {"category": "finish"}, "attempts": 20, "pct": 0.65}`.
 
 **Source:** fiba-wabc-level1 p. 171 (change of direction: last step with the foot away from the new direction, long powerful first step; mistakes: shortening 3-4 steps early, high centre of gravity, a curve instead of an angle); fiba-wabc-level2 p. 171 (alactic covers the first 10-15 s; alactic power: under 7 s, 1:8, 5-10 reps; alactic capacity: 4-10 s, 1:6, 8-15 reps, backboard jumps 6 s on / 40 s off x8; lactic capacity: 1:3, use sparingly); Petway et al. 2020, https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0229212 (elite matches have about 43-145 accelerations and 24-95 decelerations per player; evidence inconsistent). Quote: none.
+
+**See also:** MV-accel-posture, MV-transition-head-up, MV-decel-stop in `prompts/movement_kb.md`.
 
 ### KB-deceleration-landing
 
@@ -317,6 +325,8 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **Source:** Harper et al. 2022, Sports Med, https://pmc.ncbi.nlm.nih.gov/articles/PMC9474351/ (braking forces up to about 2.7 times those of the first acceleration steps; intense decelerations often precede non-contact ACL injury; lower the centre of mass with triple flexion, brake over several steps, train eccentric strength and both legs, progress the drills); Struzik et al. 2014, J Hum Kinet, https://pmc.ncbi.nlm.nih.gov/articles/PMC4234772/ (jump-shot landing forces about 5.5 times body weight; soft-landing technique recommended); fiba-wabc-level2 p. 165 (screen landing: do they absorb shock or land on locked joints), pp. 166-167 (step to vertical jump with a soft landing, single-leg hop and stick in three directions); fiba-wabc-level1 p. 241 (ankle sprain is common; ACL injury from a twisting force); Donnell-Fink et al. 2015, PLoS One 10(12):e0144063, PMC4670212 (meta-analysis of 24 studies: knee injury IRR 0.731, ACL IRR 0.493 with neuromuscular and proprioceptive training); Cumps et al. 2007, JSSM, https://jssm.org/jssm-06-212.xml-Fulltext (basketball balance programme in the warm-up, 5-10 min, 3 times a week; ankle sprain RR 0.30; pilot study); Longo et al. 2012, AJSM 40(5):996-1005, PEDro https://search.pedro.org.au/search-results/record-detail/32191 (FIFA 11+ in youth basketball: fewer injuries overall, no significant difference for knee or ankle). Quote: "Knees remain over feet (don't come in or out)" (fiba-wabc-level2 p. 167).
 
+**See also:** MV-decel-stop, MV-landing, MV-knee-load in `prompts/movement_kb.md`.
+
 ### KB-strength-power
 
 **Symptom (observable):** Proxy. Pose `jump` low and falling across the session, `misses.short` rising late, finishes through contact lost (see KB-finishing-contact), and the player reports little or no gym work. No direct strength measure exists in the session data.
@@ -336,6 +346,8 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 
 **Source:** fiba-wabc-level2 p. 162 (strength training does not make you slow; stronger muscles make shots less fatiguing), p. 165 (detraining starts within about 5 days), p. 163 (change the programme every 4-6 weeks; periodise), p. 166 (screening tests: single-leg hamstring bridge 12/leg, push-ups 12, prone hold 1 min, single-leg calf raise 20/leg), p. 169 (progressive resistance; strength-endurance, hypertrophy, maximal-strength and power rep and load ranges; maximal strength usually first), p. 170 (power needs a strength base and longer rests), pp. 174-176 (beginner programmes, big lifts first, 2 min rests, last 2 reps very hard but no failure, bodyweight programme); ACSM 2009 position stand "Progression Models in Resistance Training for Healthy Adults", summary PDF https://www.sportgeneeskunde.com/wp-content/uploads/ACSM-Position-Stand-Progression-Models-in-Resistance-Training-for-Healthy-Adults.pdf (novice loads of 8-12 RM; increase the load by 2-10 % when the player can do one to two repetitions over the target; novice frequency 2-3 days a week). Quote: none.
 
+**See also:** MV-ankle-dominant-push, MV-calf-capacity, MV-hamstring-safety in `prompts/movement_kb.md`.
+
 ### KB-warm-up-mobility
 
 **Symptom (observable):** The first `thirds` third is the worst of the session (warm-up effect), the first `blocks` entry is already `shooting` with no `warm-up` block, or the warm-up block is under about 10 minutes; `form` notes "stiff", "short arm", "can't get elbow up"; early-session pose `knee_bend` and `lift` lower than later.
@@ -354,6 +366,8 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 **Next-session target:** report the first-third pct against the session mean; a close-shot warm-up target such as `{"name": "Warm-up close shots", "match": {"zone": "paint"}, "attempts": 20, "pct": 0.70}`.
 
 **Source:** Human Kinetics, "The RAMP system", https://us.humankinetics.com/blogs/strength-conditioning-fitness/the-ramp-system (names Raise, Activate, Mobilise, Potentiate, by Ian Jeffreys; the page gives no exercise list); fiba-wabc-level2 p. 161 (range of motion matters: limited shoulder ROM makes it hard to get the elbow under the ball), pp. 166-167 (training warm-up: general movement, then dynamic range of motion, then sport-specific; the example exercises above), p. 168 (game warm-up: 3-4 min aerobic, 2-3 min mobility, accelerations, defensive slides, backboard jumps), p. 173 (static stretching 10-30 s after training, dynamic before); fiba-wabc-level1 p. 240 (warm-up 5-10 min with dynamic stretching, cool-down with static stretching); specialolympics-basketball-coaching-guide-2024 p. 30 (at least 15 min, sport-specific), p. 31 (aerobic, dynamic stretching, sport-specific movements). Quote: none.
+
+**See also:** the sprint drills in MV-accel-posture and MV-backside-mechanics (`prompts/movement_kb.md`).
 
 ### KB-fatigue-shooting
 
@@ -393,3 +407,5 @@ Sources: entries are paraphrased in our own words from professional coaching mat
 **Next-session target:** keep the previous targets; on a planned light day lower `attempts` by about a third and keep `pct` (our rule), e.g. `{"name": "Light day free throws", "match": {"zone": "ft"}, "attempts": 20, "pct": 0.75}`.
 
 **Source:** fiba-wabc-level1 p. 37 (volume vs intensity; balance work and rest; lighter load in the day or two before a game and the day after), p. 238 (2 % dehydration can mean a 10 % performance drop); fiba-wabc-level2 p. 22 (diary of load, sleep and "how I feel"), p. 23 (reduce the session or change its content with signs of fatigue; work stress counts), p. 163 (change the programme every 4-6 weeks, periodise), p. 165 (detraining starts within about 5 days), p. 201 (active recovery), p. 205 (sleep: partial loss hurts repeated submaximal efforts more, naps, regular sleep-wake routine, dark cool room, avoid alcohol and caffeine before bed); Mah et al. 2011, Sleep 34(7):943-950, https://pmc.ncbi.nlm.nih.gov/articles/PMC3119836/ (11 college players, about 111 min more sleep a night; sprint 16.2 to 15.5 s, free throws +9 %, threes +9.2 %; small sample). Quote: none.
+
+**See also:** FR-recovery-ranked, FR-sleep, FR-soreness-vs-pain, FR-load-progression in `prompts/fuel_recovery_kb.md`.

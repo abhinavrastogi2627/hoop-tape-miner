@@ -111,6 +111,7 @@ def test_layup_penultimate():
     assert abs(lay["hip_drop"] - 0.08) <= 0.02
     assert lay["takeoff_foot"] == ("L" if feet[5] == 0 else "R")
     assert len(lay["last3_len"]) == 3
+    assert lay["free_knee"] is not None
 
 
 def test_dribble_bounces():
@@ -121,7 +122,7 @@ def test_dribble_bounces():
     ball = np.c_[np.full(len(t), 520), 380 + 70 * np.cos(2 * np.pi * 2 * t)]  # 2 bounces/s, top at y=310
     d = G.dribble_metrics(t, kp, ball)
     assert 7 <= d["bounces"] <= 8
-    assert abs(d["ball_top_vs_hip"] - (300 - 310) / LEG) <= 0.02
+    assert abs(d["ball_top_vs_hip"] - (FLOOR - 310) / LEG) <= 0.02  # 1.0 = hip height
     assert d["bounces_per_10m"] is None
 
 

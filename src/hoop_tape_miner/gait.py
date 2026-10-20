@@ -214,9 +214,10 @@ def layup_metrics(t: np.ndarray, kp: np.ndarray, conf: np.ndarray, contacts: lis
     last3_len (lengths of the last three steps), penultimate_ratio (step onto the penultimate contact / median
     earlier step), hip_drop (lowest hip from the penultimate touchdown to take-off vs the earlier run-up, leg lengths,
     + = lower), takeoff_knee (smallest knee angle on the take-off contact, deg), takeoff_trunk, takeoff_ahead (at the
-    take-off touchdown), landing_knee_min (smallest knee angle in the second after release)."""
+    take-off touchdown), free_knee (peak thigh angle of the free leg from take-off touchdown to release, deg from
+    vertical, + = forward), landing_knee_min (smallest knee angle in the second after release)."""
     out = dict(takeoff_t=None, takeoff_foot=None, last3_len=[], penultimate_ratio=None, hip_drop=None,
-               takeoff_knee=None, takeoff_trunk=None, takeoff_ahead=None, landing_knee_min=None)
+               takeoff_knee=None, takeoff_trunk=None, takeoff_ahead=None, free_knee=None, landing_knee_min=None)
     before = [c for c in contacts if c["on"] <= release_t]
     if not before:
         return out
@@ -232,6 +233,13 @@ def layup_metrics(t: np.ndarray, kp: np.ndarray, conf: np.ndarray, contacts: lis
     i1 = take["i_off"] if take["i_off"] is not None else min(len(t) - 1, int(np.searchsorted(t, release_t)))
     knee = T.angle(km[take["i_on"]:i1 + 1, hp], km[take["i_on"]:i1 + 1, kn], km[take["i_on"]:i1 + 1, an])
     out["takeoff_knee"] = _num(np.nanmin(knee)) if np.isfinite(knee).any() else None
+    d = direction(t, km)
+    if d:
+        _, fk, fh = FEET["R" if take["foot"] == "L" else "L"]
+        w = slice(take["i_on"], min(len(t), int(np.searchsorted(t, release_t, side="right"))))
+        with _quiet():
+            th = np.degrees(np.arctan2(d * (km[w, fk, 0] - km[w, fh, 0]), km[w, fk, 1] - km[w, fh, 1]))
+        out["free_knee"] = _num(np.nanmax(th)) if np.isfinite(th).any() else None
     if len(steps) >= 2:
         pen = steps[-2]
         earlier = [s["step_len"] for s in steps[:-2] if s["step_len"] is not None]
@@ -268,7 +276,8 @@ def _extrema(y: np.ndarray, fps: float, L: float, low: bool) -> list[int]:
 
 def dribble_metrics(t: np.ndarray, kp: np.ndarray, ball: np.ndarray, m_per_px: float | None = None) -> dict:
     """Ball rhythm of a dribble clip: bounces (lowest ball points), bounces_per_10m (needs m_per_px for the hip
-    travel, else None), ball_top_vs_hip (median height of the ball's top points above the hip, leg lengths)."""
+    travel, else None), ball_top_vs_hip (median height of the ball's top points above the floor in leg lengths, so
+    1.0 = hip height)."""
     L, fps = leg_length(kp), _fps(t)
     by = np.asarray(ball, float)[:, 1]
     out = dict(bounces=0, bounces_per_10m=None, ball_top_vs_hip=None)
@@ -277,8 +286,9 @@ def dribble_metrics(t: np.ndarray, kp: np.ndarray, ball: np.ndarray, m_per_px: f
     bot, top = _extrema(by, fps, L, low=False), _extrema(by, fps, L, low=True)
     out["bounces"] = len(bot)
     hip = _pair(kp, T.L_HIP, T.R_HIP)
+    floor = _floor(kp, fps)
     if top:
-        out["ball_top_vs_hip"] = _num(float(np.nanmedian([(hip[i, 1] - by[i]) / L for i in top])))
+        out["ball_top_vs_hip"] = _num(float(np.nanmedian([(floor[i] - by[i]) / L for i in top])))
     hx = hip[:, 0][np.isfinite(hip[:, 0])]
     if m_per_px and len(hx) > 1 and abs(hx[-1] - hx[0]) > 0:
         out["bounces_per_10m"] = len(bot) / (abs(hx[-1] - hx[0]) * m_per_px) * 10
