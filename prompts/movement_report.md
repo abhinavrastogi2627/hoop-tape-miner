@@ -35,8 +35,8 @@ Depth is the point: for every finding go film evidence (segment id + time + clip
   knee lift from behind). List these honestly in section 5 so the re-shoot covers them.
 - Never write a number that is not in facts.md. Reference bands are directions from trained populations, not pass
   marks; say "sprinters are about X" rather than "you fail X".
-- Segments whose reviewer set `identity_ok: false` (the crop followed someone else) count for nothing; facts.md
-  already drops them. Do not rescue them from memory.
+- Segments whose reviewer set `identity_ok: false` (the crop followed someone else) count for nothing, nor do
+  findings inside a segment's `wrong_person` stretches; facts.md already drops them. Do not rescue them from memory.
 
 ## Section skeleton
 

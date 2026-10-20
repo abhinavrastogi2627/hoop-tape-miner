@@ -286,8 +286,9 @@ def write_brief(folder: Path, m: dict, out: Path, name: str, segs: list[dict], s
     vals = {
         "session": str(folder), "player": f"{m.get('name') or ''} #{m.get('player')}".strip(),
         "plan": m.get("plan") or "(not given)", "group": name, "reel": str(M.path(folder, m, "video_overlay", "reel.mp4")),
-        "who": (f"others are in frame. The player is: {m['look']}. If the skeleton or crop follows someone else, set "
-                "`identity_ok: false` for that segment and judge only frames where the player is clear."
+        "who": (f"others are in frame. The player is: {m['look']}. If the skeleton or crop follows someone else, list "
+                "those stretches in `wrong_person` and judge only frames where the player is clear (`identity_ok: "
+                "false` when that is most of the window)."
                 if m.get("look") else "only the player should be in frame."),
         "segments": "\n\n".join(rows), "json": str(out / f"review_{name}.json"), "memo": str(out / f"memo_{name}.md"),
     }

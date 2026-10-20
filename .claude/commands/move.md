@@ -13,7 +13,7 @@ Loop:
 
 - Run `uv run hoop-tape-miner move $ARGUMENTS > workspace/logs/move.log 2>&1` (with a spec: `move --spec <file>`) and read only the tail of the log. After the first run, pass the session folder it printed.
 - Exit 3 means it is waiting for you: do exactly the step the log names (playbook, "Movement sessions"), then run it again. Exit 1: read the stage log it names, fix the cause, run again. Exit 0: done.
-- Identity check, label check and review: subagents, at most 3 at once; they write files and reply in a few lines. Do not read the sheets yourself. When a reviewer says the crop follows someone else, fix `who` / `release` and re-run `move-scan --repick` and `move-sheets --force` before trusting that group.
+- Identity check, label check and review: subagents, at most 3 at once; they write files and reply in a few lines. Do not read the sheets yourself. When a reviewer lists `wrong_person` stretches or sets `identity_ok` false, add `more` picks at those times in `who.json` (or fix `release`), re-run `move-scan --repick` and `move-sheets --force`, and review that group again.
 - Browser checks go to the browser-check subagent. Publish only when the user asks (`--publish`; the page gets its own private link and is never listed on the team hub).
 
 Rules: one session per conversation; reuse `run/seg/*.raw.npz` (never `--force` the scan without a reason); numbers only from `facts.md`, and only side-view metrics that passed the label check; what a view cannot show is "not visible", never a guess; never commit anything from `workspace/` or any media.

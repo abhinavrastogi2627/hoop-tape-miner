@@ -128,9 +128,35 @@ def metrics(gaits: dict[str, dict], validation: dict) -> dict:
 
 # ---- faults --------------------------------------------------------------------------------------------------
 
+def wrong_spans(s: dict) -> list[tuple[float, float]]:
+    """A reviewed segment's "wrong_person" stretches ("mm:ss.s-mm:ss.s") as (from, to) source seconds."""
+    out = []
+    for x in s.get("wrong_person") or []:
+        a, _, b = str(x).partition("-")
+        try:
+            out.append((M.secs(a.strip()), M.secs((b or a).strip())))
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+def in_spans(t, spans: list[tuple[float, float]]) -> bool:
+    """True when any of the finding's times (one or a list of mm:ss.s) falls inside a stretch."""
+    ts = t if isinstance(t, list) else [t] if t else []
+    for x in ts:
+        try:
+            v = M.secs(x)
+        except (ValueError, TypeError):
+            continue
+        if any(a - 0.05 <= v <= b + 0.05 for a, b in spans):
+            return True
+    return False
+
+
 def faults(reviews: list[dict], gaits: dict[str, dict]) -> list[dict]:
     """Findings merged over review groups: per KB slug the segments and times per status. Segments with
-    identity_ok false are left out. A running fault (M.SPRINT_SLUGS) seen only on non-side cameras is a hypothesis."""
+    identity_ok false are left out, and so are findings timed inside a segment's "wrong_person" stretches. A running
+    fault (M.SPRINT_SLUGS) seen only on non-side cameras is a hypothesis."""
     by: dict[str, dict] = {}
     good: dict[str, dict] = {}
     for rv in reviews:
@@ -138,7 +164,10 @@ def faults(reviews: list[dict], gaits: dict[str, dict]) -> list[dict]:
             if s.get("identity_ok") is False:
                 continue
             side = (gaits.get(s["id"]) or {}).get("view") == "side"
+            wrong = wrong_spans(s)
             for f in s.get("faults") or []:
+                if f.get("status") in ("seen", "hypothesis") and in_spans(f.get("t"), wrong):
+                    continue
                 st = f.get("status")
                 if st == "seen" and f["kb"] in M.SPRINT_SLUGS and not side:
                     st = "hypothesis"
@@ -152,6 +181,8 @@ def faults(reviews: list[dict], gaits: dict[str, dict]) -> list[dict]:
                     if f.get("note"):
                         row["notes"].append(f"{s['id']}: {f['note']} ({f.get('confidence', '?')})")
             for gd in s.get("good") or []:
+                if in_spans(gd.get("t"), wrong):
+                    continue
                 row = good.setdefault(gd["kb"], {"segments": [], "times": [], "notes": []})
                 row["segments"].append(s["id"])
                 if gd.get("t"):

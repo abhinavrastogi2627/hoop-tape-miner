@@ -28,8 +28,10 @@ How to read the sheets:
   before the ball leaves the hand). Read them left to right, row by row.
 - Side-view tiles also carry `trunk <deg>` (lean from vertical) and `TD L` / `TD R` (the scan thinks that foot
   touched down). Those numbers are unchecked: use them as a hint, judge from the picture.
-- A skeleton drawn on the wrong person, or missing, says nothing about the player: judge the person in the crop
-  and set `identity_ok` to false if the crop is not the player.
+- A skeleton drawn on the wrong person, or missing, says nothing about the player. When the crop follows someone
+  else only for part of the window, keep `identity_ok` true, list those stretches in `wrong_person`
+  (`"mm:ss.s-mm:ss.s"`, source times) and judge only the frames outside them; set `identity_ok` to false only when
+  the player is not in the crop for most of the window.
 - Game-view segments (no key sheet) are for context: open the overlay reel at their reel times.
 
 What to look for: use `prompts/movement_kb.md` (repo root). Each `MV-` entry has a **Symptom** and a
@@ -54,7 +56,7 @@ unless the camera turns to the side.
 {
   "group": "{{group}}",
   "segments": [
-    {"id": "L01", "identity_ok": true,
+    {"id": "L01", "identity_ok": true, "wrong_person": ["31:46.8-31:47.3"],
      "faults": [
        {"kb": "MV-landing", "status": "seen | not_seen | not_visible", "t": "31:46.2",
         "confidence": "high | medium | low", "note": "one short line: what the frames show"}
@@ -73,6 +75,8 @@ Rules:
 - `confidence` high only when several frames agree; one blurry frame is low.
 - `t` is the source time from the tile caption (mm:ss.s), not the reel time.
 - `good`: habits worth keeping, same rules (seen only).
+- `wrong_person`: every stretch where the crop or skeleton is on someone else (empty list when none). Findings
+  inside a stretch are dropped, and the stretches tell the next identity pass where to pick the player again.
 
 2. `{{memo}}`, at most 20 lines of Markdown: the two or three patterns that repeat across your segments (with the
 segment ids and times where they show best and the MV slug), what changes between early and late segments

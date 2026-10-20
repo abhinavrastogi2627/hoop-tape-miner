@@ -7,8 +7,11 @@ any segment with "follow": "ball") on the segment's window of its *source* video
 real frames per second), picks the player and writes to the session's run folder:
   seg/<id>.raw.npz everyone the models saw; --repick chooses the player again from it without re-running them
   seg/<id>.npz     the player: t (source s), kp, conf, box, ball, size; reused on the next run (--force to redo)
-The player: when the ball was scanned and the segment has an "anchor" (else "release") time, the person holding the
-ball nearest that time, followed backward and forward from there; otherwise "seed", else the largest person.
+The player, by the first identity source the segment has: "who" (an agent picked the player's numbered box on
+run/move_review/who_<id>.jpg; "more" adds picks at other times), followed through the window by the cheapest path
+over the detected boxes (movement between frames + how unlike the player each box looks, from the clothing colours of
+every pick in the session); else the person holding the ball at "anchor" (else "release"); else "seed", else the
+largest person.
   gait/<id>.json   direction, leg length, foot contacts, per-step metrics, clip summary, layup / dribble metrics
   gait.json        all segments in one list
 Game-view segments are review-only: no pose, gait/<id>.json says "metrics": null. Only side-view segments are
@@ -36,6 +39,8 @@ CROWD_SHARE = 0.1     # more than one person in over 10 % of the frames -> ident
 FEAT_BINS = (8, 4, 4)  # HSV histogram bins
 APPEAR_W = 1.0        # weight of the clothing-colour difference (0-1) against the move in body heights
 MAX_MOVE = 1.5        # a box further than this many body heights from the last one is not the player
+PATH_W = 0.5          # best_path: weight of the session appearance cost (in spreads) against the move per frame
+JUMP_COST = 10.0      # best_path: cost of a move of more than MAX_MOVE body heights between two frames
 WHO_TILE_H = 420
 
 
@@ -130,6 +135,84 @@ def track(boxes: list[np.ndarray], feats: list[np.ndarray] | None, i0: int, k0: 
     return [k0 if i == i0 else fwd.get(i, back.get(i)) for i in range(len(boxes))]
 
 
+def _unit(x: np.ndarray) -> np.ndarray:
+    """Colour histograms as unit vectors of their square roots (cosine = Bhattacharyya coefficient up to scale)."""
+    x = np.sqrt(np.clip(x, 0, None))
+    return x / np.maximum(np.linalg.norm(x, axis=-1, keepdims=True), 1e-9)
+
+
+def appearance_model(samples: list[tuple[np.ndarray, int]]) -> dict | None:
+    """Clothing-colour model from picked frames: samples are (box features of one frame, the player's box index).
+    Returns the mean player and mean other-person vectors and the spread of the score over the samples, or None
+    when no frame shows anyone else."""
+    P = [_unit(f[k]) for f, k in samples if k < len(f)]
+    O = [_unit(x) for f, k in samples for j, x in enumerate(f) if j != k]
+    if not P or not O:
+        return None
+    cp, co = np.mean(P, axis=0), np.mean(O, axis=0)
+    sd = float(np.std([x @ co - x @ cp for x in P + O]))
+    return {"player": cp, "other": co, "spread": sd if sd > 1e-6 else 1.0}
+
+
+def appearance_cost(feats: list[np.ndarray], model: dict) -> list[np.ndarray]:
+    """Per frame and box: how much more the box looks like the others than like the player, in spreads."""
+    return [(_unit(f) @ model["other"] - _unit(f) @ model["player"]) / model["spread"] if len(f) else np.zeros(0)
+            for f in feats]
+
+
+def best_path(boxes: list[np.ndarray], cost: list[np.ndarray] | None, anchors: dict[int, int]) -> list[int | None]:
+    """Box index per frame for the player over the whole window (Viterbi): the path with the lowest sum of moves
+    between frames (centre distance in body heights, JUMP_COST beyond MAX_MOVE) + PATH_W x appearance cost, through
+    every anchor {frame: box}; an anchor box of -1 means the player has no box of his own in that frame (missed, or
+    merged with someone else), so the frame is None. Frames without boxes are None. Unlike track(), one bad frame at
+    a contact cannot hand the rest of the window to the other person."""
+    idx = [i for i in range(len(boxes)) if len(boxes[i]) and anchors.get(i) != -1]
+    if not idx:
+        return [None] * len(boxes)
+    acc, back, prev = None, {}, None
+    for i in idx:
+        b = boxes[i]
+        c = np.c_[(b[:, 0] + b[:, 2]) / 2, (b[:, 1] + b[:, 3]) / 2]
+        em = PATH_W * cost[i] if cost is not None and len(cost[i]) == len(b) else np.zeros(len(b))
+        if i in anchors and anchors[i] < len(b):
+            em = np.full(len(b), 1e9)
+            em[anchors[i]] = 0.0
+        if prev is None:
+            acc = em
+        else:
+            pc, ph = prev
+            d = np.linalg.norm(c[:, None] - pc[None], axis=2) / np.maximum(ph[None], 1.0)
+            tot = acc[None] + np.where(d > MAX_MOVE, JUMP_COST, d)
+            back[i] = np.argmin(tot, axis=1)
+            acc = tot[np.arange(len(b)), back[i]] + em
+        prev = (c, b[:, 3] - b[:, 1])
+    sel, k = {}, int(np.argmin(acc))
+    for j in range(len(idx) - 1, -1, -1):
+        sel[idx[j]] = k
+        if j:
+            k = int(back[idx[j]][k])
+    return [sel.get(i) for i in range(len(boxes))]
+
+
+def who_picks(seg: dict, raw: dict) -> dict[int, int]:
+    """{frame index: box} from the segment's "who" pick and its "more" picks. The main pick's caption time (rounded
+    to 0.1 s) is snapped to the identity-sheet frame it belongs to; a "more" time to the nearest scanned frame, the
+    same frame its sheet showed."""
+    t = np.asarray(raw["t"], float)
+    who = seg.get("who") or {}
+    if not len(t) or who.get("box") is None or who.get("t") is None:
+        return {}
+    tw = M.secs(who["t"])
+    sheet = min(who_times(seg, raw), key=lambda x: abs(x - tw))
+    if abs(sheet - tw) <= 0.06:  # captions are rounded to 0.1 s: use the exact sheet frame the numbers belong to
+        tw = sheet
+    out = {int(np.argmin(np.abs(t - tw))): int(who["box"])}
+    for p in who.get("more") or []:
+        if p.get("box") is not None and p.get("t") is not None:
+            out[int(np.argmin(np.abs(t - M.secs(p["t"]))))] = int(p["box"])
+    return out
+
+
 def who_times(seg: dict, raw: dict) -> list[float]:
     """Frames of the identity sheet: 1 s before, at and 0.5 s after the anchor (else release, else the middle of the
     window), snapped to scanned frames."""
@@ -145,16 +228,16 @@ def who_times(seg: dict, raw: dict) -> list[float]:
     return out
 
 
-def who_sheet(seg: dict, raw: dict, out: Path) -> dict:
-    """who_<id>.jpg: the who_times frames with every detected person boxed and numbered (the number `who` uses);
-    returns the who.json entry {"times": [...], "t": None, "box": None} for the agent to fill."""
+def who_sheet(seg: dict, raw: dict, out: Path, times: list[float] | None = None) -> dict:
+    """who_<id>.jpg: the who_times frames (or `times`, snapped to scanned frames) with every detected person boxed
+    and numbered (the number `who` uses); returns the who.json entry {"times": [...], "t": None, "box": None}."""
     import cv2
 
     from . import train_sheets as TS
     from .move_sheets import read_frames
-    times = who_times(seg, raw)
-    frames = read_frames(Path(seg["source"]), times)
     t = np.asarray(raw["t"], float)
+    times = who_times(seg, raw) if times is None else [float(t[int(np.argmin(np.abs(t - x)))]) for x in times]
+    frames = read_frames(Path(seg["source"]), times)
     tiles = []
     for x in times:
         if x not in frames:
@@ -181,22 +264,19 @@ def _mmss(x: float) -> str:
     return f"{int(x // 60):02d}:{x % 60:04.1f}"
 
 
-def pick_segment(seg: dict, raw: dict, feats: list[np.ndarray] | None = None) -> dict:
+def pick_segment(seg: dict, raw: dict, feats: list[np.ndarray] | None = None, model: dict | None = None) -> dict:
     """The player's track in one segment from scan() output, by the first identity source the segment has:
-    "who" {"t", "box"} (an agent picked the numbered box on the identity sheet), the person holding the ball at
-    "anchor" (else "release"), else "seed" / the largest person (train_scan.pick). The first two are followed both
-    ways from that frame, with clothing colour when `feats` is given."""
-    t = np.asarray(raw["t"], float)
+    "who" {"t", "box", "more": [{"t", "box"}]} (an agent picked the numbered box on the identity sheets), followed by
+    best_path with the session appearance `model` (else one built from this segment's picks) when `feats` is given;
+    the person holding the ball at "anchor" (else "release"), followed both ways; else "seed" / the largest person
+    (train_scan.pick)."""
     boxes = valid_boxes(raw)
-    who = seg.get("who") or {}
-    if who.get("box") is not None and who.get("t") is not None and len(t):
-        tw = M.secs(who["t"])
-        sheet = min(who_times(seg, raw), key=lambda x: abs(x - tw))
-        if abs(sheet - tw) <= 0.06:  # captions are rounded to 0.1 s: use the exact sheet frame the numbers belong to
-            tw = sheet
-        i0 = int(np.argmin(np.abs(t - tw)))
-        if int(who["box"]) < len(boxes[i0]):
-            return S.assemble(raw, track(boxes, feats, i0, int(who["box"])))
+    picks = {i: k for i, k in who_picks(seg, raw).items() if k < len(boxes[i])}
+    if any(k >= 0 for k in picks.values()):
+        model = model or (appearance_model([(feats[i], k) for i, k in picks.items() if k >= 0])
+                          if feats is not None else None)
+        cost = appearance_cost(feats, model) if feats is not None and model is not None else None
+        return S.assemble(raw, best_path(boxes, cost, picks))
     at = seg.get("anchor", seg.get("release"))
     if at is not None and "balls" in raw:
         sel = anchored(raw, M.secs(at), feats)
@@ -271,6 +351,7 @@ def scan_segments(folder: Path, force: bool = False, only: list[str] | None = No
     who_all = json.loads(who_path.read_text(encoding="utf8")) if who_path.exists() else {}
     if merge_who(m, who_all):
         M.save(folder, m)
+    model = session_model(m, run)
     scanned, allg = [], []
     for seg in m.get("segments", []):
         sid = seg["id"]
@@ -302,7 +383,7 @@ def scan_segments(folder: Path, force: bool = False, only: list[str] | None = No
                 feats = None
                 if crowded(raw) and Path(seg["source"]).is_file():
                     feats = cached_features(seg, raw, run / "seg" / f"{sid}.feat.npz", force)
-                d = pick_segment(seg, raw, feats)
+                d = pick_segment(seg, raw, feats, model)
                 np.savez_compressed(npz, **d)
             g = metrics(seg, d)
             g["crowded"] = raw is not None and crowded(raw)
@@ -312,6 +393,9 @@ def scan_segments(folder: Path, force: bool = False, only: list[str] | None = No
                 entry = who_sheet(seg, raw, img) if force or not img.exists() else \
                     {"times": [_mmss(x) for x in who_times(seg, raw)], "t": None, "box": None}
                 who_all[sid] = {**entry, **{k: v for k, v in who_all.get(sid, {}).items() if v is not None}}
+            more = [x for x in (who_all.get(sid) or {}).get("more") or [] if x.get("box") is None and x.get("t")]
+            if raw is not None and more and Path(seg["source"]).is_file():
+                who_sheet(seg, raw, run / "move_review" / f"who_{sid}.more.jpg", [M.secs(x["t"]) for x in more])
         gpath.write_text(json.dumps(g, indent=1) + "\n", encoding="utf8")
         allg.append(g)
     (run / "gait.json").write_text(json.dumps(allg, indent=1) + "\n", encoding="utf8")
@@ -319,7 +403,8 @@ def scan_segments(folder: Path, force: bool = False, only: list[str] | None = No
         who_path.write_text(json.dumps(who_all, indent=1, ensure_ascii=False) + "\n", encoding="utf8")
     n_steps = sum(len(g.get("steps") or []) for g in allg)
     print(f"[move-scan] {len(allg)} segments ({len(scanned)} scanned, the rest reused), {n_steps} steps found")
-    open_who = [s["id"] for s in m.get("segments", []) if s["id"] in who_all and (s.get("who") or {}).get("box") is None]
+    open_who = [s["id"] for s in m.get("segments", []) if s["id"] in who_all and (
+        (s.get("who") or {}).get("box") is None or any(x.get("box") is None for x in who_all[s["id"]].get("more") or []))]
     if open_who:
         print(f"[move-scan] identity check needed ({len(open_who)} segments with more than one person): "
               f"{who_path} and who_<id>.jpg")
@@ -327,8 +412,9 @@ def scan_segments(folder: Path, force: bool = False, only: list[str] | None = No
 
 
 def merge_who(m: dict, who_all: dict) -> bool:
-    """Copy the agent's picks from who.json ({"<id>": {"times": [...], "t": "mm:ss.s", "box": 1}}) into the
-    segments' "who"; t defaults to the middle sheet frame. Returns True when movement.json changed."""
+    """Copy the agent's picks from who.json ({"<id>": {"times": [...], "t": "mm:ss.s", "box": 1, "more": [{"t":
+    "mm:ss.s", "box": 0}]}}) into the segments' "who"; t defaults to the middle sheet frame. "more" items with a box
+    become extra picks (-1: the player has no box of his own there). Returns True when movement.json changed."""
     changed = False
     for seg in m.get("segments", []):
         e = who_all.get(seg["id"]) or {}
@@ -339,9 +425,27 @@ def merge_who(m: dict, who_all: dict) -> bool:
         if t is None:
             continue
         new = {"t": t, "box": int(e["box"])}
+        more = [{"t": x["t"], "box": int(x["box"])} for x in e.get("more") or [] if x.get("box") is not None and x.get("t")]
+        if more:
+            new["more"] = more
         if seg.get("who") != new:
             seg["who"], changed = new, True
     return changed
+
+
+def session_model(m: dict, run: Path) -> dict | None:
+    """appearance_model over every pick of the session (the player wears the same clothes in all segments), from the
+    cached seg/<id>.raw.npz and seg/<id>.feat.npz; None before any segment is picked."""
+    samples = []
+    for seg in m.get("segments", []):
+        raw_npz, feat_npz = run / "seg" / f"{seg['id']}.raw.npz", run / "seg" / f"{seg['id']}.feat.npz"
+        if (seg.get("who") or {}).get("box") is None or not raw_npz.exists() or not feat_npz.exists():
+            continue
+        z = np.load(raw_npz)
+        raw = {k: z[k] for k in z.files}
+        feats = cached_features(seg, raw, feat_npz)
+        samples += [(feats[i], k) for i, k in who_picks(seg, raw).items() if 0 <= k < len(feats[i])]
+    return appearance_model(samples)
 
 
 def cached_features(seg: dict, raw: dict, path: Path, force: bool = False) -> list[np.ndarray]:

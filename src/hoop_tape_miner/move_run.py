@@ -136,7 +136,11 @@ MOVE_STEPS = [
     R.Step("review", "agent", review_done,
            how="Film review (playbook, movement step 5): launch one subagent per {review}/brief_<g>.md, at most 3 at "
                "once; each writes review_<g>.json and memo_<g>.md there and replies in a few lines. Do not read the "
-               "sheets yourself. Re-run a group whose json does not parse or misses segment ids."),
+               "sheets yourself. Re-run a group whose json does not parse or misses segment ids. Where a reviewer "
+               "lists `wrong_person` stretches or sets identity_ok false, add {{\"t\": \"mm:ss.s\", \"box\": null}} "
+               "items at those times to the segment's \"more\" list in {run}/move_review/who.json, run `move-scan "
+               "{folder} --repick` (writes who_<id>.more.jpg), have a subagent fill each box (-1 when the player has no box of his own in that tile), run `move-scan --repick` "
+               "and `move-sheets --force` again and review that group again."),
     R.Step("summary", "cmd", summary_done, lambda g: [["move-summary", str(g.folder)]]),
     R.Step("report", "agent", report_done,
            how="Write the movement report (playbook, movement step 7, prompts/movement_report.md): {folder}/README.md "

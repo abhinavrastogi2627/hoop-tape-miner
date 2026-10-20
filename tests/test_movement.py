@@ -188,6 +188,64 @@ def test_track_uses_colour_through_contact():
     assert MS.track(boxes, feats, 9, 1)[0] == 0  # backward from the last frame finds the player at the start
 
 
+def _meeting():
+    """Player (feature A) left to right, trainer (B) right to left, both at x=600 for frames 4-6; box order swaps
+    from frame 5."""
+    xa = [200, 300, 400, 500, 600, 600, 600, 700, 800, 900]
+    xb = [1000, 900, 800, 700, 600, 600, 600, 500, 400, 300]
+    A, B = np.eye(128)[0] * 0.8 + np.eye(128)[5] * 0.2, np.eye(128)[40]
+    boxes, feats = [], []
+    for i, (a, b) in enumerate(zip(xa, xb)):
+        rows = [(b - 50, 200, b + 50, 500), (a - 50, 200, a + 50, 500)] if i >= 5 else \
+            [(a - 50, 200, a + 50, 500), (b - 50, 200, b + 50, 500)]
+        boxes.append(np.array(rows, float))
+        feats.append(np.array([B, A] if i >= 5 else [A, B]))
+    return xa, boxes, feats
+
+
+def test_best_path_follows_colour_and_anchors():
+    from hoop_tape_miner import move_scan as MS
+    xa, boxes, feats = _meeting()
+    model = MS.appearance_model([(feats[0], 0)])
+    assert MS.appearance_model([(feats[0][:1], 0)]) is None  # nobody else in the picked frame: no model
+    sel = MS.best_path(boxes, MS.appearance_cost(feats, model), {0: 0})
+    assert [boxes[i][k][0] + 50 for i, k in enumerate(sel)] == xa
+    # Without colour, a second pick after the meeting (a "more" pick) decides who leaves it.
+    sel = MS.best_path(boxes, None, {0: 0, 9: 1})
+    assert [boxes[i][k][0] + 50 for i, k in enumerate(sel)] == xa
+    sel = MS.best_path(boxes, None, {0: 0, 9: 0})  # the agent says the person on the left at the end is the player
+    assert boxes[9][sel[9]][0] + 50 == 300 and boxes[0][sel[0]][0] + 50 == 200
+    assert MS.best_path([np.zeros((0, 4))] * 3, None, {}) == [None] * 3
+    sel = MS.best_path(boxes, MS.appearance_cost(feats, model), {0: 0, 5: -1})  # player not boxed in frame 5
+    assert sel[5] is None and boxes[6][sel[6]][0] + 50 == 600 and boxes[9][sel[9]][0] + 50 == 900
+
+
+def test_who_more_picks():
+    from hoop_tape_miner import move_scan as MS
+    raw = _crossing()
+    m = {"segments": [{"id": "L1", "kind": "layup", "from": 10, "to": 11}]}
+    who = {"L1": {"times": ["00:10.0", "00:10.5", "00:11.0"], "t": "00:10.5", "box": 0,
+                  "more": [{"t": "00:10.9", "box": 0}, {"t": "00:10.2", "box": None}]}}
+    assert MS.merge_who(m, who)
+    seg = m["segments"][0]
+    assert seg["who"] == {"t": "00:10.5", "box": 0, "more": [{"t": "00:10.9", "box": 0}]}
+    assert MS.who_picks(seg, raw) == {15: 0, 27: 0}
+
+
+def test_summary_drops_wrong_person_findings():
+    from hoop_tape_miner import move_summary as MSum
+    rv = [{"segments": [{"id": "L1", "identity_ok": True, "wrong_person": ["35:09.9-35:10.4"],
+                         "faults": [{"kb": "MV-landing", "status": "seen", "t": "35:10.1", "note": "trainer"},
+                                    {"kb": "MV-accel-posture", "status": "seen", "t": "35:08.0", "note": "player"}],
+                         "good": [{"kb": "MV-one-foot-takeoff", "t": "35:10.0"}, {"kb": "MV-landing", "t": "35:09.2"}]}]}]
+    out = MSum.faults(rv, {"L1": {"view": "side"}})
+    rows = out[0] if isinstance(out, tuple) else out
+    text = json.dumps(out)
+    assert "MV-accel-posture" in text and "trainer" not in text and "35:10.0" not in text and "35:09.2" in text
+    assert MSum.wrong_spans({"wrong_person": ["bad", "00:01.0-00:02.0"]}) == [(1.0, 2.0)]
+    assert rows is not None
+
+
 def test_who_pick_and_merge():
     from hoop_tape_miner import move_scan as MS
     raw = _crossing()
@@ -195,7 +253,10 @@ def test_who_pick_and_merge():
     who = {"L1": {"times": ["00:10.0", "00:10.5", "00:11.0"], "t": None, "box": 0}, "L2": {"t": None, "box": None}}
     assert MS.merge_who(m, who) and m["segments"][0]["who"] == {"t": "00:10.5", "box": 0}
     assert "who" not in m["segments"][1] and not MS.merge_who(m, who)
-    d = MS.pick_segment(m["segments"][0], raw)  # box 0 at 10.5 s is the player
+    # 10.5 s is the very frame where both boxes overlap, so on position alone either person could be the player
+    # before it: picks on both sides of the crossing settle it
+    m["segments"][0]["who"] = {"t": "00:10.0", "box": 0, "more": [{"t": "00:11.0", "box": 0}]}
+    d = MS.pick_segment(m["segments"][0], raw)
     assert np.all(np.diff((d["box"][:, 0] + d["box"][:, 2]) / 2) > 0)
     assert MS.crowded(raw)
 
