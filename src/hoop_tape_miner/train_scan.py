@@ -36,29 +36,45 @@ def model(name: str):
     return YOLO(str(WEIGHTS / name))
 
 
-def frames(video: Path, fps: float):
-    """Yield (t, frame) at about `fps` frames per second, reading the video once."""
+def frames(video: Path, fps: float, t0: float = 0.0, t1: float | None = None):
+    """Yield (t, frame) at about `fps` frames per second, reading the video once; with t0 / t1 only that window
+    (t stays in source seconds)."""
     import cv2
     cap = cv2.VideoCapture(str(video))
     if not cap.isOpened():
         sys.exit(f"cannot open {video}")
     src = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    step = max(1, round(src / fps))
-    i = 0
+    if t0 <= 0 and t1 is None:
+        step = max(1, round(src / fps))
+        i = 0
+        while cap.grab():
+            if i % step == 0:
+                ok, f = cap.retrieve()
+                if ok:
+                    yield i / src, f
+            i += 1
+        cap.release()
+        return
+    if t0 > 0:
+        cap.set(cv2.CAP_PROP_POS_MSEC, t0 * 1000)
+    nxt = t0
     while cap.grab():
-        if i % step == 0:
+        t = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+        if t1 is not None and t > t1 + 1e-6:
+            break
+        if t >= nxt - 0.5 / src:
             ok, f = cap.retrieve()
             if ok:
-                yield i / src, f
-        i += 1
+                yield t, f
+            nxt = max(nxt + 1 / fps, t + 0.5 / src)
     cap.release()
 
 
 MAX_PEOPLE, MAX_BALLS = 6, 4  # per frame, kept in pose_all.npz (largest people, most confident balls)
 
 
-def scan(video: Path, fps: float = 15.0, ball: bool = True) -> dict:
-    """Every person (box, keypoints) and ball in each analysed frame, padded with NaN:
+def scan(video: Path, fps: float = 15.0, ball: bool = True, t0: float = 0.0, t1: float | None = None) -> dict:
+    """Every person (box, keypoints) and ball in each analysed frame (only t0..t1 when given), padded with NaN:
     t (N,), boxes (N,M,4), kps (N,M,17,2), confs (N,M,17), balls (N,B,2), size (w,h)."""
     import torch
     dev = 0 if torch.cuda.is_available() else "cpu"
@@ -90,7 +106,7 @@ def scan(video: Path, fps: float = 15.0, ball: bool = True) -> dict:
                 rows[k].append(v)
 
     batch = []
-    for n, (t, f) in enumerate(frames(video, fps)):
+    for n, (t, f) in enumerate(frames(video, fps, t0, t1)):
         size = size or (f.shape[1], f.shape[0])
         batch.append((t, f))
         if len(batch) == BATCH:

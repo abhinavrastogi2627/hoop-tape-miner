@@ -66,3 +66,65 @@ def test_create_and_extend(tmp_path, monkeypatch):
     assert gc.load_game(f)["kind"] == "movement"
     assert gc.is_movement(gc.load_game(f)) and gc.is_personal(gc.load_game(f))
     assert not gc.is_personal({"kind": "game"})
+
+
+# ---- move-scan ---------------------------------------------------------------------------------------------
+
+def _session(tmp_path, segments):
+    f = tmp_path / "mv"
+    f.mkdir()
+    M.save(f, dict(kind="movement", player="17", date="2026-10-20", run=str(tmp_path / "run"),
+                   video=str(tmp_path / "reel.mp4"), segments=segments))
+    return f
+
+
+def _fake_scanner(calls):
+    from test_gait import runner
+
+    def scanner(video, fps, ball, t0, t1):
+        calls.append(dict(video=str(video), fps=fps, ball=ball, t0=t0, t1=t1))
+        t, kp, conf, *_ = runner(fps=fps, dur=t1 - t0)
+        n = len(t)
+        boxes = np.full((n, 6, 4), np.nan)
+        boxes[:, 0] = (300, 100, 700, 470)
+        kps = np.full((n, 6, 17, 2), np.nan)
+        kps[:, 0] = kp
+        confs = np.zeros((n, 6, 17))
+        confs[:, 0] = conf
+        return dict(t=t + t0, boxes=boxes, kps=kps, confs=confs, balls=np.full((n, 4, 2), np.nan),
+                    size=np.array([1280, 720]))
+    return scanner
+
+
+def test_scan_skips_done(tmp_path):
+    from hoop_tape_miner import move_scan as MS
+    f = _session(tmp_path, [dict(id="S01", kind="sprint", view="side", source="a.mp4", **{"from": 10, "to": 13},
+                                 fps=30, scan_fps=30)])
+    calls = []
+    assert MS.scan_segments(f, scanner=_fake_scanner(calls)) == ["S01"]
+    g = json.loads((tmp_path / "run" / "gait" / "S01.json").read_text())
+    assert g["metrics_version"] == 1 and g["direction"] == 1 and len(g["contacts"]) >= 6
+    assert all(10 <= c["on"] <= 13 for c in g["contacts"])  # source seconds
+    assert MS.scan_segments(f, scanner=_fake_scanner(calls)) == [] and len(calls) == 1
+    assert len(json.loads((tmp_path / "run" / "gait.json").read_text())) == 1
+
+
+def test_scan_fps_cap(tmp_path):
+    from hoop_tape_miner import move_scan as MS
+    seg = MN.reel_plan([dict(kind="sprint", view="side", source="a.mp4", **{"from": 0, "to": 2})],
+                       {"a.mp4": 5}, {"a.mp4": 240})[0]
+    f = _session(tmp_path, [seg])
+    calls = []
+    MS.scan_segments(f, scanner=_fake_scanner(calls))
+    assert calls[0]["fps"] == 120 and calls[0]["ball"] is False
+    g = json.loads((tmp_path / "run" / "gait" / "S01.json").read_text())
+    assert g["clip"]["contact_ok"] and any(s["contact_s"] for s in g["steps"])
+
+
+def test_game_segment_no_metrics(tmp_path):
+    from hoop_tape_miner import move_scan as MS
+    f = _session(tmp_path, [dict(id="G1", kind="game", view="game", source="g.mp4", **{"from": 0, "to": 4})])
+    calls = []
+    MS.scan_segments(f, scanner=_fake_scanner(calls))
+    assert calls == []
+    assert json.loads((tmp_path / "run" / "gait" / "G1.json").read_text())["metrics"] is None
