@@ -448,6 +448,7 @@ Set-up (our rule, within the research ranges of 8-15 m and hip height):
 - Tape marks on the floor every 1 m (or at least every 5 m) in the filmed zone for scale; measure his hip (trochanter) height once.
 - Same spot, same lane, same shoes and floor for every re-test; note the spot in `movement.json`.
 - Plain clothing that contrasts with the background; nobody else crossing the frame (the tracker can switch to another person).
+- Film alone when you can. If a trainer or partner must be in shot, they wear a clearly different colour from the player, top and shorts: in the first baseline the trainer's T-shirt matched the player's, the clothing-colour model could not tell them apart and most landings were lost.
 - Front or behind view optional (knee-in on landings and stops, arm crossing).
 
 Clips (each as its own segment, kind in brackets):

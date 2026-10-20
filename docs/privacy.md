@@ -13,6 +13,8 @@ hoop-tape-miner analyses real people: your teammates, opponents and referees, of
 
 Before any commit: `git status` must show no file from `workspace/`, no media (`*.mp4`, `*.mov`, `*.jpg` frames, `*.mp3`) and no personal names. If something slipped into history, rewrite it (`git filter-repo`) before the repo goes public; deleting it in a later commit is not enough.
 
+Design notes, plans and prompts (`docs/`, `prompts/`) are public too: write "the owner", "#17", `<player>`, `<opponent>` and `<media root>` instead of names, team names and local paths. Before a push, `git grep -i` the outgoing commits for your own names and paths.
+
 ## People in the footage
 
 - Refer to players by jersey number in all outputs. Do not add names, even if you know them.

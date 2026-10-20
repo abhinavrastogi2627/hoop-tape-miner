@@ -365,7 +365,7 @@ uv run hoop-tape-miner move workspace/players/17/movement/<date> > workspace/log
 
 **Movement steps 8-10** work as training steps 8-10: narration (3-4 minutes), `html` (a movement band instead of the score), QA by the browser-check subagent, `--publish` only when asked, then `film.<lang>.md` on the overlay reel and `film`.
 
-The re-shoot: film the protocol, start a new session with `move --spec`, and the page compares the measurements with this one.
+The re-shoot: film the protocol (`prompts/movement_kb.md`, "Filming protocol": side-on at hip height, 120-240 fps, alone or with a trainer in a clearly different colour), start a new session with `move --spec`, and the page compares the measurements with this one. Only side-view segments give numbers, so a baseline filmed from behind or the front has findings and hypotheses but no measurements.
 
 ## Working rules
 
