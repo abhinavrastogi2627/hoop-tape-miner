@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -286,7 +287,7 @@ def candidate_table(reps: list[dict]) -> str:
 
 
 def write_brief(folder: Path, s: dict, out: Path, part: dict, reps: list[dict], drib: list[dict]):
-    text = BRIEF.read_text(encoding="utf8")
+    text = re.sub(r"\A(# .*\n)\n<!--.*?-->\n", r"\1", BRIEF.read_text(encoding="utf8"), flags=re.S)  # drop the template note
     vals = {
         "session": str(folder), "review": str(out), "part": str(part["part"]), "from": part["from"], "to": part["to"],
         "plan": s.get("plan") or "(not given)", "player": f"{s.get('name') or ''} #{s.get('player')}".strip(),
@@ -297,6 +298,10 @@ def write_brief(folder: Path, s: dict, out: Path, part: dict, reps: list[dict], 
         "dribble": "\n".join(f"- {T.mmss(d['from'])}-{T.mmss(d['to'])}: bounces R {d['bounces']['R']} / L {d['bounces']['L']}, "
                              f"{d['rate']}/s, ball seen {d.get('ball_seen')}" for d in drib) or "- (none detected)",
         "json": str(out / f"review_part{part['part']}.json"), "memo": str(out / f"memo_part{part['part']}.md"),
+        "who": (f"others are in frame (a trainer or partner). The player is: {s['look']}. The crops follow whoever holds "
+                "the ball, so some candidates are the other person: those are `not_a_rep` (write who in `form`), and "
+                "dribbling, blocks and drills describe the player only." if s.get("look") else
+                "only the player should be in frame; a candidate made by anyone else is `not_a_rep`."),
     }
     for k, v in vals.items():
         text = text.replace("{{" + k + "}}", v)

@@ -1,10 +1,12 @@
 """Scan a training session video: body pose of the main player, shot / finish candidates, dribble segments.
 
-usage: hoop-tape-miner train-scan <session folder> [--fps 15] [--seed 0.5,0.6] [--no-ball] [--force]
+usage: hoop-tape-miner train-scan <session folder> [--fps 15] [--seed 0.5,0.6] [--no-ball] [--follow player|ball] [--force] [--repick]
 
 Runs ultralytics YOLO pose (yolo11s-pose) and, unless --no-ball, the COCO detector (yolo11s, class "sports ball")
 on every frame at --fps, follows the main player (largest person at the start, or the one nearest --seed x,y frame
-fractions) and writes to the session's run folder:
+fractions; with --follow ball, or session.json "follow": "ball", whoever holds the ball, for sessions with a
+trainer or partner in frame) and writes to the session's run folder:
+  pose_all.npz   every person and ball per frame, so --repick needs no models
   pose.npz       t, kp (N,17,2 px), conf (N,17), box (N,4 xyxy), ball (N,2 centre px), size (w,h)
   reps.json      shot / finish candidates with form metrics (training.find_reps); the film review confirms them
   dribble.json   dribble segments from wrist rhythm (training.find_dribbles), ball_seen when the ball was detected
@@ -52,12 +54,18 @@ def frames(video: Path, fps: float):
     cap.release()
 
 
-def scan(video: Path, fps: float = 15.0, ball: bool = True, seed: tuple[float, float] | None = None) -> dict:
+MAX_PEOPLE, MAX_BALLS = 6, 4  # per frame, kept in pose_all.npz (largest people, most confident balls)
+
+
+def scan(video: Path, fps: float = 15.0, ball: bool = True) -> dict:
+    """Every person (box, keypoints) and ball in each analysed frame, padded with NaN:
+    t (N,), boxes (N,M,4), kps (N,M,17,2), confs (N,M,17), balls (N,B,2), size (w,h)."""
     import torch
     dev = 0 if torch.cuda.is_available() else "cpu"
     pose_m = model(POSE_MODEL)
     ball_m = model(BALL_MODEL) if ball else None
-    ts, boxes, kps, confs, balls, size = [], [], [], [], [], None
+    ts, size = [], None
+    rows: dict[str, list] = {"boxes": [], "kps": [], "confs": [], "balls": []}
 
     def run(batch):
         imgs = [f for _, f in batch]
@@ -65,19 +73,21 @@ def scan(video: Path, fps: float = 15.0, ball: bool = True, seed: tuple[float, f
         bres = ball_m(imgs, verbose=False, device=dev, half=dev != "cpu", conf=0.15, classes=[BALL_CLASS]) if ball_m else [None] * len(imgs)
         for (t, _), r, b in zip(batch, res, bres):
             ts.append(t)
+            bx, kp = np.full((MAX_PEOPLE, 4), np.nan, np.float32), np.full((MAX_PEOPLE, 17, 2), np.nan, np.float32)
+            cf = np.zeros((MAX_PEOPLE, 17), np.float32)
             if r.keypoints is not None and len(r.boxes):
-                boxes.append(r.boxes.xyxy.cpu().numpy())
-                kps.append(r.keypoints.xy.cpu().numpy())
-                confs.append(r.keypoints.conf.cpu().numpy() if r.keypoints.conf is not None else np.ones(r.keypoints.xy.shape[:2]))
-            else:
-                boxes.append(np.zeros((0, 4)))
-                kps.append(np.zeros((0, 17, 2)))
-                confs.append(np.zeros((0, 17)))
+                B = r.boxes.xyxy.cpu().numpy()
+                K = r.keypoints.xy.cpu().numpy()
+                C = r.keypoints.conf.cpu().numpy() if r.keypoints.conf is not None else np.ones(K.shape[:2])
+                order = np.argsort(-(B[:, 2] - B[:, 0]) * (B[:, 3] - B[:, 1]))[:MAX_PEOPLE]
+                for j, i in enumerate(order):
+                    bx[j], kp[j], cf[j] = B[i], K[i], C[i]
+            bl = np.full((MAX_BALLS, 2), np.nan, np.float32)
             if b is not None and len(b.boxes):
-                bb = b.boxes.xyxy.cpu().numpy()
-                balls.append(np.c_[(bb[:, 0] + bb[:, 2]) / 2, (bb[:, 1] + bb[:, 3]) / 2])
-            else:
-                balls.append(np.zeros((0, 2)))
+                bb = b.boxes.xyxy.cpu().numpy()[np.argsort(-b.boxes.conf.cpu().numpy())][:MAX_BALLS]
+                bl[:len(bb)] = np.c_[(bb[:, 0] + bb[:, 2]) / 2, (bb[:, 1] + bb[:, 3]) / 2]
+            for k, v in zip(("boxes", "kps", "confs", "balls"), (bx, kp, cf, bl)):
+                rows[k].append(v)
 
     batch = []
     for n, (t, f) in enumerate(frames(video, fps)):
@@ -90,19 +100,37 @@ def scan(video: Path, fps: float = 15.0, ball: bool = True, seed: tuple[float, f
             print(f"[train-scan] {t / 60:.0f} min", flush=True)
     if batch:
         run(batch)
-    pick = T.pick_main(boxes, seed, size)
+    out = {k: np.array(v) for k, v in rows.items()}
+    return dict(t=np.array(ts), size=np.array(size or (0, 0)), **out)
+
+
+def pick(raw: dict, seed: tuple[float, float] | None = None, follow: str = "player") -> dict:
+    """The main player's track from scan() output (pose.npz content): t, kp, conf, box, ball (nearest the
+    player's hands), size. follow "player" = the seed / largest person by position; "ball" = whoever holds the
+    ball (a trainer or partner in frame, see training.pick_ball_carrier)."""
+    ts, size = raw["t"], tuple(int(v) for v in raw["size"])
+    valid = [np.isfinite(b[:, 0]) for b in raw["boxes"]]
+    boxes = [b[m] for b, m in zip(raw["boxes"], valid)]
+    if follow == "ball":
+        balls = [b[np.isfinite(b[:, 0])] for b in raw["balls"]]
+        sel = T.pick_ball_carrier(boxes, [k[m] for k, m in zip(raw["kps"], valid)],
+                                  [c[m] for c, m in zip(raw["confs"], valid)], balls, seed, size)
+    else:
+        sel = T.pick_main(boxes, seed, size)
     N = len(ts)
     kp, conf, box, ballc = np.full((N, 17, 2), np.nan), np.zeros((N, 17)), np.full((N, 4), np.nan), np.full((N, 2), np.nan)
-    for i, k in enumerate(pick):
+    for i, k in enumerate(sel):
         if k is None:
             continue
-        kp[i], conf[i], box[i] = kps[i][k], confs[i][k], boxes[i][k]
-        if len(balls[i]):  # the ball nearest the player's hands
+        j = int(np.flatnonzero(valid[i])[k])
+        kp[i], conf[i], box[i] = raw["kps"][i][j], raw["confs"][i][j], raw["boxes"][i][j]
+        balls = raw["balls"][i][np.isfinite(raw["balls"][i][:, 0])]
+        if len(balls):  # the ball nearest the player's hands
             hands = kp[i, [T.L_WR, T.R_WR]]
             hands = hands[np.isfinite(hands).all(1)]
             ref = hands.mean(0) if len(hands) else np.array([(box[i, 0] + box[i, 2]) / 2, (box[i, 1] + box[i, 3]) / 2])
-            ballc[i] = balls[i][int(np.argmin(np.linalg.norm(balls[i] - ref, axis=1)))]
-    return dict(t=np.array(ts), kp=kp, conf=conf, box=box, ball=ballc, size=np.array(size or (0, 0)))
+            ballc[i] = balls[int(np.argmin(np.linalg.norm(balls - ref, axis=1)))]
+    return dict(t=np.array(ts), kp=kp, conf=conf, box=box, ball=ballc, size=np.array(size))
 
 
 def activity(d: dict, window: float = 5.0) -> dict:
@@ -145,9 +173,15 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="hoop-tape-miner train-scan", description=__doc__.split("\n\n")[0])
     ap.add_argument("folder", help="session folder (with session.json)")
     ap.add_argument("--fps", type=float, default=15.0, help="frames per second to analyse (default 15)")
-    ap.add_argument("--seed", help="x,y frame fractions of the player at the start, when others are in the frame")
+    ap.add_argument("--seed", help="x,y frame fractions of the player at the start, when others are in the frame "
+                    "(default: session.json \"seed\")")
     ap.add_argument("--no-ball", action="store_true", help="skip ball detection (faster; dribbles from pose only)")
     ap.add_argument("--force", action="store_true", help="re-run even if pose.npz exists")
+    ap.add_argument("--follow", choices=("player", "ball"),
+                    help="player = the seed / largest person (default); ball = whoever holds the ball, when a trainer "
+                    "or partner is in frame (default: session.json \"follow\")")
+    ap.add_argument("--repick", action="store_true",
+                    help="choose the player again from pose_all.npz (e.g. with a new --seed) without re-running the models")
     a = ap.parse_args(argv)
     folder = Path(a.folder)
     s = T.load_session(folder)
@@ -155,13 +189,23 @@ def main(argv=None):
     video = T.session_path(folder, s, "video", "session.mp4")
     if not video.is_file():
         sys.exit(f"session video not found: {video}")
-    if (run / "pose.npz").exists() and not a.force:
+    seed = tuple(map(float, a.seed.split(","))) if a.seed else (tuple(s["seed"]) if s.get("seed") else None)
+    follow = a.follow or s.get("follow") or "player"
+    if a.repick:
+        if not (run / "pose_all.npz").exists():
+            sys.exit(f"--repick needs {run / 'pose_all.npz'} (scans before this option kept only the main player)")
+        z = np.load(run / "pose_all.npz")
+        d = pick({k: z[k] for k in z.files}, seed, follow)
+        print("[train-scan] re-picked the player from pose_all.npz")
+    elif (run / "pose.npz").exists() and not a.force:
         z = np.load(run / "pose.npz")
         d = {k: z[k] for k in z.files}
         print("[train-scan] reusing pose.npz (--force to re-run the models)")
     else:
-        seed = tuple(map(float, a.seed.split(","))) if a.seed else None
-        d = scan(video, a.fps, not a.no_ball, seed)
+        raw = scan(video, a.fps, not a.no_ball)
+        run.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(run / "pose_all.npz", **raw)
+        d = pick(raw, seed, follow)
     write(run, d)
 
 

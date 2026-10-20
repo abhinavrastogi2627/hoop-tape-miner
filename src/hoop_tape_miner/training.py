@@ -276,6 +276,55 @@ def pick_main(frames: list[np.ndarray], seed: tuple[float, float] | None = None,
     return out
 
 
+HOLD_R = 0.25  # ball centre within this many body heights of a wrist = that person holds the ball
+
+
+def pick_ball_carrier(frames: list[np.ndarray], kps: list[np.ndarray], confs: list[np.ndarray],
+                      balls: list[np.ndarray], seed: tuple[float, float] | None = None,
+                      size: tuple[int, int] | None = None) -> list[int | None]:
+    """pick_main for sessions with a trainer or partner in frame: follow whoever holds the ball. Per frame
+    (M, 4) boxes, (M, 17, 2) keypoints, (M, 17) confidences and (B, 2) ball centres. When a ball is seen within
+    HOLD_R body heights of someone's wrist (and nobody else is as close), the pick moves to that person; otherwise
+    it follows the box nearest the previous pick, as pick_main does. Shots, finishes and dribbles are all made by
+    the ball carrier, so the shooter is picked from the set point on; the film review rejects the partner's reps."""
+    out: list[int | None] = []
+    prev, lost = None, 0
+    for boxes, kp, cf, bl in zip(frames, kps, confs, balls):
+        if boxes is None or len(boxes) == 0:
+            out.append(None)
+            lost += 1
+            continue
+        c = np.c_[(boxes[:, 0] + boxes[:, 2]) / 2, (boxes[:, 1] + boxes[:, 3]) / 2]
+        h = boxes[:, 3] - boxes[:, 1]
+        holder = None
+        if bl is not None and len(bl):
+            d = np.full(len(boxes), np.inf)
+            for k in range(len(boxes)):
+                w = kp[k, [L_WR, R_WR]][cf[k, [L_WR, R_WR]] >= KP_MIN]
+                if len(w):
+                    d[k] = np.min(np.linalg.norm(w[:, None] - bl[None], axis=2)) / max(h[k], 1.0)
+            order = np.argsort(d)
+            if d[order[0]] < HOLD_R and (len(d) == 1 or d[order[1]] >= HOLD_R):
+                holder = int(order[0])
+        if holder is not None:
+            k = holder
+        elif prev is None or lost > 30:
+            if prev is None and seed is not None and size is not None:
+                k = int(np.argmin(np.linalg.norm(c - np.array([seed[0] * size[0], seed[1] * size[1]]), axis=1)))
+            else:
+                k = int(np.argmax((boxes[:, 2] - boxes[:, 0]) * h))
+        else:
+            d = np.linalg.norm(c - prev[0], axis=1) / max(prev[1], 1.0)
+            k = int(np.argmin(d))
+            if d[k] > 1.5:
+                out.append(None)
+                lost += 1
+                continue
+        prev, lost = (c[k], h[k]), 0
+        out.append(k)
+    return out
+
+
 # ---- review aggregation ------------------------------------------------------------------------------------
 
 def reviewed_reps(review: list[dict]) -> list[dict]:

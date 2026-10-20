@@ -3,7 +3,7 @@
 <!--
 Template. `hoop-tape-miner train-sheets` fills it once per part into <run>/train_review/brief_part<N>.md:
 {{session}} {{review}} {{part}} {{from}} {{to}} {{plan}} {{player}} {{rim}} {{sheets}} {{candidates}} {{dribble}}
-{{json}} {{memo}} are replaced from session.json, reps.json and dribble.json.
+{{json}} {{memo}} {{who}} are replaced from session.json, reps.json and dribble.json.
 -->
 
 You are a skills coach reviewing one player's solo workout ({{player}}), filmed on a phone from a fixed spot.
@@ -12,6 +12,8 @@ numbers and a plan for the next session. Be strict: write `unclear` whenever you
 or miss. Never guess a make. Unclear attempts are reported separately and are never counted as makes or misses.
 
 What the player meant to train today: {{plan}}
+
+Who is who: {{who}}
 
 ## Your part
 
@@ -88,10 +90,17 @@ Rules:
   defender) is dropped and goes in `notes`. `losses` = times the ball got away (only if you see it).
 - `form`: write it only when you can see something specific in the three crops (e.g. "elbow flares out",
   "lands 30 cm forward of take-off", "ball starts behind the head", "no knee bend"). Otherwise null.
+- Skill and conditioning words: use the **Symptom** and **What to check on film** lines of
+  `prompts/skill_kb.md` (repo root) for what to look for and how to name it, and end a form note with the entry slug
+  when it matches, e.g. "guide hand pushes, ball spins sideways [shooting-base-alignment]". A trainer-led session
+  also has drills that are not shots (handling series, 1-on-1 moves, slides, sprints): list them as `blocks` with
+  the right `category` and a drill name precise enough to coach from (e.g. "two-ball pound + crossovers, trainer
+  swiping", "jab-and-go vs trainer from the wing", "defensive slides, 3 x 30 s").
 
-2. `{{memo}}`, at most 15 lines of Markdown: what this part looked like (drills, volume, makes per spot), the
-two or three most important things you saw in the form or decisions, with the times (mm:ss) where they show
-best, and what you could not judge (rim out of view, camera angle, others in frame).
+2. `{{memo}}`, at most 20 lines of Markdown: what this part looked like (drills, volume, makes per spot), the
+two or three most important things you saw in the form, footwork, handling or decisions, with the times (mm:ss)
+where they show best and the skill_kb slug they match, signs of fatigue (form or speed dropping after hard
+blocks, long rests), and what you could not judge (rim out of view, camera angle, others in frame).
 
 Reply in at most 5 lines: the file paths, counts (candidates confirmed / rejected / added, makes / attempts /
 unclear), and any problem with the sheets.

@@ -308,7 +308,7 @@ uv run hoop-tape-miner train workspace/players/17/training/<date> > workspace/lo
 
 **Training step 1: record.** Phone on a tripod (or a fence), landscape, still for the whole session. The rim and the player's whole body in frame, side-on or from behind the shooter at about 45°; one player in frame. Several files are fine; they are joined in the given order. Say what you meant to train in `--plan`.
 
-**Training step 2: start and scan.** `train <videos>` runs `train-new` (session folder `workspace/players/<player>/training/<date>[-n]/`, `session.json`, joined `session.mp4`, targets copied from the last `plan.json`) and `train-scan` (YOLO pose at 15 fps, about real time on a GPU; the models download once). `--seed x,y` (frame fractions) picks the player when several people are in frame.
+**Training step 2: start and scan.** `train <videos>` runs `train-new` (session folder `workspace/players/<player>/training/<date>[-n]/`, `session.json`, joined `session.mp4`, targets copied from the last `plan.json`) and `train-scan` (YOLO pose at 15 fps, about real time on a GPU; the models download once). `--seed x,y` (frame fractions) picks the player when several people are in frame. With a trainer or partner in frame, set `"follow": "ball"` (the scan follows whoever holds the ball, so the shooter is picked at every shot) and `"look"` (what the player wears, e.g. "short dark hair, glasses, black shorts"; the reviewers reject the other person's reps) in `session.json` before the scan. The scan keeps every person in `run/pose_all.npz`, so `train-scan <session> --repick [--follow ...] [--seed ...]` chooses again without re-running the models.
 
 **Training step 3: rim boxes.** View `run/train_review/rim_probe.jpg` (four frames across the session, grid lines every 0.1). In `session.json` set `rim` to the rim's box as frame fractions `[x, y, w, h]` (top-left, size), e.g. `[{"from": "00:00", "box": [0.47, 0.18, 0.06, 0.03]}]`. Add an entry with a later `from` when the camera moved, `"box": null` when the rim leaves the frame, or `[]` when it is never in view. Then set `"rim_checked": true`.
 
@@ -318,7 +318,7 @@ uv run hoop-tape-miner train workspace/players/17/training/<date> > workspace/lo
 
 **Training step 6: summary.** `train-summary` merges the parts with the pose numbers into `summary.json`, `facts.md` and the figures. Every number in the report comes from `facts.md`.
 
-**Training step 7: report and plan.** Write `README.md` (中文), `README.en.md` and `plan.json` with `prompts/training_report.md`: the verdict, targets from last time, shooting, finishing, form, dribbling, progress and 3-5 drills for next time, each with a reason from this session and a checkable target. Mark 4-8 clips; `clips` cuts them.
+**Training step 7: report and plan.** Write `README.md` (中文), `README.en.md` and `plan.json` with `prompts/training_report.md`: the verdict, targets from last time, shooting, finishing, form, dribbling, progress, what to fix and how, 3-5 drills for next time (each with a reason from this session and a checkable target) and the skill and conditioning work between sessions (`plan.json` `between_sessions`). Causes, cues, drills and conditioning doses come from the individual skill and conditioning knowledge base `prompts/skill_kb.md`. Mark 4-8 clips; `clips` cuts them.
 
 **Training step 8: narration, page, QA.** `listen.<lang>.md` (2-3 minutes, `prompts/narration.md`), then `narrate` and `html` run. The browser-check subagent checks the page in both languages, the audio and every clip and writes `qa.md` (first word PASS).
 

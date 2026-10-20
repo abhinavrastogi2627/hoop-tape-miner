@@ -162,3 +162,30 @@ def test_load_game_finds_session_json(tmp_path):
     (tmp_path / "session.json").write_text(json.dumps({"kind": "training", "video": "v.mp4"}))
     g = gc.load_game(tmp_path)
     assert gc.is_training(g) and g["video"] == "v.mp4"
+
+
+def _person(x: float, y: float, s: float = 100.0) -> np.ndarray:
+    """COCO-17 keypoints of a standing person, top of the head at (x, y), s = height in px."""
+    kp = np.zeros((17, 2))
+    kp[:5] = [x, y + 0.06 * s]
+    kp[[T.L_SH, T.R_SH]] = [[x + 0.12 * s, y + 0.2 * s], [x - 0.12 * s, y + 0.2 * s]]
+    kp[[T.L_EL, T.R_EL, T.L_WR, T.R_WR]] = [x, y + 0.4 * s]
+    kp[[T.L_HIP, T.R_HIP]] = [[x + 0.08 * s, y + 0.5 * s], [x - 0.08 * s, y + 0.5 * s]]
+    kp[[T.L_KN, T.R_KN]] = [[x + 0.08 * s, y + 0.75 * s], [x - 0.08 * s, y + 0.75 * s]]
+    kp[[T.L_AN, T.R_AN]] = [[x + 0.08 * s, y + 0.95 * s], [x - 0.08 * s, y + 0.95 * s]]
+    return kp
+
+
+
+def test_pick_ball_carrier_moves_to_whoever_holds_the_ball():
+    box = lambda x: np.array([x, 100, x + 60, 300], float)
+    kp = lambda x: np.tile([x + 30, 200], (17, 1)).astype(float)  # wrists at the box centre
+    cf = np.ones((2, 17))
+    frames = [np.array([box(100), box(300)])] * 4
+    kps = [np.array([kp(100), kp(300)])] * 4
+    no_ball = np.zeros((0, 2))
+    balls = [no_ball, np.array([[330, 205]]), no_ball, np.array([[130, 200], [330, 200]])]
+    # start on the seed (left), the right one catches the ball, stays picked without a ball, both hold: no switch
+    assert T.pick_ball_carrier(frames, kps, [cf] * 4, balls, seed=(0.1, 0.5), size=(800, 450)) == [0, 1, 1, 1]
+    # no ball ever seen: the same as pick_main
+    assert T.pick_ball_carrier(frames, kps, [cf] * 4, [no_ball] * 4) == T.pick_main(frames)
