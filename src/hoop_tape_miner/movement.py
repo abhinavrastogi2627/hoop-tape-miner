@@ -19,8 +19,47 @@ REEL_FPS, REEL_W, REEL_H = 30, 1280, 720
 SCAN_FPS_CAP = 120.0
 
 # Reference bands copied from prompts/movement_kb.md "Reference values"; a metric without a band is shown without one.
-# {metric key: {"band": (lo, hi), "kinds": kinds it applies to, "phase": ..., "kb": slug}}
-REFERENCE: dict[str, dict] = {}
+# {key: {"metric": gait key, "band": (lo, hi), "phase": accel | maxv | layup | dribble, "kinds": segment kinds,
+# "kb": slug}}. accel = mean of the first `steps` steps, maxv = mean of the steps from step 9 on (a long side-view run).
+_ACCEL, _MAXV = ("sprint", "dribble-sprint"), ("sprint", "run")
+REFERENCE: dict[str, dict] = {
+    "trunk_lean@accel": dict(metric="trunk_lean", band=(48, 64), phase="accel", steps=3, kinds=_ACCEL,
+                             kb="MV-accel-posture", unit="°"),
+    "trunk_lean@maxv": dict(metric="trunk_lean", band=(9, 20), phase="maxv", kinds=_MAXV, kb="MV-accel-posture",
+                            unit="°"),
+    "shin@accel": dict(metric="shin", band=(32, 38), phase="accel", steps=3, kinds=_ACCEL, kb="MV-braking-touchdown",
+                       unit="°"),
+    "touchdown_ahead@accel": dict(metric="touchdown_ahead", band=(-0.15, 0.07), phase="accel", steps=4, kinds=_ACCEL,
+                                  kb="MV-braking-touchdown", unit="leg"),
+    "contact_s@accel": dict(metric="contact_s", band=(0.175, 0.203), phase="accel", steps=4, kinds=_ACCEL,
+                            kb="MV-short-accel-stride", unit="s"),
+    "contact_s@maxv": dict(metric="contact_s", band=(0.13, 0.16), phase="maxv", kinds=_MAXV,
+                           kb="MV-ankle-dominant-push", unit="s"),
+    "cadence_spm@accel": dict(metric="cadence_spm", band=(238, 273), phase="accel", steps=4, kinds=_ACCEL,
+                              kb="MV-short-accel-stride", unit="/min"),
+    "cadence_spm@maxv": dict(metric="cadence_spm", band=(283, 302), phase="maxv", kinds=_MAXV,
+                             kb="MV-short-accel-stride", unit="/min"),
+    "penultimate_ratio": dict(metric="penultimate_ratio", band=(1.0, 1.4), phase="layup", kinds=("layup",),
+                              kb="MV-layup-penultimate", unit="x"),
+    "hip_drop": dict(metric="hip_drop", band=(0.02, 0.08), phase="layup", kinds=("layup",), kb="MV-layup-penultimate",
+                     unit="leg"),
+    "takeoff_ahead": dict(metric="takeoff_ahead", band=(0.0, 0.3), phase="layup", kinds=("layup",),
+                          kb="MV-one-foot-takeoff", unit="leg"),
+    "free_knee": dict(metric="free_knee", band=(75, 95), phase="layup", kinds=("layup",), kb="MV-one-foot-takeoff",
+                      unit="°"),
+    "takeoff_knee": dict(metric="takeoff_knee", band=None, phase="layup", kinds=("layup",), kb="MV-one-foot-takeoff",
+                         unit="°"),
+    "landing_knee_min": dict(metric="landing_knee_min", band=None, phase="layup", kinds=("layup",), kb="MV-landing",
+                             unit="°"),
+    "bounces_per_10m": dict(metric="bounces_per_10m", band=(1.1, 1.8), phase="dribble", kinds=("dribble-sprint",),
+                            kb="MV-speed-dribble", unit=""),
+    "ball_top_vs_hip": dict(metric="ball_top_vs_hip", band=(0.9, 1.15), phase="dribble", kinds=("dribble-sprint",),
+                            kb="MV-speed-dribble", unit="leg"),
+}
+MAXV_FROM_STEP = 8
+# Running faults: from a non-side camera they stay hypotheses for the re-shoot, never "seen".
+SPRINT_SLUGS = ("MV-accel-posture", "MV-braking-touchdown", "MV-ankle-dominant-push", "MV-short-accel-stride",
+                "MV-backside-mechanics")
 
 
 def root(player: str) -> Path:

@@ -8,7 +8,9 @@ player (segment "seed", else the largest person) and writes to the session's run
   seg/<id>.npz     t (source s), kp, conf, box, ball, size; reused on the next run (--force to redo)
   gait/<id>.json   direction, leg length, foot contacts, per-step metrics, clip summary, layup / dribble metrics
   gait.json        all segments in one list
-Game-view segments are review-only: no pose, gait/<id>.json says "metrics": null. Times in the json files are
+Game-view segments are review-only: no pose, gait/<id>.json says "metrics": null. Only side-view segments are
+"measurable": 2D angles, step lengths and contacts from a front, behind or game camera are not valid, so pages show
+no numbers for them (the agent review of the key frames covers them). Times in the json files are
 source seconds; durations (step_time, contact_s) are real seconds (an exported slow-motion file is scaled back).
 """
 from __future__ import annotations
@@ -63,7 +65,8 @@ def metrics(seg: dict, d: dict) -> dict:
     steps = G.step_metrics(t, kp, conf, contacts)
     real_fps = float(1 / np.median(np.diff(t))) if len(t) > 1 else 0.0
     out = dict(id=seg["id"], kind=seg["kind"], view=seg["view"], fps=seg.get("fps"), scan_fps=seg.get("scan_fps"),
-               real_fps=round(real_fps, 2), metrics_version=G.METRICS_VERSION, direction=G.direction(t, kp),
+               real_fps=round(real_fps, 2), metrics_version=G.METRICS_VERSION, measurable=seg["view"] == "side",
+               direction=G.direction(t, kp),
                leg_px=G.leg_length(T.masked(kp, conf)),
                visible_share=float(np.isfinite(T.masked(kp, conf)[:, T.L_HIP, 0]).mean()) if len(t) else 0.0,
                contacts=[dict(c, on=back(c["on"]), off=back(c["off"])) for c in contacts],
@@ -96,7 +99,7 @@ def scan_segments(folder: Path, force: bool = False, only: list[str] | None = No
                 allg.append(json.loads(gpath.read_text(encoding="utf8")))
             continue
         if seg["view"] == "game":
-            g = dict(id=sid, kind=seg["kind"], view="game", metrics=None)
+            g = dict(id=sid, kind=seg["kind"], view="game", metrics=None, measurable=False)
         else:
             npz = run / "seg" / f"{sid}.npz"
             if npz.exists() and not force:
