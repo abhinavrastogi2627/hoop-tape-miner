@@ -36,13 +36,17 @@ UI = {
                listen="听报告", listen_sub="约 {m} 分钟，可以边看边听", play="播放 / 暂停", seek="播放进度", speed="播放速度",
                clip="片段", slow="慢放", missing="（片段还没剪：运行 hoop-tape-miner clips）",
                training="个人训练", made="命中 / 出手", shots="投篮", finishes="终结", dribble="运球",
-               targets="目标达成", vs_last="对比上次", minutes="分钟", unclear="无法判断"),
+               targets="目标达成", vs_last="对比上次", minutes="分钟", unclear="无法判断",
+               movement="运动模式", segments="片段", seen="看到的问题", hypotheses="待侧拍验证", good="保持的优点",
+               measured="测量值"),
     "en": dict(us="Us", them="Them", half1="1st half", half2="2nd half", final="Final", contents="Contents", switch="Switch language",
                listen="Listen to the report", listen_sub="About {m} min. Read along or just listen.", play="Play / pause",
                seek="Playback position", speed="Playback speed",
                clip="Clip", slow="Slow-mo", missing="(clip not cut yet: run hoop-tape-miner clips)",
                training="Training", made="Made / attempts", shots="Shots", finishes="Finishes", dribble="Dribbling",
-               targets="Targets met", vs_last="vs last session", minutes="min", unclear="unclear"),
+               targets="Targets met", vs_last="vs last session", minutes="min", unclear="unclear",
+               movement="Movement", segments="Segments", seen="Findings seen", hypotheses="To test (side re-shoot)",
+               good="Good habits", measured="Measured"),
 }
 PLAY_ICON = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5.5v13l10.5-6.5z"/>'
              '<path class="i-pause" d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>')
@@ -68,7 +72,7 @@ def scoreboard(folder: Path):
     game = gc.load_game(folder)
     if not game:
         raise FileNotFoundError(f"game.json / session.json not found in {folder} or its parent")
-    if gc.is_training(game):
+    if gc.is_personal(game):
         return training_scoreboard(folder, game)
     res = game.get("result") or {}
     fin = (_num(res.get("us")), _num(res.get("them")))
@@ -99,7 +103,8 @@ def training_scoreboard(folder: Path, s: dict) -> dict:
     if gc.is_hex(h):
         colours["us"] = (h, gc.mix(h, "#ffffff", 0.55))
     name = s.get("name") or f"#{s.get('player', '')}"
-    return dict(training=True, us=name, them="", date=s.get("date") or folder.name, summary=summ, colours=colours)
+    return dict(training=True, movement=gc.is_movement(s), us=name, them="", date=s.get("date") or folder.name,
+                summary=summ, colours=colours)
 
 
 def _pct(t: dict | None) -> str:
@@ -130,6 +135,21 @@ def training_board(sb: dict, lab) -> str:
       <div class="team us"><span class="name">{html.escape(sb["us"])}</span><span class="side">{lab("training")} · {html.escape(str(sb["date"]))}</span></div>
       <div class="pts" aria-label="{_pct(allr)}"><span>{_pct(allr)}</span></div>
       <div class="team them"><span class="name">{made}</span><span class="side">{lab("made")}</span></div>
+    </div>
+    <div class="halves">{"".join(stats)}</div>"""
+
+
+def movement_board(sb: dict, lab) -> str:
+    """Movement band: the player, film findings seen / to test / good habits and measured metrics (headline)."""
+    h = sb["summary"].get("headline") or {}
+    stats = [f'<span>{lab(k)}<b>{h[k]}</b></span>' for k in ("segments", "hypotheses", "good") if h.get(k) is not None]
+    if h.get("shown_metrics"):
+        stats.append(f'<span>{lab("measured")}<b>{h["shown_metrics"]}</b></span>')
+    seen = h.get("seen")
+    return f"""<div class="score" data-result="training">
+      <div class="team us"><span class="name">{html.escape(sb["us"])}</span><span class="side">{lab("movement")} · {html.escape(str(sb["date"]))}</span></div>
+      <div class="pts" aria-label="{seen if seen is not None else '–'}"><span>{seen if seen is not None else '–'}</span></div>
+      <div class="team them"><span class="name"></span><span class="side">{lab("seen")}</span></div>
     </div>
     <div class="halves">{"".join(stats)}</div>"""
 
@@ -276,7 +296,9 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
 
     def title_spans():
         return "".join(f'<span data-lang="{c}"{hide(c)}>{html.escape(titles[c])}</span>' for c, *_ in LANGS)
-    if sb.get("training"):
+    if sb.get("movement"):
+        board = movement_board(sb, lab)
+    elif sb.get("training"):
         board = training_board(sb, lab)
     else:
         us, them = sb["final"]

@@ -133,6 +133,13 @@ def pick(raw: dict, seed: tuple[float, float] | None = None, follow: str = "play
                                   [c[m] for c, m in zip(raw["confs"], valid)], balls, seed, size)
     else:
         sel = T.pick_main(boxes, seed, size)
+    return assemble(raw, sel)
+
+
+def assemble(raw: dict, sel: list[int | None]) -> dict:
+    """pick() output from one chosen box index per frame (index among that frame's valid boxes, or None)."""
+    ts, size = raw["t"], tuple(int(v) for v in raw["size"])
+    valid = [np.isfinite(b[:, 0]) for b in raw["boxes"]]
     N = len(ts)
     kp, conf, box, ballc = np.full((N, 17, 2), np.nan), np.zeros((N, 17)), np.full((N, 4), np.nan), np.full((N, 2), np.nan)
     for i, k in enumerate(sel):

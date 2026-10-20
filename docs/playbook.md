@@ -328,6 +328,45 @@ uv run hoop-tape-miner train workspace/players/17/training/<date> > workspace/lo
 
 The next session: film it, run `train <videos>` again. Its `targets` come from this `plan.json`, the page shows met / missed / not trained for each, and the progress figure grows by one session.
 
+## Movement sessions
+
+How one player runs, finishes layups and stops (running form, force pattern, layup approach), judged by a sprint and movement coach against `prompts/movement_kb.md`, with fuel and recovery from `prompts/fuel_recovery_kb.md`. Input = windows (segments) of any video: phone clips filmed for it, a training session, a game. Output = a movement page (`index.html`, bilingual, narration, clips from a skeleton overlay reel; a private link with `--publish`, never on the team hub), an explained video `film.<lang>.mp4` (send it yourself) and `plan.json` (drills in sessions A-D, re-tests, fuel, recovery). Claude Code: `/move <segments.json | session folder>` (`.claude/commands/move.md`).
+
+```
+uv run hoop-tape-miner move --spec segments.json --player 17 --look "black T-shirt, glasses" > workspace/logs/move.log 2>&1
+uv run hoop-tape-miner move workspace/players/17/movement/<date> > workspace/logs/move.log 2>&1   # every later run
+```
+
+| Step | Movement step |
+|---|---|
+| video*, scan, who* | 1-2 |
+| sheets | 3 |
+| labels* (side-view segments only) | 4 |
+| review* | 5 |
+| summary | 6 |
+| report*, clips | 7 |
+| listen-script*, narrate, html, qa* | 8 |
+| publish (only with `--publish`) | 9 |
+| film-script*, film | 10 |
+
+**Movement step 1: film (the protocol).** Numbers need a **side view**: phone on a tripod at hip height, landscape, locked, 8-10 m from the lane and perpendicular to it; 240 fps slow motion (120 at least; contact times are shown only at >= 100 real fps); tape marks every 1-5 m for scale; nobody crossing the frame. Clips: 3 x 20 m sprints from a 2-point start (`sprint`), 3 x full-court speed dribble each hand (`dribble-sprint`), 6 layups each side at game speed (`layup`, side or 45°), 3 x sprint-to-stop (`decel`), one easy jog (`run`). A front or behind view is optional (knee-in, base width, arm crossing). Same spot, shoes and floor at every re-test. Full protocol and the re-test battery: `prompts/movement_kb.md`.
+
+**Movement step 2: start, scan, identity.** The spec is a JSON list of segments, or `{"look": .., "plan": .., "segments": [..]}`. A segment is `{"kind": sprint|run|dribble-sprint|layup|decel|game|training, "view": side|front|behind|game, "source": "<video>", "from": "mm:ss.s", "to": "mm:ss.s"}` plus optional `"release"` (layup: when the ball leaves the hand), `"slowmo": 8` (an exported slow-motion file that plays 8x slower), `"seed": [x, y]` (frame fractions of the player at the window start), `"anchor": "mm:ss.s"` (a moment the player clearly holds the ball) and `"follow": "ball"` (scan the ball too). `move-new` cuts every window into one 30 fps `reel.mp4`; `move-new --into <session> --spec more.json` adds segments later. `move-scan` runs pose on each window of its source at native fps (capped at 120 real fps) and keeps everyone the models saw in `run/seg/<id>.raw.npz`. When more than one person is in frame (a trainer, a defender), it writes `run/move_review/who_<id>.jpg` (three frames around the release, every person boxed and numbered) and `who.json`; one subagent with the movement.json `look` fills `"t"` (the clearest frame's caption) and `"box"` (the player's number) per segment, then `move-scan <session> --repick` follows that person both ways from that frame, using clothing colour where the two touch. Without a pick it falls back to the ball holder at the `anchor` (else `release`), then `seed`, then the largest person. Metrics come only from side-view segments; from other views the page shows findings, never numbers.
+
+**Movement step 3: sheets.** `move-sheets` draws the skeleton overlay reel (`reel.overlay.mp4`, the clip and film source), a key-frame sheet per segment (around the release for a layup), label strips for side-view segments, and one brief per group of about 8 segments from `prompts/movement_review_brief.md`.
+
+**Movement step 4: label check (side view only).** One subagent opens every `strip_<id>.jpg` and writes `labels.json` with each frame where a foot first touches the floor (at least 10 segments when there are that many); then set `"labels_checked": true`. A metric is shown only when the scan's contacts match the labels (recall and precision >= 0.8, mean error <= 1.5 frames). Sessions without side-view segments skip this step.
+
+**Movement step 5: review.** One subagent per `brief_<g>.md`, at most 3 at once. Each writes `review_<g>.json` (per segment: `identity_ok`, each KB fault `seen` / `not_seen` / `not_visible` with time and confidence, good habits) and `memo_<g>.md`. Do not read the sheets yourself. When a reviewer reports that the crop follows someone else or a release time is off, fix the segment (`who`, `release`, `anchor`), run `move-scan --repick` and `move-sheets --force`, and review that group again.
+
+**Movement step 6: summary.** `move-summary` writes `summary.json`, `facts.md` and the figures: findings merged per KB entry (seen, hypothesis, not seen, not visible), good habits, measurements that passed the label check, progress against earlier sessions with the same kind, view and metrics version. Running faults seen from a non-side camera are hypotheses for the re-shoot; segments with `identity_ok: false` count for nothing. Missing values are "unknown", never 0.
+
+**Movement step 7: report and plan.** `README.md` (中文), `README.en.md` and `plan.json` with `prompts/movement_report.md`: the verdict, the teammates' claims checked, the model, what the footage shows (clip markers on the overlay reel) and what it cannot show, the training plan in sessions A-D, the pain check, fuel by day type, recovery, the re-shoot and re-tests. `clips` cuts the clips from the overlay reel.
+
+**Movement steps 8-10** work as training steps 8-10: narration (3-4 minutes), `html` (a movement band instead of the score), QA by the browser-check subagent, `--publish` only when asked, then `film.<lang>.md` on the overlay reel and `film`.
+
+The re-shoot: film the protocol, start a new session with `move --spec`, and the page compares the measurements with this one.
+
 ## Working rules
 
 - One game per session. If the context gets large, write a short status note and start a fresh session.

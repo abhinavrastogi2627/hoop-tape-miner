@@ -381,10 +381,11 @@ def scene_events(sc: Scene, length: float, slow: float, clip_s: float, cues, lan
 
 def title_text(folder: Path, game: dict, h: int) -> str:
     """'<us> vs <them>' plus date and final score (game.json result only) on a smaller second line.
-    Training sessions: session.json `title` (else '<name> · training') plus the date."""
+    Training and movement sessions: `title` (else '<name> · training' / '<name> · movement') plus the date."""
     gap = f"\\N{{\\fs{round(h * 0.02)}}} "  # a thin blank line between the title and the date
-    if gc.is_training(game):
-        head = game.get("title") or f"{game.get('name') or '#' + str(game.get('player', ''))} · training"
+    if gc.is_personal(game):
+        kind = "movement" if gc.is_movement(game) else "training"
+        head = game.get("title") or f"{game.get('name') or '#' + str(game.get('player', ''))} · {kind}"
         sub = str(game.get("date") or folder.name)
         return ass_escape(head) + f"{gap}\\N{{\\fs{round(h * 0.045)}\\b0}}{ass_escape(sub)}"
     head = f"{gc.team_name(game, 'us')} vs {gc.team_name(game, 'them')}"

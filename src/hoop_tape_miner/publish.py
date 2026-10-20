@@ -119,9 +119,9 @@ def write_site(site: Path, reg: dict, root: Path) -> None:
     team = []
     for key, t in reg["reports"].items():
         folder = root / key
-        # player pages and personal training sessions get their own link but are never listed on the team hub
+        # player pages and personal (training, movement) sessions get their own link but are never on the team hub
         if (re.fullmatch(r"player-\w+", folder.name) or not (folder / "README.md").exists()
-                or (folder / "session.json").exists()):
+                or (folder / "session.json").exists() or (folder / "movement.json").exists()):
             continue
         team.append((folder.name, title_of(folder), t))
     if team:

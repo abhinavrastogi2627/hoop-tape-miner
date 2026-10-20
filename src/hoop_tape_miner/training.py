@@ -279,6 +279,22 @@ def pick_main(frames: list[np.ndarray], seed: tuple[float, float] | None = None,
 HOLD_R = 0.25  # ball centre within this many body heights of a wrist = that person holds the ball
 
 
+def ball_holder(boxes: np.ndarray, kp: np.ndarray, cf: np.ndarray, bl: np.ndarray | None) -> int | None:
+    """Index of the one person with a wrist within HOLD_R body heights of a ball centre (nobody else as close)."""
+    if bl is None or not len(bl) or not len(boxes):
+        return None
+    h = boxes[:, 3] - boxes[:, 1]
+    d = np.full(len(boxes), np.inf)
+    for k in range(len(boxes)):
+        w = kp[k, [L_WR, R_WR]][cf[k, [L_WR, R_WR]] >= KP_MIN]
+        if len(w):
+            d[k] = np.min(np.linalg.norm(w[:, None] - bl[None], axis=2)) / max(h[k], 1.0)
+    order = np.argsort(d)
+    if d[order[0]] < HOLD_R and (len(d) == 1 or d[order[1]] >= HOLD_R):
+        return int(order[0])
+    return None
+
+
 def pick_ball_carrier(frames: list[np.ndarray], kps: list[np.ndarray], confs: list[np.ndarray],
                       balls: list[np.ndarray], seed: tuple[float, float] | None = None,
                       size: tuple[int, int] | None = None) -> list[int | None]:
@@ -296,16 +312,7 @@ def pick_ball_carrier(frames: list[np.ndarray], kps: list[np.ndarray], confs: li
             continue
         c = np.c_[(boxes[:, 0] + boxes[:, 2]) / 2, (boxes[:, 1] + boxes[:, 3]) / 2]
         h = boxes[:, 3] - boxes[:, 1]
-        holder = None
-        if bl is not None and len(bl):
-            d = np.full(len(boxes), np.inf)
-            for k in range(len(boxes)):
-                w = kp[k, [L_WR, R_WR]][cf[k, [L_WR, R_WR]] >= KP_MIN]
-                if len(w):
-                    d[k] = np.min(np.linalg.norm(w[:, None] - bl[None], axis=2)) / max(h[k], 1.0)
-            order = np.argsort(d)
-            if d[order[0]] < HOLD_R and (len(d) == 1 or d[order[1]] >= HOLD_R):
-                holder = int(order[0])
+        holder = ball_holder(boxes, kp, cf, bl)
         if holder is not None:
             k = holder
         elif prev is None or lost > 30:

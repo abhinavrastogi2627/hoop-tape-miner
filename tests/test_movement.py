@@ -139,6 +139,77 @@ def test_scan_measurable_side_only(tmp_path):
     assert g["S01"]["measurable"] is True and g["S02"]["measurable"] is False
 
 
+def _crossing(n=31, ball_at=25):
+    """Player (box 0, smaller) runs left to right, a taller trainer (box 1) right to left; they cross mid-clip.
+    The player's right wrist holds the ball at frame `ball_at`."""
+    t = np.arange(n) / 30.0
+    boxes = np.full((n, 3, 4), np.nan)
+    kps = np.full((n, 3, 17, 2), np.nan)
+    confs = np.zeros((n, 3, 17))
+    balls = np.full((n, 2, 2), np.nan)
+    for i in range(n):
+        xa, xb = 200 + 800 * i / (n - 1), 1000 - 800 * i / (n - 1)
+        boxes[i, 0] = (xa - 40, 300, xa + 40, 500)
+        boxes[i, 1] = (xb - 50, 180, xb + 50, 440)
+        for k, x in ((0, xa), (1, xb)):
+            kps[i, k] = (x, 400)
+            confs[i, k] = 0.9
+    kps[ball_at, 0, 10] = (boxes[ball_at, 0, 2], 330)
+    balls[ball_at, 0] = (boxes[ball_at, 0, 2] + 5, 330)
+    return dict(t=t + 10, boxes=boxes, kps=kps, confs=confs, balls=balls, size=np.array([1280, 720]))
+
+
+def test_anchored_pick_keeps_ball_holder():
+    from hoop_tape_miner import move_scan as MS
+    raw = _crossing()
+    plain = MS.pick_segment(dict(id="L1", kind="layup"), raw)  # no anchor: the largest person (the trainer)
+    assert plain["box"][0][1] == 180
+    d = MS.pick_segment(dict(id="L1", kind="layup", release=10 + 25 / 30), raw)
+    cx = (d["box"][:, 0] + d["box"][:, 2]) / 2
+    assert np.all(np.diff(cx) > 0) and d["box"][0][1] == 300  # the player, before and after the crossing
+    assert MS.anchored(raw, 5.0) is None  # nobody holds the ball near that time
+
+
+def test_track_uses_colour_through_contact():
+    from hoop_tape_miner import move_scan as MS
+    # Player (dark, feature A) and trainer (feature B) meet at x=600 for frames 4-6, then the player goes on to the
+    # right and the trainer back to the left. Position alone cannot tell them apart at the meeting point.
+    xa = [200, 300, 400, 500, 600, 600, 600, 700, 800, 900]
+    xb = [1000, 900, 800, 700, 600, 600, 600, 500, 400, 300]
+    A, B = np.eye(128)[0] * 0.8 + np.eye(128)[5] * 0.2, np.eye(128)[40]
+    boxes, feats = [], []
+    for i, (a, b) in enumerate(zip(xa, xb)):
+        rows = [(b - 50, 200, b + 50, 500), (a - 50, 200, a + 50, 500)] if i >= 5 else \
+            [(a - 50, 200, a + 50, 500), (b - 50, 200, b + 50, 500)]
+        boxes.append(np.array(rows, float))
+        feats.append(np.array([B, A] if i >= 5 else [A, B]))
+    sel = MS.track(boxes, feats, 0, 0)
+    assert [boxes[i][k][0] + 50 for i, k in enumerate(sel)] == xa
+    assert MS.track(boxes, feats, 9, 1)[0] == 0  # backward from the last frame finds the player at the start
+
+
+def test_who_pick_and_merge():
+    from hoop_tape_miner import move_scan as MS
+    raw = _crossing()
+    m = {"segments": [{"id": "L1", "kind": "layup", "from": 10, "to": 11}, {"id": "L2", "kind": "layup", "from": 10, "to": 11}]}
+    who = {"L1": {"times": ["00:10.0", "00:10.5", "00:11.0"], "t": None, "box": 0}, "L2": {"t": None, "box": None}}
+    assert MS.merge_who(m, who) and m["segments"][0]["who"] == {"t": "00:10.5", "box": 0}
+    assert "who" not in m["segments"][1] and not MS.merge_who(m, who)
+    d = MS.pick_segment(m["segments"][0], raw)  # box 0 at 10.5 s is the player
+    assert np.all(np.diff((d["box"][:, 0] + d["box"][:, 2]) / 2) > 0)
+    assert MS.crowded(raw)
+
+
+def test_repick_uses_raw_without_scanning(tmp_path):
+    from hoop_tape_miner import move_scan as MS
+    f = _session(tmp_path, [dict(id="S01", kind="training", view="behind", source="a.mp4", **{"from": 0, "to": 2},
+                                 follow="ball")])
+    calls = []
+    MS.scan_segments(f, scanner=_fake_scanner(calls))
+    assert calls[0]["ball"] is True and (tmp_path / "run" / "seg" / "S01.raw.npz").exists()
+    assert MS.scan_segments(f, scanner=_fake_scanner(calls), repick=True) == [] and len(calls) == 1
+
+
 # ---- move-sheets -------------------------------------------------------------------------------------------
 
 def test_draw_overlay_shape():
@@ -279,3 +350,60 @@ def test_progress_matches_only_same_kind(tmp_path):
     rows = MS.progress(now, {"sprint/side/trunk_lean@accel": dict(shown=True, mean=50.0)})
     assert rows == [dict(session="2026-10-01", metric="sprint/side/trunk_lean@accel", before=40.0, now=50.0,
                          delta=10.0)]
+
+
+# ---- move (driver), page band, film title ------------------------------------------------------------------
+
+def test_move_steps_order():
+    from hoop_tape_miner import move_run as MR
+    assert MR.NAMES == ["video", "scan", "who", "sheets", "labels", "review", "summary", "report", "clips", "listen-script",
+                        "narrate", "html", "qa", "publish", "film-script", "film"]
+
+
+def test_move_driver_skips_labels_without_side_view(tmp_path, monkeypatch, capsys):
+    import subprocess
+    from hoop_tape_miner import move_run as MR
+    from hoop_tape_miner import run as R
+    monkeypatch.setenv("HOOP_WORKSPACE", str(tmp_path / "ws"))
+    (tmp_path / "reel.mp4").write_bytes(b"x")
+    f = _session(tmp_path, [dict(id="L01", kind="layup", view="behind", source="a.mp4", **{"from": 0, "to": 4})])
+    run = tmp_path / "run"
+    calls = []
+
+    def runner(cmd, **kw):
+        calls.append(cmd[3])
+        if cmd[3] == "move-scan":
+            (run / "gait").mkdir(parents=True)
+            (run / "gait" / "L01.json").write_text("{}")
+            (run / "gait.json").write_text("[]")
+        if cmd[3] == "move-sheets":
+            (run / "move_review").mkdir(parents=True)
+            for n in ("manifest.json", "brief_g1.md"):
+                (run / "move_review" / n).write_text("{}")
+            (tmp_path / "reel.overlay.mp4").write_bytes(b"x")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    assert R.drive(MR.Session.load(f), runner=runner, steps=MR.MOVE_STEPS) == R.WAITING
+    assert calls == ["move-scan", "move-sheets"]
+    assert "waiting for the agent: review" in capsys.readouterr().out  # no side segment: no label step
+
+
+def test_movement_board(tmp_path):
+    from hoop_tape_miner import render_html
+    f = _session(tmp_path, [])
+    m = M.load(f)
+    M.save(f, dict(m, name="Alex"))
+    (f / "summary.json").write_text(json.dumps({"headline": dict(segments=24, seen=3, hypotheses=4, good=2,
+                                                                  shown_metrics=0)}))
+    sb = render_html.scoreboard(f)
+    assert sb["movement"] and sb["us"] == "Alex" and sb["date"] == "2026-10-20"
+    band = render_html.movement_board(sb, lambda k: render_html.UI["en"][k])
+    assert "Movement · 2026-10-20" in band and "Segments<b>24</b>" in band and "<span>3</span>" in band
+    assert "To test (side re-shoot)<b>4</b>" in band and "Measured" not in band
+
+
+def test_film_title_movement(tmp_path):
+    from hoop_tape_miner import film
+    t = film.title_text(tmp_path, {"kind": "movement", "name": "Alex", "date": "2026-10-20"}, 720)
+    assert t.startswith("Alex · movement") and t.endswith("2026-10-20")
+    assert film.title_text(tmp_path, {"kind": "training", "player": "17"}, 720).startswith("#17 · training")
