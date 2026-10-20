@@ -1,0 +1,13 @@
+{
+  "_comment": "Spec for `hoop-tape-miner move-new --spec <this file>`: one entry per window of a video. kind: sprint, run, dribble-sprint, layup, decel, game, training; view: side, front, behind, game (game = review only, no metrics). Times: seconds or mm:ss.s in the source file. Keep phone slow motion as the original 120/240 fps file; for an exported slowed-down copy add \"slowmo\": 8 (or 4).",
+  "player": "17",
+  "name": "Alex",
+  "plan": "baseline: 20 m sprints, full-court speed dribble, layups each side",
+  "look": "black T-shirt, white shoes; the other person in frame wears red",
+  "segments": [
+    {"id": "S01", "kind": "sprint", "view": "side", "source": "C:/phone/IMG_0101.MOV", "from": "00:01.0", "to": "00:05.5", "seed": [0.2, 0.6], "note": "20 m sprint from standing, 240 fps"},
+    {"id": "S02", "kind": "layup", "view": "side", "source": "C:/phone/IMG_0102.MOV", "from": "00:02.0", "to": "00:06.0", "release": "00:05.1", "note": "right-hand layup, game speed"},
+    {"id": "S03", "kind": "dribble-sprint", "view": "side", "source": "C:/phone/IMG_0103.MOV", "note": "whole file: full-court speed dribble, right hand"},
+    {"id": "S04", "kind": "game", "view": "game", "source": "C:/games/2026-10-14.mp4", "from": "07:27", "to": "07:31", "crop": [0.3, 0.2, 0.5, 0.6], "note": "transition run in a game"}
+  ]
+}

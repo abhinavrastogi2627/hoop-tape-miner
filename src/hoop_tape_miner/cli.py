@@ -42,6 +42,11 @@ STAGES = {
     "train-scan": ("hoop_tape_miner.train_scan", "training: player pose, shot/finish candidates, dribble segments"),
     "train-sheets": ("hoop_tape_miner.train_sheets", "training: rim probe, rep and dribble review sheets, briefs"),
     "train-summary": ("hoop_tape_miner.train_summary", "training: reviewed reps -> summary.json, facts.md, figures"),
+    "move": ("hoop_tape_miner.move_run", "one movement session end to end: clips -> gait metrics, review, page, film"),
+    "move-new": ("hoop_tape_miner.move_new", "start a movement session: segments of any video -> movement.json + reel"),
+    "move-scan": ("hoop_tape_miner.move_scan", "movement: pose per segment at native fps -> contacts, gait metrics"),
+    "move-sheets": ("hoop_tape_miner.move_sheets", "movement: skeleton overlay reel, key-frame sheets, label strips, briefs"),
+    "move-summary": ("hoop_tape_miner.move_summary", "movement: label check, review -> summary.json, facts.md, figures"),
 }
 
 

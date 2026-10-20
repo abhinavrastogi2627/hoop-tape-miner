@@ -30,12 +30,13 @@ def find_up(folder: Path | str, name: str = "game.json", levels: int = 1) -> Pat
 def load_game(path: Path | str | None) -> dict:
     """Load game.json from a file path or a folder (searching one level up); {} when not found.
     A training session folder has session.json instead (`kind: "training"`), which is returned the same way, so
-    clips, narrate, film and html work on sessions unchanged."""
+    clips, narrate, film and html work on sessions unchanged; a movement session has movement.json
+    (`kind: "movement"`)."""
     if path is None:
         return {}
     p = Path(path)
     if p.is_dir():
-        p = find_up(p) or find_up(p, "session.json", levels=0)
+        p = find_up(p) or find_up(p, "session.json", levels=0) or find_up(p, "movement.json", levels=0)
         if p is None:
             return {}
     return json.loads(p.read_text(encoding="utf8"))
@@ -43,6 +44,15 @@ def load_game(path: Path | str | None) -> dict:
 
 def is_training(game: dict) -> bool:
     return game.get("kind") == "training"
+
+
+def is_movement(game: dict) -> bool:
+    return game.get("kind") == "movement"
+
+
+def is_personal(game: dict) -> bool:
+    """A one-player page (training or movement session), not a game."""
+    return is_training(game) or is_movement(game)
 
 
 def team(game: dict, side: str) -> dict:
