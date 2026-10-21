@@ -225,6 +225,21 @@ def test_redo_reruns_a_done_step(game):
     assert runner.calls and runner.calls[0][0] == "calibrate"
 
 
+def test_until_stops_when_the_step_is_already_done(game, capsys):
+    touch(game, "run/calib/grid_1.jpg")
+    runner = Runner(game)
+    assert R.drive(R.Game.load(game), until="calib-grid", runner=runner) == 0
+    assert not runner.calls and "stopped after calib-grid" in capsys.readouterr().out
+
+
+def test_until_stops_in_custom_step_lists(game, capsys):
+    """train / move pass their own steps to drive: --until applies there too."""
+    steps = [R.Step("a", "cmd", lambda g: True), R.Step("b", "cmd", lambda g: False, lambda g: [["b"]])]
+    runner = Runner(game)
+    assert R.drive(R.Game.load(game), until="a", runner=runner, steps=steps) == 0
+    assert not runner.calls
+
+
 def test_url_target_is_fetched_first(game, monkeypatch):
     import sys
     import types

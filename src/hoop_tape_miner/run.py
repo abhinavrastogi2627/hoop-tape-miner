@@ -355,8 +355,14 @@ def drive(g: Game, until: str | None = None, redo: str | None = None, publish: b
         if s.name == "publish" and not publish:
             if not s.done(g):
                 print("[run] publish skipped: re-run with --publish to deploy the pages as links")
+            if s.name == until:
+                print(f"[run] stopped after {until}")
+                return 0
             continue
         if s.done(g) and s.name != redo:
+            if s.name == until:
+                print(f"[run] stopped after {until} (already done)")
+                return 0
             continue
         if s.kind == "agent":
             print(f"[run] waiting for the agent: {s.name}\n{g.fill(s.how)}")
