@@ -25,7 +25,7 @@ uv run hoop-tape-miner run <league game url | game folder> > workspace/logs/run.
 - **Exit 1**: a command failed; the log shows the tail of its stage log. Fix the cause and run again.
 - **Exit 0**: done. It prints the page paths and the explained video paths.
 - `--status` lists every step and whether it is done; `--dry` prints the next command; `--until STEP` stops after a step; `--redo STEP` runs a done step again.
-- Publishing is outward-facing, so it only happens with `--publish`: once `qa.md` says PASS, run again with `--publish`, then have the browser-check subagent check the live links.
+- Publishing is outward-facing, so it only happens with `--publish`: once `qa.md` says PASS with the current `checked:` stamp, run again with `--publish`, then have the browser-check subagent check the live links.
 
 Steps in order (agent steps marked *):
 
@@ -243,7 +243,7 @@ Writes `index.html` in each folder (team names, colours and score from `game.jso
 
 ## 13. QA via the browser-check subagent
 
-Ask it (text result only, at most 10 lines) to serve `$G` over http and check, for each `index.html` and each language: title and score band correct, every image loads, audio plays and its length label matches, every clip plays and the slow-mo button works, tables do not overflow at 390 px width, no console errors, no dead links, no local paths visible. Fix and re-render until it passes, then write `$G/qa.md` with `PASS` as its first word (the run waits for that).
+Ask it (text result only, at most 10 lines) to serve `$G` over http and check, for each `index.html` and each language: title and score band correct, every image loads, audio plays and its length label matches, every clip plays and the slow-mo button works, tables do not overflow at 390 px width, no console errors, no dead links, no local paths visible. Fix and re-render until it passes, then write `$G/qa.md` with `PASS` as its first word and the line `checked: <stamp>` that `run` printed when it stopped at QA (the run waits for both). The stamp covers the pages, READMEs, audio and clips of both reports: any edit after QA changes it, and the run asks for QA again before anything is published.
 
 ## 14. Publish the pages
 
@@ -256,6 +256,8 @@ uv run hoop-tape-miner publish "$G" "$G/player-<N>" --deploy [--project <name>] 
 - Each folder keeps the same random URL across updates: after any edit, publish again and the link already sent shows the new version. Links are stored in `workspace/publish.json`.
 - Team reports are also listed on a hub page (its link is printed); send the hub once and new games appear on it. `player-<N>` reports are only reachable through their own link: send each one only to that player.
 - Audio and clips stay as separate files behind a small Worker that serves the Range requests iPhones need for video. The explained video is never published.
+- A report counts as published (for `run`) only after `--deploy` succeeded; when wrangler fails, the links stay the same and the next `run --publish` tries again. `publish.json` is written atomically, with the previous version kept as `publish.json.bak`.
+- Pages are markdown only: raw HTML in a README shows as text, and only media files inside the report folder are copied to the site (anything else, e.g. `../` or an absolute path, is left out with a warning). The Worker sends a Content-Security-Policy, `nosniff`, `no-referrer` and `noindex` on every response; each page also pins its own script by hash.
 - Links are unlisted, not password-protected. `--new-link` retires a leaked link. Read `docs/privacy.md` before sending frames of players to anyone.
 
 Reply to the user with: the hub link, the team page link, the focus player's link (and who gets it).
@@ -320,7 +322,7 @@ uv run hoop-tape-miner train workspace/players/17/training/<date> > workspace/lo
 
 **Training step 7: report and plan.** Write `README.md` (中文), `README.en.md` and `plan.json` with `prompts/training_report.md`: the verdict, targets from last time, shooting, finishing, form, dribbling, progress, what to fix and how, 3-5 drills for next time (each with a reason from this session and a checkable target) and the skill and conditioning work between sessions (`plan.json` `between_sessions`). Causes, cues, drills and conditioning doses come from the individual skill and conditioning knowledge base `prompts/skill_kb.md`. Mark 4-8 clips; `clips` cuts them.
 
-**Training step 8: narration, page, QA.** `listen.<lang>.md` (2-3 minutes, `prompts/narration.md`), then `narrate` and `html` run. The browser-check subagent checks the page in both languages, the audio and every clip and writes `qa.md` (first word PASS).
+**Training step 8: narration, page, QA.** `listen.<lang>.md` (2-3 minutes, `prompts/narration.md`), then `narrate` and `html` run. The browser-check subagent checks the page in both languages, the audio and every clip and writes `qa.md` (first word PASS, plus the `checked: <stamp>` line the run printed).
 
 **Training step 9: publish (optional).** Only when the user asks: run again with `--publish`. The page gets its own private link and is never listed on the team hub.
 
