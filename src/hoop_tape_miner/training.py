@@ -75,26 +75,23 @@ def session_path(folder: Path, s: dict, key: str, default: str) -> Path:
 
 def earlier_sessions(folder: Path) -> list[Path]:
     """Sibling session folders that sort before this one (same player), oldest first."""
-    folder = Path(folder)
-    return sorted(d for d in folder.parent.iterdir()
-                  if d.is_dir() and d.name < folder.name and is_session(d) and re.match(r"\d{4}-\d{2}-\d{2}", d.name))
+    from .movement import earlier_folders
+    return earlier_folders(folder, is_session)
 
 
 # ---- time --------------------------------------------------------------------------------------------------
 
 def mmss(t: float) -> str:
     """83.44 -> '01:23.4'"""
-    t = max(0.0, float(t))
+    t = round(max(0.0, float(t)), 1)  # round first: 59.97 -> '01:00.0', not '00:60.0'
     m = int(t // 60)
     return f"{m:02d}:{t - 60 * m:04.1f}"
 
 
 def seconds(v) -> float:
-    """'01:23.4' / '1:23' / 83.4 -> seconds."""
-    if isinstance(v, (int, float)):
-        return float(v)
-    m, s = str(v).strip().split(":")
-    return int(m) * 60 + float(s)
+    """'01:23.4' / '1:23' / '1:02:03' / 83.4 -> seconds."""
+    from .movement import secs
+    return secs(v)
 
 
 # ---- pose geometry -----------------------------------------------------------------------------------------
@@ -401,8 +398,12 @@ def check_targets(targets: list[dict], reps: list[dict]) -> list[dict]:
 FORM_KEYS = ("lift", "knee_bend", "dip_to_release", "elbow_set", "elbow_release", "jump")
 
 
+SD_MIN_N = 3  # a spread (consistency) of fewer reps says nothing
+
+
 def form_stats(reps: list[dict]) -> dict:
-    """Per form metric over reps that have it: mean, sd (consistency), n, mean for makes and for misses."""
+    """Per form metric over reps that have it: mean, sample sd (consistency; None below SD_MIN_N reps), n, mean for
+    makes and for misses."""
     out = {}
     for k in FORM_KEYS:
         def vals(rs):
@@ -411,6 +412,6 @@ def form_stats(reps: list[dict]) -> dict:
         if not len(allv):
             continue
         mk, ms = vals([r for r in reps if r.get("result") == "make"]), vals([r for r in reps if r.get("result") == "miss"])
-        out[k] = dict(mean=_r(allv.mean()), sd=_r(allv.std()), n=len(allv),
+        out[k] = dict(mean=_r(allv.mean()), sd=_r(allv.std(ddof=1)) if len(allv) >= SD_MIN_N else None, n=len(allv),
                       make_mean=_r(mk.mean()) if len(mk) else None, miss_mean=_r(ms.mean()) if len(ms) else None)
     return out

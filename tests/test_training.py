@@ -100,6 +100,19 @@ def test_time_formats():
     assert T.mmss(83.44) == "01:23.4"
     assert T.seconds("01:23.4") == pytest.approx(83.4)
     assert T.seconds("1:05") == 65
+    assert T.mmss(59.97) == "01:00.0" and T.mmss(119.96) == "02:00.0"
+    assert T.seconds("1:02:03.5") == pytest.approx(3723.5)
+    from hoop_tape_miner import move_scan as MS
+    assert MS._mmss(59.97) == "01:00.0"
+
+
+def test_earlier_sessions_sort_by_date_then_number(tmp_path):
+    for n in ("2026-10-19", "2026-10-20", "2026-10-20-2", "2026-10-20-10", "2026-10-20-11", "2026-10-21", "notes"):
+        (tmp_path / n).mkdir()
+        (tmp_path / n / "session.json").write_text("{}", encoding="utf8")
+    got = [p.name for p in T.earlier_sessions(tmp_path / "2026-10-20-11")]
+    assert got == ["2026-10-19", "2026-10-20", "2026-10-20-2", "2026-10-20-10"]
+    assert [p.name for p in T.earlier_sessions(tmp_path / "2026-10-20-2")] == ["2026-10-19", "2026-10-20"]
 
 
 REVIEW = [
@@ -141,6 +154,54 @@ def test_form_stats_split_by_result():
             {"result": "miss", "knee_bend": None}]
     f = T.form_stats(reps)["knee_bend"]
     assert (f["n"], f["make_mean"], f["miss_mean"]) == (3, 45.0, 20.0)
+    assert f["sd"] == pytest.approx(15.28, abs=0.01)  # sample sd of 40, 50, 20
+    assert T.form_stats(reps[:2])["knee_bend"]["sd"] is None  # two reps: no spread shown
+
+
+def _two_people_raw() -> dict:
+    """scan() output: a big player on the left and a smaller trainer on the right, 4 frames."""
+    n, box = 4, np.full((4, 3, 4), np.nan)
+    box[:, 0], box[:, 1] = [100, 100, 200, 400], [600, 150, 680, 330]
+    kps = np.zeros((n, 3, 17, 2))
+    kps[:, 0], kps[:, 1] = 150.0, 640.0
+    return dict(t=np.arange(n) / 10, size=np.array((800, 450)), boxes=box, kps=kps, confs=np.ones((n, 3, 17)),
+                balls=np.full((n, 3, 2), np.nan))
+
+
+def test_pose_cache_repicks_when_seed_changes(tmp_path):
+    from hoop_tape_miner import train_scan as S
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"video")
+    calls = []
+
+    def scanner(v, fps, ball):
+        calls.append(fps)
+        return _two_people_raw()
+
+    run = tmp_path / "run"
+    d = S.pose_for(run, video, 10, True, None, "player", scanner=scanner)
+    assert d["box"][0, 0] == 100 and calls == [10]
+    d = S.pose_for(run, video, 10, True, (0.8, 0.5), "player", scanner=scanner)  # new seed: re-pick, no re-scan
+    assert d["box"][0, 0] == 600 and calls == [10]
+    d = S.pose_for(run, video, 10, True, (0.8, 0.5), "player", scanner=scanner)  # same inputs: reuse pose.npz
+    assert d["box"][0, 0] == 600 and calls == [10]
+    S.pose_for(run, video, 5, True, (0.8, 0.5), "player", scanner=scanner)  # new --fps: scan again
+    assert calls == [10, 5]
+    video.write_bytes(b"another video")  # same name, new content: scan again
+    S.pose_for(run, video, 5, True, (0.8, 0.5), "player", scanner=scanner)
+    assert calls == [10, 5, 5]
+
+
+def test_legacy_pose_without_key_is_repicked(tmp_path):
+    from hoop_tape_miner import train_scan as S
+    run = tmp_path / "run"
+    run.mkdir()
+    raw = _two_people_raw()
+    np.savez_compressed(run / "pose_all.npz", **raw)
+    np.savez_compressed(run / "pose.npz", **S.pick(raw))  # picked the player, no key
+    d = S.pose_for(run, tmp_path / "gone.mp4", 10, True, (0.8, 0.5), "player",
+                   scanner=lambda *a: pytest.fail("pose_all.npz is reused"))
+    assert d["box"][0, 0] == 600
 
 
 def test_session_paths(tmp_path, monkeypatch):

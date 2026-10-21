@@ -232,6 +232,51 @@ def test_who_more_picks():
     assert MS.who_picks(seg, raw) == {15: 0, 27: 0}
 
 
+def _crossing_scanner(calls, swap=False):
+    def scanner(video, fps, ball, t0, t1):
+        calls.append(dict(t0=t0, t1=t1))
+        raw = _crossing()
+        if swap:  # a re-scan that lists the two people in the other order
+            for k in ("boxes", "kps", "confs"):
+                raw[k] = raw[k][:, [1, 0, 2]]
+        return raw
+    return scanner
+
+
+def test_plain_scan_repicks_after_who_and_window_change(tmp_path):
+    """who.json filled after the first scan: a plain move-scan (no --repick) follows the picked person, and the
+    picks survive a --force re-scan that numbers the boxes differently; a changed window re-runs pose."""
+    from hoop_tape_miner import move_scan as MS
+    f = _session(tmp_path, [dict(id="L1", kind="layup", view="behind", source="a.mp4", **{"from": 10, "to": 11})])
+    calls, run = [], tmp_path / "run"
+    MS.scan_segments(f, scanner=_crossing_scanner(calls))
+    y0 = lambda: np.load(run / "seg" / "L1.npz")["box"][0][1]
+    assert y0() == 180 and MS.pick_fresh(run, M.load(f)["segments"][0], M.load(f))  # the trainer, no pick yet
+    m = M.load(f)
+    m["segments"][0]["who"] = {"t": "00:10.0", "box": 0}
+    assert not MS.pick_fresh(run, m["segments"][0], m)  # a pick the track was not made with
+    (run / "move_review").mkdir(exist_ok=True)
+    (run / "move_review" / "who.json").write_text(json.dumps(
+        {"L1": {"times": ["00:10.0", "00:10.5", "00:11.0"], "t": "00:10.0", "box": 0,
+                "more": [{"t": "00:11.0", "box": 0}]}}))
+    assert MS.scan_segments(f, scanner=_crossing_scanner(calls)) == [] and len(calls) == 1
+    m = M.load(f)
+    assert y0() == 300 and MS.pick_fresh(run, m["segments"][0], m)  # the player, from the cached raw.npz
+    assert m["segments"][0]["who"]["xyxy"] == [160.0, 300.0, 240.0, 500.0]  # the pick is pinned to its box
+    MS.scan_segments(f, force=True, scanner=_crossing_scanner(calls, swap=True))
+    assert len(calls) == 2 and y0() == 300  # box 0 is now the trainer, the pinned box still finds the player
+    from types import SimpleNamespace
+    from hoop_tape_miner import move_run as MR
+    assert MR.who_done(SimpleNamespace(game=M.load(f), run=run))
+    stale = M.load(f)
+    stale["segments"][0]["who"]["box"] = 1  # a new pick the track was not made with
+    assert not MR.who_done(SimpleNamespace(game=dict(stale, who_checked=True), run=run))
+    m["segments"][0]["to"] = 10.9
+    M.save(f, m)
+    MS.scan_segments(f, scanner=_crossing_scanner(calls, swap=True))
+    assert len(calls) == 3 and calls[-1]["t1"] == 10.9
+
+
 def test_summary_drops_wrong_person_findings():
     from hoop_tape_miner import move_summary as MSum
     rv = [{"segments": [{"id": "L1", "identity_ok": True, "wrong_person": ["35:09.9-35:10.4"],
@@ -360,6 +405,53 @@ def test_gate_hides_metric():
     assert "| sprint/side/trunk_lean@accel |" not in text and "No measurement is shown" in text
 
 
+def test_gate_slowmo_in_source_time():
+    """A 240 fps clip exported to play at 30 (slowmo 8), scanned at 15 file fps = 120 real fps: labels one scanned
+    frame (1/15 source s) off the detections still pass; three frames off fail."""
+    from hoop_tape_miner import move_summary as MS
+    on = (100.0, 102.0, 104.0, 106.0)  # source seconds, 0.25 real s apart
+    g = {"S01": _gait(contacts=on, fps=120.0, scan_fps=15.0, slowmo=8)}
+    one = {"S01": {"contacts": [{"foot": "LR"[k % 2], "on": c + 1 / 15} for k, c in enumerate(on)]}}
+    v = MS.validate(g, one)["S01"]
+    assert v["pass"] and v["matched"] == 4 and abs(v["mae_s"] - 1 / 120) < 1e-3  # error in real seconds
+    three = {"S01": {"contacts": [{"foot": "LR"[k % 2], "on": c + 3 / 15} for k, c in enumerate(on)]}}
+    assert not MS.validate(g, three)["S01"]["pass"]
+    old = {"S01": _gait(contacts=on, fps=120.0, scan_fps=15.0)}  # gait.json from before "slowmo" was written
+    assert MS.validate(old, one)["S01"]["pass"]
+    lay = {"L1": _gait("L1", "layup", contacts=on, fps=120.0, scan_fps=15.0, slowmo=8, layup={"takeoff_t": 106.0})}
+    lab = {"L1": dict(one["S01"], takeoff=106.0 + 1 / 15)}
+    assert MS.validate(lay, lab)["L1"]["pass"]
+
+
+def test_unlabelled_segment_not_validated_by_other_clip():
+    """A passing label check validates only its own segment and unlabelled segments of the same kind, view, source
+    file and frame rate; another clip of the same kind stays unvalidated and out of the mean."""
+    from hoop_tape_miner import move_summary as MS
+    g = {"S01": _gait("S01", lean=55.0, source="a.mp4"), "S02": _gait("S02", lean=30.0, source="b.mp4"),
+         "S03": _gait("S03", lean=57.0, source="a.mp4"), "S04": _gait("S04", lean=20.0, source="a.mp4", fps=60.0)}
+    lab = {"S01": {"contacts": [{"foot": "LR"[k % 2], "on": c} for k, c in enumerate((1.0, 1.25, 1.5, 1.75))]}}
+    val = MS.validate(g, lab)
+    row = MS.metrics(g, val)["sprint/side/trunk_lean@accel"]
+    assert row["shown"] and set(row["values"]) == {"S01", "S03"} and row["mean"] == 56.0
+    assert set(row["unvalidated"]) == {"S02", "S04"}
+    val["S01"]["pass"] = False
+    row = MS.metrics(g, val)["sprint/side/trunk_lean@accel"]
+    assert not row["shown"] and row["values"] == {} and "S01" in row["reason"]
+    sm = dict(player="17", name="", date="2026-10-20", headline=dict(segments=4, side=4, reviewed=0, seen=0,
+              hypotheses=0, good=0, validated=True, shown_metrics=1), not_measurable=[], not_reviewed=[],
+              faults=[], metrics=MS.metrics(g, MS.validate(g, lab)), validation={}, progress=[], notes=[])
+    assert "S02" in MS.facts(sm) and "unvalidated" in MS.facts(sm)
+
+
+def test_scan_writes_slowmo(tmp_path):
+    from hoop_tape_miner import move_scan as MS
+    f = _session(tmp_path, [dict(id="S01", kind="sprint", view="side", source="a.mp4", **{"from": 0, "to": 16},
+                                 fps=30, scan_fps=15, slowmo=8)])
+    MS.scan_segments(f, scanner=_fake_scanner([]))
+    g = json.loads((tmp_path / "run" / "gait" / "S01.json").read_text())
+    assert g["slowmo"] == 8 and g["real_fps"] == 120 and g["source"] == "a.mp4"
+
+
 def test_behind_view_no_metrics():
     from hoop_tape_miner import move_summary as MS
     assert MS.metrics({"S01": _gait(view="behind")}, {}) == {}
@@ -381,6 +473,15 @@ def test_faults_merge():
     assert rows["MV-landing"]["seen"] == ["L01", "L02"] and rows["MV-landing"]["times"] == ["31:46.2", "32:40.0"]
     assert rows["MV-accel-posture"]["status"] == "hypothesis"  # running fault from a behind camera
     assert rows["MV-one-foot-takeoff"]["status"] == "good"
+    r3 = {"segments": [{"id": "L01", "faults": [{"status": "seen", "t": "1:00", "note": "no slug"}],
+                        "good": [{"t": "1:01"}]}]}
+    assert MS.faults([r3], gaits) == []  # items without a kb slug are skipped, not a KeyError
+
+
+def test_fps_ignores_repeated_timestamps():
+    from hoop_tape_miner import gait as G
+    assert G._fps(np.array([0.0, 0.0, 0.0, 0.1, 0.1, 0.2])) == pytest.approx(10.0)
+    assert G._fps(np.array([1.0, 1.0])) == 0.0 and G._fps(np.array([])) == 0.0
 
 
 def test_facts_unknown_not_zero():
@@ -447,6 +548,26 @@ def test_move_driver_skips_labels_without_side_view(tmp_path, monkeypatch, capsy
     assert R.drive(MR.Session.load(f), runner=runner, steps=MR.MOVE_STEPS) == R.WAITING
     assert calls == ["move-scan", "move-sheets"]
     assert "waiting for the agent: review" in capsys.readouterr().out  # no side segment: no label step
+
+
+def test_sheets_stale_after_a_repick(tmp_path, monkeypatch):
+    import os
+    from hoop_tape_miner import move_run as MR
+    monkeypatch.setenv("HOOP_WORKSPACE", str(tmp_path / "ws"))
+    (tmp_path / "reel.mp4").write_bytes(b"x")
+    f = _session(tmp_path, [dict(id="L01", kind="layup", view="behind", source="a.mp4", **{"from": 0, "to": 4})])
+    g = MR.Session.load(f)
+    (g.run / "seg").mkdir(parents=True)
+    npz = g.run / "seg" / "L01.npz"
+    npz.write_bytes(b"x")
+    g.review.mkdir(parents=True)
+    for n in ("manifest.json", "brief_g1.md"):
+        (g.review / n).write_text("{}")
+    g.overlay.write_bytes(b"x")
+    assert MR.sheets_done(g)
+    later = npz.stat().st_mtime + 60  # move-scan picked the track again after the sheets were drawn
+    os.utime(npz, (later, later))
+    assert not MR.sheets_done(g)
 
 
 def test_movement_board(tmp_path):

@@ -88,11 +88,18 @@ def crowded_segments(g: Session) -> list[str]:
 
 def who_done(g: Session) -> bool:
     picked = {s["id"] for s in g.game.get("segments", []) if (s.get("who") or {}).get("box") is not None}
+    from . import move_scan as MS
+    if any(s["id"] in picked and not MS.pick_fresh(g.run, s, g.game) for s in g.game.get("segments", [])):
+        return False  # picks in movement.json the track was not chosen with: move-scan has to run again
     return g.game.get("who_checked") is True or set(crowded_segments(g)) <= picked
 
 
 def sheets_done(g: Session) -> bool:
-    return (g.review / "manifest.json").exists() and g.overlay.exists() and any(g.review.glob("brief_*.md"))
+    """Sheets, briefs and the overlay reel exist and none is older than a track move-scan picked again."""
+    from . import move_sheets as MSh
+    segs = MSh.seg_npzs(g.run, g.game)
+    return (R._newer(g.review / "manifest.json", *segs) and R._newer(g.overlay, *segs)
+            and any(g.review.glob("brief_*.md")))
 
 
 def labels_done(g: Session) -> bool:

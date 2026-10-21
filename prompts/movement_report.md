@@ -12,7 +12,8 @@ Depth is the point: for every finding go film evidence (segment id + time + clip
 ## Inputs
 
 - `facts.md` in the session folder: the only source of numbers, findings counts and the validation result. A metric
-  that facts.md marks hidden (contact check failed, not side view) is never quoted; "unknown" stays "unknown".
+  that facts.md marks hidden (contact check failed, no hand-labelled check, not side view) is never quoted, nor are
+  the values facts.md lists as unvalidated segments; "unknown" stays "unknown".
 - `<run>/move_review/memo_<g>.md` and `review_<g>.json` (what the reviewers saw, with times), `summary.json` (same
   content as facts.md, plus per-fault times and notes).
 - Figures in the session folder: `faults.png`, `metrics.png` (only when metrics are shown), `progress.png` (2+

@@ -41,9 +41,20 @@ def load_reviews(review_dir: Path) -> list[dict]:
 
 # ---- validation ----------------------------------------------------------------------------------------------
 
+def slowmo_of(g: dict) -> float:
+    """How many times slower than real life a segment's source plays: gait.json "slowmo", else real_fps / scan_fps
+    (gait.json from before "slowmo" was written), else 1."""
+    if g.get("slowmo"):
+        return float(g["slowmo"])
+    r, s = g.get("real_fps"), g.get("scan_fps")
+    return max(1.0, round(float(r) / float(s), 2)) if r and s else 1.0
+
+
 def validate(gaits: dict[str, dict], labels: dict) -> dict:
     """Per labelled side segment: detected contacts inside the labelled window vs the hand labels (gait.compare_contacts
-    with a tolerance of 3 frames, at least 0.05 s), take-off check for layups, and `pass` (gait.gate). `window` = the
+    with a tolerance of 3 frames, at least 0.05 s), take-off check for layups, and `pass` (gait.gate). Label and
+    detection times are source seconds; they are compared in real seconds (divided by the segment's slowmo), so the
+    tolerance, the MAE (mae_s, tol_s) and the gate are all in real time and frames at the real fps. `window` = the
     label strip span [lo, hi] in source seconds (default: the labelled contacts +- the tolerance)."""
     out = {}
     for sid, lab in labels.items():
@@ -51,19 +62,22 @@ def validate(gaits: dict[str, dict], labels: dict) -> dict:
         if not g.get("measurable"):
             continue
         fps = float(g.get("real_fps") or g.get("scan_fps") or 30)
+        k = slowmo_of(g)
         tol = max(0.05, 3 / fps)
         cons = lab.get("contacts") or []
-        lo, hi = lab.get("window") or ((min(c["on"] for c in cons) - tol, max(c["on"] for c in cons) + tol)
+        lo, hi = lab.get("window") or ((min(c["on"] for c in cons) - tol * k, max(c["on"] for c in cons) + tol * k)
                                         if cons else (None, None))
         det = [c for c in g.get("contacts") or [] if lo is not None and lo <= c["on"] <= hi]
-        chk = G.compare_contacts(det, cons, tol)
+        real = lambda cs: [dict(c, on=c["on"] / k) for c in cs]
+        chk = G.compare_contacts(real(det), real(cons), tol)
         ok = G.gate(chk, fps)
         to_lab, to_det = lab.get("takeoff"), (g.get("layup") or {}).get("takeoff_t")
         if to_lab is not None:
-            chk["takeoff_err_s"] = None if to_det is None else round(abs(to_det - to_lab), 3)
-            ok = ok and to_det is not None and abs(to_det - to_lab) <= tol
-        out[sid] = dict({k: (round(v, 3) if isinstance(v, float) else v) for k, v in chk.items()}, fps=fps, tol_s=tol,
-                        **{"pass": bool(ok)})
+            err = None if to_det is None else abs(to_det - to_lab) / k
+            chk["takeoff_err_s"] = None if err is None else round(err, 3)
+            ok = ok and err is not None and err <= tol + 1e-9
+        out[sid] = dict({k_: (round(v, 4) if isinstance(v, float) else v) for k_, v in chk.items()}, fps=fps,
+                        slowmo=k, tol_s=tol, **{"pass": bool(ok)})
     return out
 
 
@@ -86,11 +100,35 @@ def seg_value(g: dict, ref: dict) -> float | None:
     return float(np.mean(vals)) if len(vals) >= need else None
 
 
-def metrics(gaits: dict[str, dict], validation: dict) -> dict:
-    """{"<kind>/<view>/<reference key>": {mean, sd, n, values, band, kb, unit, shown, reason}}. Dribble metrics need
-    no contact labels; every other metric is shown only when at least one segment was hand-checked, all checked
-    segments of that kind passed, and the value comes from measurable segments that did not fail."""
+def check_group(g: dict) -> tuple:
+    """Segments one hand-label check speaks for: same kind, view, source file and real frame rate."""
+    return g.get("kind"), g.get("view"), str(g.get("source") or ""), round(float(g.get("real_fps") or 0))
+
+
+def validated(gaits: dict[str, dict], validation: dict) -> dict[str, bool | None]:
+    """Per measurable segment: True when its own label check passed, or it is unlabelled and every labelled segment
+    of its check_group passed; False when its own check (or its group's) failed; None = unvalidated (no labelled
+    segment in its group). A passing clip never validates a clip of another source, frame rate or view."""
+    groups: dict[tuple, list[bool]] = {}
+    for s, v in validation.items():
+        if s in gaits:
+            groups.setdefault(check_group(gaits[s]), []).append(bool(v["pass"]))
     out = {}
+    for s, g in gaits.items():
+        if s in validation:
+            out[s] = bool(validation[s]["pass"])
+        else:
+            res = groups.get(check_group(g))
+            out[s] = None if not res else all(res)
+    return out
+
+
+def metrics(gaits: dict[str, dict], validation: dict) -> dict:
+    """{"<kind>/<view>/<reference key>": {mean, sd, n, values, unvalidated, band, kb, unit, shown, reason}}. Dribble
+    metrics need no contact labels; every other metric uses only validated segments (validated()): `values` feed
+    the mean, segments without a check of their own group are listed in `unvalidated` and never shown."""
+    out = {}
+    ok = validated(gaits, validation)
     for sid, g in gaits.items():
         if not g.get("measurable"):
             continue
@@ -105,18 +143,16 @@ def metrics(gaits: dict[str, dict], validation: dict) -> dict:
                                                                         phase=ref["phase"]))
             row["values"][sid] = round(float(v), 3)
     for name, row in out.items():
-        kind = name.split("/")[0]
-        checked = {s: v for s, v in validation.items() if gaits[s]["kind"] == kind}
+        allv, row["unvalidated"] = row["values"], {}
         if row["phase"] == "dribble":
             row["shown"], row["reason"] = True, ""
-        elif not checked:
-            row["shown"], row["reason"] = False, "no hand-labelled check"
-        elif not all(v["pass"] for v in checked.values()):
-            row["shown"] = False
-            row["reason"] = "label check failed: " + ", ".join(s for s, v in checked.items() if not v["pass"])
         else:
-            row["shown"], row["reason"] = True, ""
-        row["values"] = {s: v for s, v in row["values"].items() if validation.get(s, {}).get("pass", True)}
+            failed = sorted(s for s in allv if ok.get(s) is False)
+            row["unvalidated"] = {s: v for s, v in allv.items() if ok.get(s) is None}
+            row["values"] = {s: v for s, v in allv.items() if ok.get(s)}
+            row["shown"] = bool(row["values"])
+            row["reason"] = "" if row["shown"] else \
+                "label check failed: " + ", ".join(failed) if failed else "no hand-labelled check"
         vals = list(row["values"].values())
         row["n"] = len(vals)
         row["mean"] = round(float(np.mean(vals)), 3) if vals else None
@@ -166,6 +202,8 @@ def faults(reviews: list[dict], gaits: dict[str, dict]) -> list[dict]:
             side = (gaits.get(s["id"]) or {}).get("view") == "side"
             wrong = wrong_spans(s)
             for f in s.get("faults") or []:
+                if not f.get("kb"):  # a reviewer item without a knowledge-base slug cannot be filed
+                    continue
                 if f.get("status") in ("seen", "hypothesis") and in_spans(f.get("t"), wrong):
                     continue
                 st = f.get("status")
@@ -181,7 +219,7 @@ def faults(reviews: list[dict], gaits: dict[str, dict]) -> list[dict]:
                     if f.get("note"):
                         row["notes"].append(f"{s['id']}: {f['note']} ({f.get('confidence', '?')})")
             for gd in s.get("good") or []:
-                if in_spans(gd.get("t"), wrong):
+                if not gd.get("kb") or in_spans(gd.get("t"), wrong):
                     continue
                 row = good.setdefault(gd["kb"], {"segments": [], "times": [], "notes": []})
                 row["segments"].append(s["id"])
@@ -218,6 +256,9 @@ def progress(folder: Path, mets: dict) -> list[dict]:
 def summarize(folder: Path, m: dict, run: Path) -> dict:
     gl = json.loads((run / "gait.json").read_text(encoding="utf8"))
     gaits = {g["id"]: g for g in gl}
+    for seg in m.get("segments", []):  # gait.json from before "source" was written
+        if seg["id"] in gaits and seg.get("source"):
+            gaits[seg["id"]].setdefault("source", seg["source"])
     rdir = run / "move_review"
     labels_p = rdir / "labels.json"
     labels = json.loads(labels_p.read_text(encoding="utf8")) if labels_p.exists() else {}
@@ -288,6 +329,10 @@ def facts(sm: dict) -> str:
             L.append(f"| {k} | {unk(v['mean'])} {v['unit']} | {unk(v['sd'])} | {v['n']} | {band} | {v['kb']} |")
     else:
         L.append("No measurement is shown: no side-view segment passed the hand-labelled check.")
+    left = {k: v["unvalidated"] for k, v in sm["metrics"].items() if v.get("unvalidated")}
+    if left:
+        L += ["", "Segments left out as unvalidated (no label check for that clip's kind, view, source and frame "
+              "rate; do not quote): " + "; ".join(f"{k}: {', '.join(v)}" for k, v in left.items())]
     hidden = {k: v for k, v in sm["metrics"].items() if not v["shown"]}
     if hidden:
         L += ["", "Not shown (do not quote): " + "; ".join(f"{k} ({v['reason']})" for k, v in hidden.items())]
