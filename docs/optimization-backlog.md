@@ -7,13 +7,18 @@ From GitHub/paper research and running the pipeline on full games (2026-10).
 - `analyze.identities`: a tracklet whose vote is "none" is accepted when it has exactly one distinct non-none read that is on the team roster.
 - `jersey.pick_crops`: group detections by frame once instead of filtering the whole frame per row (output identical, tested).
 - Claude Code setup: `CLAUDE.md`, `.claude/settings.json` (output and auto-compact caps), `.claude/agents/browser-check.md` (Sonnet, effort high; keeps screenshots out of the main context; findings below).
+- Tracking measurement: `track-eval` (label-free proxies; HOTA / IDF1 against labelled MOT clips via TrackEval). Clips not labelled yet (see `pipeline.md`, "Labelling clips").
+- Tracklet stitching (`stitch`, pooled jersey votes per chain, at most five per team). Reference game, proxies before -> after: player tracks 2623 -> 1298, p90 track length 18 s -> 38 s, player time in tracks >= 10 s 0.67 -> 0.91, rows with a roster number 0.47 -> 0.65 (0.58 when the old run's reads are pooled the way `analyze` does), tracks with two numbers 33 -> 18, frames where two tracks of a team share a number 0.070 -> 0.002, frames with a sixth player per team 0.049 -> 0.040. Held out (reads of half the voted tracklets hidden, 2 seeds): 45% of the hidden fragments' rows get a number from their chain, 92% of those the hidden one.
+- Joint tracking of both teams measured and kept optional (`tracks --tracking joint`): longer tracklets but more mixed ones and a sixth player per team in 0.17 of frames vs 0.06.
+- Jersey: pose torso crop with a legibility gate, answer probability as the read confidence, weighted vote.
 
 ## Todo, by expected gain
 1. Ball track cleanup + ball-contact possession / shot signal (the ball is detected in roughly 70% of frames but unused downstream).
-2. Tracklet stitching on `tracks.pkl` (median tracklet is about 27 frames), pooling jersey reads across a chain.
+2. Label 3 x 2-minute clips and score HOTA / IDF1 before and after `stitch`; the proxies cannot see a wrong join between two unread fragments.
 3. `extract` real resume with append-only chunk files (it currently restarts from scratch and rewrites the full pickle periodically).
-4. Batched Qwen3-VL reads and logprob-weighted jersey voting (re-runs the jersey stage only).
+4. Batched Qwen3-VL reads (re-runs the jersey stage only).
 5. Profile `extract` on a 2-minute clip (fp16, batching, threaded decode).
+6. Stitch: calibrate the similarity per game (cross-fitted on the voted tracklets) instead of fixed LDA-cosine thresholds; the team-centred fallback (fewer than 3 numbers read) links little with the current thresholds.
 
 ## Claude Code cost findings (browser-check subagent)
 
