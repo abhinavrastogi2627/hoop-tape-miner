@@ -232,7 +232,15 @@ def _compare(actual, op, value) -> bool:
 def target_clauses(item: dict) -> list[dict]:
     """The measurable parts of an insight's target: structured `target` ({metric, op, value} or a list of them)
     first, else every `;`-separated clause of `target_next_game` that names `summary <path>` (or official /
-    plusminus) followed by "at most N", "at least N", "below N" ... Other clauses are kept as not measurable."""
+    plusminus) followed by "at most N", "at least N", "below N" ... Other clauses are kept as not measurable.
+    `target_check` ({number, max and/or min}, the insights.json field shared with scout) wins over both."""
+    tc = item.get("target_check")
+    if isinstance(tc, dict) and tc.get("number"):
+        head = str(tc["number"]).partition(".")[0]
+        metric = tc["number"] if head in ("official", "plusminus") else f"summary.{tc['number']}"
+        text = item.get("target_next_game") or tc["number"]
+        return [{"text": text, "metric": metric, "op": op, "value": _num(tc[k])}
+                for k, op in (("min", ">="), ("max", "<=")) if k in tc]
     t = item.get("target")
     if isinstance(t, dict):
         t = [t]
@@ -258,7 +266,7 @@ def check_targets(prev: dict, nxt: dict) -> list[dict]:
     measurable (no number named, or the number is missing in the next game)."""
     out = []
     for it in prev.get("insights") or []:
-        if not (it.get("target_next_game") or it.get("target")):
+        if not (it.get("target_next_game") or it.get("target") or it.get("target_check")):
             continue
         clauses = []
         for c in target_clauses(it):

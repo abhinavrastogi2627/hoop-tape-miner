@@ -136,6 +136,17 @@ def test_structured_target_and_missing_next_number():
     assert a["status"] == "met" and b["status"] == "not_measurable"
 
 
+def test_target_check_is_the_shared_structured_target():
+    nxt = {"_summary": {"all": {"us": {"turnovers": 9}}}, "_official": {"totals": {"us": {"FTM": 4}}}}
+    prev = {"insights": [{"id": "A", "kb": ["x"], "target_next_game": "turnovers at most 8",
+                          "target_check": {"number": "all.us.turnovers", "max": 8}},
+                         {"id": "B", "kb": ["y"], "target_next_game": "free throws made 3 to 6",
+                          "target_check": {"number": "official.totals.us.FTM", "min": 3, "max": 6}}]}
+    a, b = season.check_targets(prev, nxt)
+    assert a["status"] == "missed" and a["clauses"][0]["actual"] == 9
+    assert b["status"] == "met" and len(b["clauses"]) == 2
+
+
 def test_recurring_themes_count_games(ws):
     th = {t["kb"]: t for t in season.build(ws)[0]["themes"]}
     assert th["transition-defence"]["games"] == 2 and th["transition-defence"]["recurring"]

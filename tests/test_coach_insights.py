@@ -106,6 +106,17 @@ def test_unresolved_number_fails_unless_marked_unknown():
     assert any("official.totals.us.FTM" in e for e in validate_insights([bad], TRIPS, KB, SUMMARY, sources=src))
 
 
+def test_target_check_must_name_a_number_in_numbers_with_a_bound():
+    ok = insight(target_check={"number": "all.them.transition_scores", "max": 3})
+    assert validate_insights([ok], TRIPS, KB, SUMMARY) == []
+    for tc, why in [({"number": "all.them.transition_scores"}, "max"),
+                    ({"number": "all.them.transition_scores", "max": "3"}, "max"),
+                    ({"number": "all.us.turnovers", "max": 5}, "numbers"),
+                    ("at most 3", "object")]:
+        errs = validate_insights([insight(target_check=tc)], TRIPS, KB, SUMMARY)
+        assert any("target_check" in e and why in e for e in errs), (tc, errs)
+
+
 def test_dropped_insight_fails():
     errs = validate_insights([insight(critic={"verdict": "drop", "note": "not on film"})], TRIPS, KB, SUMMARY)
     assert any("drop" in e for e in errs)

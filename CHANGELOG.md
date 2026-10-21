@@ -31,6 +31,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - `ball-track`, `rim-scan` and `shot-proposals` stages (also `run` steps before the coach sheets): a smoothed ball track and shot-attempt candidates at each rim from the ball arc, labelled made only when an official score event matches. Coach sheets draw the ball trail and a "CV attempt?" marker on the rim and list `cv_attempts` per possession for reviewers to confirm; they are candidates, never results.
 - `season` stage: one page per season from every game folder (results, points per half, Four Factors per game with small charts, last game's targets checked in the next game, recurring coaching themes, per-player on/off and 5-player lineups pooled with shrinkage and small-sample flags); missing data is listed, never filled in. `season --brief [--opponent <name>]` writes a pre-game listen script for `narrate --script`, and `publish` pins the season page at the top of the team hub with its own stable link.
+- `scout --opponent <name>`: a rematch dossier per opponent (`scout.json` + `scout.md`) with record, their top scorers by jersey, pooled Four Factors and points per trip, what decided each game and our past targets checked against the next game; `new-game --dossier` refreshes it.
+- Training sessions start from the last game: `train-new` stores that game's insights for the player's jersey (`game_focus`), and `train-summary` adds a "Game vs practice" make-rate table with sample-size labels.
+- Insights may carry `target_check` (`{number, max and/or min}`, the number also listed in `numbers`); the season page and the scout mark it met or missed in the next game.
 
 ### Changed
 

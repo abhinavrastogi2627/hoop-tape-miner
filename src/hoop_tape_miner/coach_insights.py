@@ -169,6 +169,16 @@ def validate_insights(insights: list[dict], trips: list[dict], kb_slugs: set[str
                 errs.append(f"{tag}: number {name} not found in {file} (fix the name, or set the value to \"unknown\")")
             elif not _same(val, want):
                 errs.append(f"{tag}: number {name} = {val!r} but {file} says {want!r}")
+        tc = it.get("target_check")
+        if tc is not None:
+            if not isinstance(tc, dict):
+                errs.append(f"{tag}: `target_check` must be an object {{number, max and/or min}}")
+            else:
+                bounds = [k for k in ("max", "min") if k in tc]
+                if not bounds or not all(_num(tc[k]) for k in bounds):
+                    errs.append(f"{tag}: `target_check` needs a numeric max and/or min")
+                if tc.get("number") not in nums:
+                    errs.append(f"{tag}: `target_check` number {tc.get('number')!r} must also be listed in `numbers`")
         player = it.get("player")
         if player not in (None, "") and roster and str(player) not in roster:
             errs.append(f"{tag}: player #{player} is not on our roster (official.json box score)")
