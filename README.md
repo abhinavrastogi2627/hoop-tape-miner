@@ -170,7 +170,7 @@ workspace/                 YOUR data: team profile, games, reports (gitignored)
 
 **Where does the coaching advice come from?** From [`prompts/coach_kb.md`](prompts/coach_kb.md): one entry per common amateur problem (transition defence, press break, spacing, help defence, closeouts, rebounding, fouls, shot selection, pick-and-roll, late clock), each paraphrased from the free FIBA WABC and Jr. NBA coaching manuals with page references. Rules and numbers the manuals don't give are labelled as the team's own choices and trial values. Every insight must cite an entry, and the critic checks it against the film.
 
-**Which languages?** The pages, narration and video come in English and Chinese.
+**Which languages?** The pages, narration and video come in English and Chinese, or just one of them: set `languages` in `workspace/team.json` (default `["zh", "en"]`).
 
 **Privacy.** The reports name players and show frames of real people. Read [docs/privacy.md](docs/privacy.md) before sharing, especially if minors play in your league.
 

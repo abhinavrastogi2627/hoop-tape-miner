@@ -27,6 +27,26 @@ LANGS = ("zh", "en")
 KB = Path(__file__).resolve().parents[2] / "prompts" / "coach_kb.md"   # coaching knowledge base (insights step)
 
 
+def profile_langs() -> tuple:
+    """Report languages from team.json `languages` (default zh + en); the page, voices and charts know zh and en."""
+    langs = tuple(dict.fromkeys(workspace.profile().get("languages") or LANGS))
+    bad = [l for l in langs if l not in LANGS]
+    if bad:
+        sys.exit(f"team.json languages {list(langs)}: {bad} not supported (choose from {list(LANGS)})")
+    return langs
+
+
+def readme(lang: str) -> str:
+    """README.md is the Chinese report, README.<lang>.md any other language (same rule as render_html)."""
+    return "README.md" if lang == "zh" else f"README.{lang}.md"
+
+
+def localised(name: str, lang: str) -> str:
+    """momentum.png for zh, momentum.<lang>.png otherwise."""
+    stem, dot, ext = name.rpartition(".")
+    return name if lang == "zh" else f"{stem}.{lang}{dot}{ext}"
+
+
 @dataclass
 class Game:
     folder: Path
@@ -95,7 +115,7 @@ class Game:
         gj = folder / "game.json"
         if not gj.exists():
             sys.exit(f"{gj} not found: start with `hoop-tape-miner fetch <league game url>` or `new-game`")
-        langs = tuple(workspace.profile().get("languages") or LANGS)
+        langs = profile_langs()
         return cls(folder, json.loads(gj.read_text(encoding="utf8")), langs)
 
 
@@ -160,7 +180,7 @@ def insights_done(g: Game) -> bool:
 
 
 def reports_done(g: Game) -> bool:
-    return all((d / "README.md").exists() and (d / "README.en.md").exists() for d in g.reports())
+    return all((d / readme(l)).exists() for d in g.reports() for l in g.langs)
 
 
 def clips_done(g: Game) -> bool:
@@ -177,7 +197,7 @@ def listen_done(g: Game) -> bool:
 
 def html_done(g: Game) -> bool:
     def inputs(d: Path) -> list[Path]:
-        return [d / "README.md", d / "README.en.md", g.gj, *d.glob("listen.*.mp3"), *d.glob("clips/*.mp4")]
+        return [*(d / readme(l) for l in g.langs), g.gj, *d.glob("listen.*.mp3"), *d.glob("clips/*.mp4")]
     return all(_newer(d / "index.html", *inputs(d)) for d in g.reports())
 
 
@@ -272,22 +292,22 @@ STEPS = [
              "{review}/insights_dropped.json. Then run `hoop-tape-miner coach-insights check --review {review}` and "
              "send the errors back to the writer until it passes."),
     Step("momentum", "cmd",
-         lambda g: g.no_score_flow() or all((g.folder / n).exists() for n in ("momentum.png", "momentum.en.png")),
+         lambda g: g.no_score_flow() or all((g.folder / localised("momentum.png", l)).exists() for l in g.langs),
          lambda g: [["momentum", "--official", str(g.official), "--game", str(g.gj), "--lineup",
-                     str(g.lineup), "--out", str(g.folder / out), "--lang", lang]
-                    for out, lang in (("momentum.png", "zh"), ("momentum.en.png", "en"))]),
+                     str(g.lineup), "--out", str(g.folder / localised("momentum.png", l)), "--lang", l]
+                    for l in g.langs]),
     Step("facts", "agent",
          lambda g: (g.review / "players_facts.md").exists() and (not g.focus or (g.review / f"player{g.focus}_facts.md").exists()),
          how="Write the fact sheets (playbook step 9): {review}/players_facts.md and {review}/player{focus}_facts.md."),
     Step("reports", "agent", reports_done,
-         how="Write the reports (playbook step 10): README.md + README.en.md in {folder} (prompts/coach_report.md) "
+         how="Write the reports (playbook step 10): {readmes} in {folder} (prompts/coach_report.md) "
              "and in {folder}/player-{focus} (prompts/player_deep_dive.md), with clip markers on the key plays."),
     Step("clips", "cmd", clips_done, lambda g: [["clips", str(d), "--video", _v(g)] for d in g.reports()]),
     Step("listen-script", "agent",
          lambda g: all((d / f"listen.{l}.md").exists() for d in g.reports() for l in g.langs),
          how="Write the narration scripts listen.<lang>.md for {langs} in {folder} and {folder}/player-{focus} "
              "(playbook step 11, prompts/narration.md)."),
-    Step("narrate", "cmd", listen_done, lambda g: [["narrate", str(d)] for d in g.reports()]),
+    Step("narrate", "cmd", listen_done, lambda g: [["narrate", str(d), "--lang", *g.langs] for d in g.reports()]),
     Step("html", "cmd", html_done, lambda g: [["html", str(d)] for d in g.reports()]),
     Step("qa", "agent", qa_done,
          how="QA (playbook step 13): have the browser-check subagent serve {folder} over http and check both pages "
@@ -306,7 +326,7 @@ NAMES = [s.name for s in STEPS]
 
 def fill(how: str, g: Game) -> str:
     vals = dict(run=g.run, folder=g.folder, gj=g.gj, video=g.video, review=g.review, focus=g.focus or "<N>",
-                times=calib_times(g), langs=", ".join(g.langs),
+                times=calib_times(g), langs=", ".join(g.langs), readmes=" + ".join(readme(l) for l in g.langs),
                 us_label=game_config.team(g.game, "us").get("label", "?"),
                 them_label=game_config.team(g.game, "them").get("label", "?"))
     return how.format(**vals)

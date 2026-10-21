@@ -1,4 +1,4 @@
-"""Render a bilingual report folder (README.md = 中文, README.en.md = English) into one HTML page with
+"""Render a report folder (README.md = 中文, README.en.md = English; either or both) into one HTML page with
 a 中文 / EN switch. Images are inlined; if listen.zh.mp3 / listen.en.mp3 sit next to the READMEs
 (`hoop-tape-miner narrate` makes them) the page gets a play button that reads the report aloud. Clip markers
 `![caption](clip:07:24-07:33)` become numbered video players (cut them first with `hoop-tape-miner clips`).
@@ -244,17 +244,35 @@ def render(md_text: str, lang: str, share: bool = False, folder: Path | None = N
     return body, heads
 
 
-def hide(code: str) -> str:
-    return "" if code == "zh" else " hidden"
+def readme_name(code: str) -> str:
+    """The report file of a language: README.md is Chinese, README.<code>.md any other language."""
+    return next((f for c, _, _, f in LANGS if c == code), f"README.{code}.md")
 
 
-def listen_block(folder: Path, embed: bool):
+def report_langs(folder: Path) -> list[tuple]:
+    """LANGS entries whose README exists in folder, in LANGS order (zh first); the first one is the default."""
+    langs = [l for l in LANGS if (folder / l[3]).exists()]
+    if not langs:
+        raise SystemExit(f"{folder} has no report README ({' / '.join(l[3] for l in LANGS)})")
+    return langs
+
+
+def first_readme(folder: Path) -> Path:
+    return folder / report_langs(folder)[0][3]
+
+
+def listen_block(folder: Path, embed: bool, langs: list[tuple] | None = None):
     """Big play button + progress for the narration, or empty strings when there is no audio yet."""
-    files = {c: folder / f"listen.{c}.mp3" for c, *_ in LANGS}
+    langs = langs or LANGS
+    first = langs[0][0]
+    files = {c: folder / f"listen.{c}.mp3" for c, *_ in langs}
     if not all(p.exists() for p in files.values()):
         return "", ""
     audios, labels = [], []
-    for c, attr, *_ in LANGS:
+
+    def hide(c):
+        return "" if c == first else " hidden"
+    for c, attr, *_ in langs:
         src = data_uri(files[c]) if embed else files[c].name
         # native controls stay visible when scripts are blocked (WeChat / mail file previews); the script hides them
         audios.append(f'<audio id="audio-{c}" class="native" data-lang="{c}"{hide(c)} controls preload="metadata" src="{src}"></audio>')
@@ -262,18 +280,18 @@ def listen_block(folder: Path, embed: bool):
         labels.append(f'<span data-lang="{c}" lang="{attr}"{hide(c)}><b>{UI[c]["listen"]}</b>'
                       f'<small>{UI[c]["listen_sub"].format(m=m)}</small></span>')
     block = f"""<div class="listen">
-      <button type="button" class="play big" data-play aria-label="{UI['zh']['play']}">{PLAY_ICON}</button>
+      <button type="button" class="play big" data-play aria-label="{UI[first]['play']}">{PLAY_ICON}</button>
       <div class="listen-body">
         <div class="listen-label">{''.join(labels)}</div>
         <div class="listen-track">
-          <input type="range" class="seek" min="0" max="100" step="1" value="0" aria-label="{UI['zh']['seek']}">
+          <input type="range" class="seek" min="0" max="100" step="1" value="0" aria-label="{UI[first]['seek']}">
           <span class="clock">0:00</span>
-          <button type="button" class="speed" aria-label="{UI['zh']['speed']}">1×</button>
+          <button type="button" class="speed" aria-label="{UI[first]['speed']}">1×</button>
         </div>
       </div>
       {''.join(audios)}
     </div>"""
-    mini = f'<button type="button" class="play mini" data-play aria-label="{UI["zh"]["play"]}">{PLAY_ICON}</button>'
+    mini = f'<button type="button" class="play mini" data-play aria-label="{UI[first]["play"]}">{PLAY_ICON}</button>'
     return block, mini
 
 
@@ -282,7 +300,12 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
     embed = share if embed is None else embed
     sb = scoreboard(folder)
     arts, tocs, titles = [], [], {}
-    for code, attr, _, fname in LANGS:
+    langs = report_langs(folder)
+    first, first_attr = langs[0][0], langs[0][1]
+
+    def hide(c):
+        return "" if c == first else " hidden"
+    for code, attr, _, fname in langs:
         text = (folder / fname).read_text(encoding="utf8")
         titles[code] = re.match(r"# (.*)", text).group(1).strip()
         body, heads = render(text, code, share, folder, embed)
@@ -292,10 +315,10 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
                     f'<p class="toc-title">{UI[code]["contents"]}</p><ol>{links}</ol></nav>')
 
     def lab(key):
-        return "".join(f'<span data-lang="{c}"{hide(c)}>{UI[c][key]}</span>' for c, *_ in LANGS)
+        return "".join(f'<span data-lang="{c}"{hide(c)}>{UI[c][key]}</span>' for c, *_ in langs)
 
     def title_spans():
-        return "".join(f'<span data-lang="{c}"{hide(c)}>{html.escape(titles[c])}</span>' for c, *_ in LANGS)
+        return "".join(f'<span data-lang="{c}"{hide(c)}>{html.escape(titles[c])}</span>' for c, *_ in langs)
     if sb.get("movement"):
         board = movement_board(sb, lab)
     elif sb.get("training"):
@@ -313,13 +336,15 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
             us_name=html.escape(sb["us"]), them_name=html.escape(sb["them"]), us_label=lab("us"), them_label=lab("them"),
             us_pts=us if known else "", them_pts=them if known else "", halves="".join(halves))
     (us_hex, us_light), (them_hex, them_light) = sb["colours"]["us"], sb["colours"]["them"]
-    buttons = "".join(f'<button type="button" data-set-lang="{c}" lang="{a}" aria-pressed="{str(c == "zh").lower()}">{n}</button>' for c, a, n, _ in LANGS)
-    listen, mini = listen_block(folder, embed)
-    ui_js = {c: {k: UI[c][k] for k in ("play", "seek", "speed", "switch")} for c, *_ in LANGS}
+    buttons = "".join(f'<button type="button" data-set-lang="{c}" lang="{a}" aria-pressed="{str(c == first).lower()}">{n}</button>'
+                      for c, a, n, _ in langs) if len(langs) > 1 else ""   # one language: no switch
+    listen, mini = listen_block(folder, embed, langs)
+    ui_js = {c: {k: UI[c][k] for k in ("play", "seek", "speed", "switch")} for c, *_ in langs}
     return TEMPLATE.format(
-        page_title=html.escape(titles["zh"]), titles_js=json.dumps(json.dumps(titles, ensure_ascii=False)).replace("</", "<\\/"),
+        html_lang=first_attr,
+        page_title=html.escape(titles[first]), titles_js=json.dumps(json.dumps(titles, ensure_ascii=False)).replace("</", "<\\/"),
         ui_js=json.dumps(json.dumps(ui_js, ensure_ascii=False)),
-        buttons=buttons, switch=UI["zh"]["switch"], heading=title_spans(), board=board,
+        buttons=buttons, switch=UI[first]["switch"], heading=title_spans(), board=board,
         us_hex=us_hex, them_hex=them_hex, us_light=us_light, them_light=them_light,
         us_light_rgb=", ".join(map(str, gc.hex_to_rgb(us_light))),
         listen=listen, mini=mini, tocs="".join(tocs), articles="".join(arts),
@@ -327,7 +352,7 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
 
 
 TEMPLATE = """<!doctype html>
-<html lang="zh-CN" class="no-js">
+<html lang="{html_lang}" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -506,7 +531,7 @@ td strong {{ color: var(--whistle); }}
   const seek = document.querySelector(".seek"), clock = document.querySelector(".clock"), speedBtn = document.querySelector(".speed");
   const audios = {{ zh: document.getElementById("audio-zh"), en: document.getElementById("audio-en") }};
   const speeds = [1, 1.25, 1.5];
-  let lang = "zh", speed = 0;
+  let lang = Object.keys(titles)[0], speed = 0;
   const fmt = s => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
   document.documentElement.classList.remove("no-js");
 
@@ -570,7 +595,7 @@ td strong {{ color: var(--whistle); }}
     return idx;
   }}
   function setLang(next, keepPlace) {{
-    if (!titles[next]) next = "zh";
+    if (!titles[next]) next = Object.keys(titles)[0];  // the report's first language
     const section = keepPlace ? currentSection() : 0;
     if (next !== lang && audios[lang]) audios[lang].pause();  // the two narrations are different scripts
     document.querySelectorAll(".clip video").forEach(v => v.pause());
@@ -595,7 +620,7 @@ td strong {{ color: var(--whistle); }}
   let start = fromHash ? fromHash[1] : new URLSearchParams(location.search).get("lang");
   if (!start) {{ try {{ start = localStorage.getItem("report-lang"); }} catch (e) {{}} }}
   if (!start && !/^zh/i.test(navigator.language || "")) start = "en";
-  setLang(start || "zh", false);
+  setLang(start || Object.keys(titles)[0], false);
   if (fromHash) document.querySelector(location.hash)?.scrollIntoView();  // target was hidden at load
   const clipHash = location.hash.match(/^#clip-([0-9_-]+)$/);  // language-free link to a clip
   if (clipHash) document.getElementById(lang + "-clip-" + clipHash[1])?.scrollIntoView();

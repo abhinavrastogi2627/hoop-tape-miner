@@ -221,6 +221,22 @@ def test_embed_runs_again_after_a_new_extract(game):
     assert not dict((n, ok) for n, _, ok in R.status(R.Game.load(game)))["embed"]
 
 
+def test_languages_come_from_the_team_profile(game, tmp_path):
+    g = R.Game.load(game)
+    assert g.langs == ("zh", "en")                                    # default without a profile
+    (tmp_path / "team.json").write_text(json.dumps({"languages": ["en"]}), encoding="utf8")
+    g = R.Game.load(game)
+    assert g.langs == ("en",)
+    touch(game, "README.en.md", "player-17/README.en.md")
+    assert R.reports_done(g)                                          # no Chinese README needed
+    steps = {s.name: s for s in R.STEPS}
+    assert steps["narrate"].args(g)[0][-2:] == ["--lang", "en"]
+    assert [c[c.index("--out") + 1].endswith("momentum.en.png") for c in steps["momentum"].args(g)] == [True]
+    (tmp_path / "team.json").write_text(json.dumps({"languages": ["en", "fr"]}), encoding="utf8")
+    with pytest.raises(SystemExit, match="fr"):
+        R.Game.load(game)
+
+
 def test_official_json_next_to_game_json_is_found(game):
     touch(game, "official.json")
     assert R.Game.load(game).official == game / "official.json"

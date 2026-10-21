@@ -55,10 +55,10 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 | `report` | `--run --out` [`--game --focus --lang en|zh --events --coverage`] | figures + `stats.json` (English labels by default) |
 | `momentum` | `--official --out` [`--game --lineup --players --lang en|zh --stretches --min-run --title`] | score-margin chart with detected scoring runs and on-court lanes |
 | `replay` (optional) | `--run --out` [`--pid --t0 --t1 --fps --game`] | 2D tactics-board clips (mp4) |
-| `narrate` | `FOLDER` or `--script FILE` [`--lang zh en --out --gap --chime --loud --rate --tight`] | `listen.<lang>.mp3` per script, or one MP3 next to `--script`; `--tight` trims TTS silence around each paragraph so `--gap` is the real pause (cue loops) |
+| `narrate` | `FOLDER` or `--script FILE` [`--lang` (default: every listen.<lang>.md present) `--out --gap --chime --loud --rate --tight`] | `listen.<lang>.mp3` per script, or one MP3 next to `--script`; `--tight` trims TTS silence around each paragraph so `--gap` is the real pause (cue loops) |
 | `clips` | `FOLDER` [`--video --height --force`] | `clips/<from>-<to>.mp4` + poster for every `![caption](clip:mm:ss-mm:ss)` in the READMEs |
 | `film` | `FOLDER` [`--lang zh en --video --run --height 720 --crf 23 --font --scenes A-B --dry`] | `film.<lang>.mp4`: narration from `film.<lang>.md` over chapter cards, figures, stat scenes, animated court diagrams (`plays/*.json`) and clips of our video, with freeze frames that ring players from `run/tracks.pkl` and burned-in subtitles; speech cached in `.film-cache/` |
-| `html` | `FOLDER` [`--out index.html --share`] | bilingual `index.html` with clip players (`--share`: self-contained copy with audio and clips embedded) |
+| `html` | `FOLDER` [`--out index.html --share`] | `index.html` in the languages whose README is present (switch when both) with clip players (`--share`: self-contained copy with audio and clips embedded) |
 | `train` | `TARGET...` (phone videos, or a session folder) [`--player --date --name --plan --status --dry --until --redo --publish`] | one personal training session end to end, like `run`: `train-new` on videos, then the training steps below, resuming; exit 3 when an agent step is due (rim boxes, film review, writing, QA) |
 | `train-new` | `VIDEO...` [`--player --date --name --plan --height 1080`] | `<workspace>/players/<player>/training/<date>[-n]/session.json` (sources with start offsets, targets copied from the previous `plan.json`) and the joined `session.mp4` (rotation applied, 30 fps; under `media_root` when set) |
 | `train-scan` | `FOLDER` [`--fps 15 --seed x,y --no-ball --force`] | `run/pose.npz` (yolo11s-pose keypoints of the main person, ball centre from yolo11s), `reps.json` (shot/finish candidates with knee bend, elbow angles, dip-to-release, jump, travel), `dribble.json` (bounce segments per hand), `activity.json` |
@@ -73,7 +73,7 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 
 `uv run hoop-tape-miner <stage> -h` is authoritative; `docs/playbook.md` shows each stage with real paths. Team names, colours (`us.hex` / `them.hex`), focus player, periods, rosters, result and narration voices come from `game.json`.
 
-Current limits: the HTML page and narration handle exactly two languages, Chinese (`README.md`, `listen.zh.md`) and English (`README.en.md`, `listen.en.md`); `official` reads one league's box-score/point-chart JSON format; court dimensions are FIBA.
+Current limits: the HTML page and narration know two languages, Chinese (`README.md`, `listen.zh.md`) and English (`README.en.md`, `listen.en.md`); team.json `languages` picks both (default) or one, and the drivers, `narrate` (default: the scripts present) and `html` (only the READMEs present, no switch for one) follow it; `official` reads one league's box-score/point-chart JSON format; court dimensions are FIBA.
 
 ## Key design decisions
 

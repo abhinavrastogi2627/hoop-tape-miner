@@ -52,12 +52,12 @@ class Session(R.Game):
     def load(cls, folder: Path) -> "Session":
         if not M.is_movement(folder):
             sys.exit(f"{folder / 'movement.json'} not found: start with `hoop-tape-miner move --spec segments.json`")
-        langs = tuple(workspace.profile().get("languages") or R.LANGS)
+        langs = R.profile_langs()
         return cls(Path(folder), M.load(folder), langs)
 
     def fill(self, how: str) -> str:
         return how.format(folder=self.folder, mj=self.gj, run=self.run, review=self.review, video=self.video,
-                          overlay=self.overlay, langs=", ".join(self.langs), player=self.game.get("player"))
+                          overlay=self.overlay, langs=", ".join(self.langs), readmes=" + ".join(R.readme(l) for l in self.langs), player=self.game.get("player"))
 
     def finished(self):
         print(f"[move] done. Page: {self.folder / 'index.html'}")
@@ -110,7 +110,7 @@ def summary_done(g: Session) -> bool:
 
 
 def report_done(g: Session) -> bool:
-    return all((g.folder / n).exists() for n in ("README.md", "README.en.md", "plan.json"))
+    return all((g.folder / n).exists() for n in (*(R.readme(l) for l in g.langs), "plan.json"))
 
 
 MOVE_STEPS = [
@@ -143,8 +143,8 @@ MOVE_STEPS = [
                "and `move-sheets --force` again and review that group again."),
     R.Step("summary", "cmd", summary_done, lambda g: [["move-summary", str(g.folder)]]),
     R.Step("report", "agent", report_done,
-           how="Write the movement report (playbook, movement step 7, prompts/movement_report.md): {folder}/README.md "
-               "(Chinese) and README.en.md from {folder}/facts.md, the memos in {review}, the figures and "
+           how="Write the movement report (playbook, movement step 7, prompts/movement_report.md): {readmes} "
+               "in {folder}, from {folder}/facts.md, the memos in {review}, the figures and "
                "prompts/movement_kb.md + prompts/fuel_recovery_kb.md, with clip markers on the overlay reel; and "
                "{folder}/plan.json (focus, drills, tests, nutrition, recovery)."),
     R.Step("clips", "cmd", R.clips_done, lambda g: [["clips", str(g.folder), "--video", str(g.overlay)]]),
@@ -152,7 +152,7 @@ MOVE_STEPS = [
            how="Write the narration scripts {folder}/listen.<lang>.md for {langs} (prompts/narration.md; for a "
                "movement session: the verdict, the two or three changes that matter most, how to train, eat and "
                "recover, 3-4 minutes)."),
-    R.Step("narrate", "cmd", R.listen_done, lambda g: [["narrate", str(g.folder)]]),
+    R.Step("narrate", "cmd", R.listen_done, lambda g: [["narrate", str(g.folder), "--lang", *g.langs]]),
     R.Step("html", "cmd", R.html_done, lambda g: [["html", str(g.folder)]]),
     R.Step("qa", "agent", R.qa_done,
            how="QA: have the browser-check subagent serve {folder} over http and check the page in both languages, "
