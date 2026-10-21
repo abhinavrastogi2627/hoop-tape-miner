@@ -32,19 +32,34 @@ VALID_TRIP = {"schema": 2, "pid": 1, "trip": 1, "t0": 1.0, "t1": 9.0, "offence":
 
 
 VALID_INSIGHT = {"id": "T1", "kb": ["transition-defence"], "claim": "c", "why": "w", "rule": "r", "drill": "d",
-                 "target_next_game": "t", "evidence": [{"t": 2.0, "what": "a"}, {"t": 8.0, "what": "b"}],
-                 "counter_examples": [], "numbers": {}, "confidence": "low",
-                 "critic": {"verdict": "keep", "note": "checked"}}
+                 "target_next_game": "t", "evidence": [{"t": 2.0, "pid": 1, "trip": 1, "what": "a"},
+                                                       {"t": 8.0, "pid": 1, "trip": 1, "what": "b"}],
+                 "counter_examples": [], "numbers": {}, "confidence": "low", "critic": None}
 
 
 def touch(folder: Path, *rel: str):
-    """Create placeholder files; coach_part*.json get one valid v2 trip, insights.json one valid insight."""
+    """Create placeholder files; coach_part*.json get one valid v2 trip, insights.json one valid insight,
+    eval/run.json a passing coach-eval gate."""
     for r in rel:
         p = folder / r
         p.parent.mkdir(parents=True, exist_ok=True)
         body = (json.dumps([VALID_TRIP]) if p.name.startswith("coach_part") else
-                json.dumps([VALID_INSIGHT]) if p.name == "insights.json" else "{}" if p.suffix == ".json" else "x")
+                json.dumps([VALID_INSIGHT]) if p.name == "insights.json" else
+                json.dumps({"facts": {}, "gate": {"pass": True}}) if p.parent.name == "eval" else
+                "{}" if p.suffix == ".json" else "x")
         p.write_text(body, encoding="utf8")
+
+
+def sign_critic(review: Path):
+    """What the critic step leaves: a sheet for pid 1 in the manifest, critic.json with a verdict that re-opened it,
+    signed with `coach-insights critic`."""
+    from hoop_tape_miner.coach_insights import main as insights_main
+    (review / "manifest.json").write_text(json.dumps([{"pid": 1, "start": 1.0, "end": 9.0, "sheets": ["p001_0.jpg"]}]),
+                                          encoding="utf8")
+    (review / "p001_0.jpg").write_bytes(b"jpg")
+    (review / "critic.json").write_text(json.dumps({"verdicts": [
+        {"id": "T1", "verdict": "keep", "note": "both moments checked", "reopened": ["p001_0.jpg"]}]}), encoding="utf8")
+    assert insights_main(["critic", "--review", str(review), "--kb", str(R.KB)]) == 0
 
 
 class Runner:
@@ -68,18 +83,102 @@ def test_status_lists_every_step_in_order(game):
 
 def test_insights_step_order(game):
     names = R.NAMES
-    assert names.index("summary") < names.index("insights") < names.index("facts")
+    assert names.index("summary") < names.index("insights") < names.index("critic") < names.index("facts")
     touch(game, "run/review_v1/manifest.json", "run/review_v1/part1.json", "run/review_v1/coach_part1.json",
           "run/review_v1/summary.json")
     g = R.Game.load(game)
     done = {n: ok for n, _, ok in R.status(g)}
     assert done["summary"] and not done["insights"]
     (g.review / "insights.json").write_text(json.dumps([dict(VALID_INSIGHT, kb=["nope"])]), encoding="utf8")
-    assert not R.insights_done(g)
+    assert R.insights_errors(g)
     touch(game, "run/review_v1/insights.json")
-    assert R.insights_done(g)
+    assert not R.insights_errors(g)
     how = next(s.how for s in R.STEPS if s.name == "insights")
-    assert "coach_insights.md" in how and "coach_critic.md" in how and "coach-insights check" in how
+    assert "coach_insights.md" in how and "--no-critic" in how and "coach_critic.md" not in how
+
+
+def test_insight_evidence_without_its_trip_fails_the_writer_step(game):
+    touch(game, "run/review_v1/coach_part1.json", "run/review_v1/summary.json")
+    g = R.Game.load(game)
+    no_pid = dict(VALID_INSIGHT, evidence=[{"t": 2.0, "what": "a"}, {"t": 8.0, "what": "b"}])
+    (g.review / "insights.json").write_text(json.dumps([no_pid]), encoding="utf8")
+    assert any("pid" in e for e in R.insights_errors(g))
+
+
+def test_critic_is_its_own_step_and_needs_a_signed_critic_json(game, capsys):
+    touch(game, "run/review_v1/coach_part1.json", "run/review_v1/summary.json", "run/review_v1/insights.json")
+    g = R.Game.load(game)
+    step = next(s for s in R.STEPS if s.name == "critic")
+    assert step.kind == "agent" and not step.done(g)
+    assert "coach_critic.md" in step.how and "coach-insights critic" in step.how
+    assert any("critic.json" in e for e in step.errors(g))
+    # a verdict set inside insights.json alone (self-certified) does not count
+    (g.review / "insights.json").write_text(json.dumps([dict(VALID_INSIGHT, critic={"verdict": "keep", "note": "ok"})]),
+                                            encoding="utf8")
+    assert not step.done(g)
+    touch(game, "run/review_v1/insights.json")
+    sign_critic(g.review)
+    assert step.done(g)
+    items = json.loads((g.review / "insights.json").read_text(encoding="utf8"))
+    items[0]["claim"] = "edited after the critic"
+    (g.review / "insights.json").write_text(json.dumps(items), encoding="utf8")
+    assert not step.done(g)
+
+
+def test_coach_eval_step_runs_with_the_gate_after_the_film_review(game):
+    names = R.NAMES
+    assert names.index("features") < names.index("coach-eval") < names.index("summary")
+    touch(game, "run/review_v1/coach_part1.json")
+    g = R.Game.load(game)
+    step = next(s for s in R.STEPS if s.name == "coach-eval")
+    assert step.kind == "cmd" and step.done(g)          # no official.json: nothing to compare against
+    touch(game, "run/official.json")
+    assert not step.done(g)
+    argv = step.args(g)[0]
+    assert argv[0] == "coach-eval" and "--gate" in argv and argv[argv.index("--label") + 1] == "run"
+    ev = g.review / "eval" / "run.json"
+    ev.parent.mkdir()
+    ev.write_text(json.dumps({"facts": {}, "gate": {"pass": False}}), encoding="utf8")
+    assert not step.done(g)
+    touch(game, "run/review_v1/eval/run.json")
+    assert step.done(g)
+    later = time.time() + 30
+    os.utime(g.review / "coach_part1.json", (later, later))     # trips changed after the eval
+    assert not step.done(g)
+
+
+def test_status_shows_the_last_eval_and_its_regressions(game, capsys):
+    ev = game / "run/review_v1/eval/run.json"
+    ev.parent.mkdir(parents=True)
+    ev.write_text(json.dumps({"at": "2026-01-01T10:00:00", "previous": "old",
+                              "facts": {"us": {"pts_recall": 0.9, "pts_precision": 1.0},
+                                        "them": {"pts_recall": 0.85, "pts_precision": 0.9}},
+                              "gate": {"pass": True, "failed": [], "skipped": []},
+                              "regressions": ["us pts_recall 1.0 -> 0.9"]}), encoding="utf8")
+    R.main([str(game), "--status"])
+    out = capsys.readouterr().out
+    assert "coach-eval" in out and "us pts recall 0.9" in out and "gate PASS" in out
+    assert "WARNING" in out and "1.0 -> 0.9" in out
+
+
+def test_waiting_step_lists_its_errors_and_finished_games_get_the_legacy_note(game, capsys):
+    touch(game, "run/calib/keyframes.json", "run/detections.pkl", "run/camera.npz", "run/embeddings.npz",
+          "run/cluster_names.json", "run/tracks.pkl", "run/jersey.json", "run/possessions.pkl",
+          "run/possession_metrics.pkl", "run/review_v1/manifest.json", "run/review_v1/brief_part1.md")
+    (game / "run/review_v1/part1.json").write_text(json.dumps(
+        [{"pid": 1, "start": 1.0, "end": 9.0}, {"pid": 2, "start": 20.0, "end": 30.0}]), encoding="utf8")
+    touch(game, "run/review_v1/coach_part1.json")
+    g = json.loads((game / "game.json").read_text(encoding="utf8"))
+    (game / "game.json").write_text(json.dumps(dict(g, no_league_data=True)), encoding="utf8")
+    assert R.drive(R.Game.load(game), runner=Runner(game)) == R.WAITING
+    out = capsys.readouterr().out
+    assert "waiting for the agent: film-review" in out and "pid 2" in out and "no trip" in out
+    assert "note:" not in out
+    for d in ("", "player-17/"):
+        touch(game, d + "README.md", d + "README.en.md")
+    R.drive(R.Game.load(game), runner=Runner(game))
+    out = capsys.readouterr().out
+    assert "note:" in out and "Newly required" in out
 
 
 def test_review_dir_override(game):
@@ -172,7 +271,9 @@ def finished_until_html(folder: Path):
           "run/cluster_names.json", "run/tracks.pkl", "run/jersey.json", "run/possessions.pkl",
           "run/possession_metrics.pkl", "run/official.json", "run/review_v1/manifest.json",
           "run/review_v1/part1.json", "run/review_v1/coach_part1.json", "run/review_v1/summary.json", "run/review_v1/features.json",
-          "run/review_v1/insights.json", "run/review_v1/players_facts.md", "run/review_v1/player17_facts.md")
+          "run/review_v1/insights.json", "run/review_v1/players_facts.md", "run/review_v1/player17_facts.md",
+          "run/review_v1/eval/run.json")
+    sign_critic(folder / "run/review_v1")
     for d in ("", "player-17/"):
         touch(folder, *(d + f for f in ("README.md", "README.en.md", "listen.zh.md", "listen.en.md",
                                         "listen.zh.mp3", "listen.en.mp3")))

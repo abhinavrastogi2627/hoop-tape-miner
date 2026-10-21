@@ -107,6 +107,7 @@ class Step:
     how: str = ""                               # agent: instructions ({run}, {folder}, ... filled in)
     long: bool = False                          # cmd: log to a file instead of the terminal
     expect_exit: bool = False                   # cmd: a non-zero exit is the expected stop (tracks pass 1)
+    errors: Callable[[Game], list[str]] | None = None   # agent: why its output does not pass yet (printed when waiting)
 
 
 def _exists(*rel: str, base: str = "run") -> Callable[[Game], bool]:
@@ -138,24 +139,87 @@ def calib_times(g: Game) -> str:
     return ",".join(f"{t:.0f}" for t in ts)
 
 
-def parts_done(g: Game) -> bool:
-    """A valid (schema v2, see coach_schema) coach_part<N>.json for every part coach-sheets wrote
-    (part<N>.json / brief_part<N>.md)."""
+def parts_errors(g: Game) -> list[str]:
+    """Why the film review is not done: parts without a valid (schema v2, see coach_schema) coach_part<N>.json,
+    then part coverage (coach_eval.part_coverage: every pid has a trip, no gap over MAX_GAP, jerseys resolved)."""
+    from .coach_eval import part_coverage
     from .coach_schema import validate_part
     parts = {p.stem.removeprefix("brief_") for p in g.review.glob("brief_part*.md")}
     parts |= {p.stem for p in g.review.glob("part*.json")}
-    done = {p.stem.removeprefix("coach_") for p in g.review.glob("coach_part*.json") if not validate_part(p)}
-    return bool(done) and parts <= done
+    files = sorted(g.review.glob("coach_part*.json"))
+    if not files:
+        return ["no coach_part*.json yet"]
+    errs = [f"{p.name}: {e}" for p in files for e in validate_part(p)]
+    have = {p.stem.removeprefix("coach_") for p in files}
+    errs += [f"coach_{p}.json: missing" for p in sorted(parts - have)]
+    return errs or part_coverage(g.review)
+
+
+def parts_done(g: Game) -> bool:
+    """A valid coach_part<N>.json for every part coach-sheets wrote (part<N>.json / brief_part<N>.md), covering
+    its part (see parts_errors)."""
+    return not parts_errors(g)
 
 
 def parts_listed(g: Game) -> bool:
     return any(g.review.glob("brief_part*.md")) or any(g.review.glob("coach_part*.json"))
 
 
-def insights_done(g: Game) -> bool:
-    """review/insights.json exists and passes `coach-insights check` (trips, KB slugs, summary numbers, critic)."""
+def _official(g: Game) -> Path | None:
+    return g.official if g.official.exists() else None
+
+
+def insights_errors(g: Game) -> list[str]:
+    """The writer's check of review/insights.json (`coach-insights check --no-critic`: cited trips, KB slugs,
+    numbers that resolve in their source files, roster)."""
     from .coach_insights import check_review
-    return (g.review / "insights.json").exists() and not check_review(g.review, KB)
+    return check_review(g.review, KB, critic=False, official=_official(g))
+
+
+def critic_errors(g: Game) -> list[str]:
+    """The full check, including the critic's own signed critic.json (`coach-insights check`)."""
+    from .coach_insights import check_review
+    return check_review(g.review, KB, official=_official(g))
+
+
+def eval_result(g: Game) -> dict | None:
+    """review/eval/run.json written by the coach-eval step (None if missing or unreadable)."""
+    try:
+        return json.loads((g.review / "eval" / "run.json").read_text(encoding="utf8"))
+    except (OSError, ValueError):
+        return None
+
+
+def eval_done(g: Game) -> bool:
+    """coach-eval ran on the current trips and its gate passed (nothing to compare against without official.json)."""
+    if not g.official.exists():
+        return True
+    res = eval_result(g)
+    return bool(isinstance(res, dict) and (res.get("gate") or {}).get("pass")) and _newer(
+        g.review / "eval" / "run.json", g.official, *g.review.glob("coach_part*.json"))
+
+
+def eval_line(g: Game) -> str | None:
+    """One `run --status` line from review/eval/run.json: recalls, gate, regressions."""
+    res = eval_result(g)
+    if not isinstance(res, dict) or not isinstance(res.get("facts"), dict):
+        return None
+    f, gt = res["facts"], res.get("gate") or {}
+    sides = "; ".join(f"{s} pts recall {(f.get(s) or {}).get('pts_recall')} prec {(f.get(s) or {}).get('pts_precision')}"
+                      for s in ("us", "them"))
+    out = f"coach-eval {res.get('at', '?')}: {sides}; gate {'PASS' if gt.get('pass') else 'FAIL'}"
+    if gt.get("skipped"):
+        out += f" (not computed: {', '.join(gt['skipped'])})"
+    if res.get("regressions"):
+        out += f"; WARNING worse than {res.get('previous')}: {', '.join(res['regressions'])}"
+    return out
+
+
+LEGACY = ("this game's reports were written before the stricter coach gates. Newly required: every pid of each part "
+          "covered by a trip without gaps over 20 s, scoring and foul jerseys written or marked unknown (film-review); "
+          "insight evidence that names its pid and trip, numbers that resolve in their source file (insights); a "
+          "critic.json signed by a separate critic (critic); the coach-eval gate (coach-eval). Fix these and re-run, "
+          "or keep the pages already published.")
 
 
 def reports_done(g: Game) -> bool:
@@ -255,21 +319,32 @@ STEPS = [
     Step("film-review", "agent", parts_done,
          how="Film review (playbook step 7): launch one subagent per {review}/brief_part<N>.md, at most 3 at once; "
              "each writes coach_part<N>.json, memo_part<N>.md and notes_part<N>.txt there. Do not read the sheets "
-             "yourself. A part counts as done when `hoop-tape-miner coach-check --review {review}` passes for it; "
-             "re-run a part whose json fails coach-check or misses pids."),
+             "yourself. A part counts as done when `hoop-tape-miner coach-check --review {review}` passes for it "
+             "(schema, every pid of the part covered without gaps over 20 s, scoring and foul jerseys written or "
+             "marked unknown); send a part's errors back to its subagent.",
+         errors=parts_errors),
     Step("features", "cmd", lambda g: (g.review / "features.json").exists(),
          lambda g: [["coach-features", "--run", str(g.run), "--review", str(g.review)]]),
+    Step("coach-eval", "cmd", eval_done,
+         lambda g: [["coach-eval", "--review", str(g.review), "--official", str(g.official), "--label", "run",
+                     "--gate"]]),
     Step("summary", "agent",
          lambda g: (g.review / "summary.json").exists(),
          how="Choose the game's stretches from the score flow, then run `coach-summary` and `plusminus` into "
              "{review}/summary.json and {review}/plusminus.json (playbook step 7.4)."),
-    Step("insights", "agent", insights_done,
-         how="Coaching insights with a critic (playbook step 7.5): launch the writer subagent with "
-             "prompts/coach_insights.md (review folder {review}; it also uses {review}/features.json when present); "
-             "it writes {review}/insights.json. Then launch the critic subagent with prompts/coach_critic.md: it "
-             "re-checks every insight on the cited sheets, sets critic.verdict and moves dropped insights to "
-             "{review}/insights_dropped.json. Then run `hoop-tape-miner coach-insights check --review {review}` and "
-             "send the errors back to the writer until it passes."),
+    Step("insights", "agent", lambda g: not insights_errors(g),
+         how="Coaching insights (playbook step 7.5): launch the writer subagent with prompts/coach_insights.md "
+             "(review folder {review}; it also uses {review}/features.json when present); it writes "
+             "{review}/insights.json and is done when `hoop-tape-miner coach-insights check --review {review} "
+             "--no-critic` passes. Send the errors back to the writer. The writer does not write critic.json.",
+         errors=insights_errors),
+    Step("critic", "agent", lambda g: not critic_errors(g),
+         how="Critic (playbook step 7.5): launch a separate critic subagent with prompts/coach_critic.md (review "
+             "folder {review}). It re-opens the cited sheets, writes {review}/critic.json (a verdict per insight "
+             "with the sheets it re-opened), moves dropped insights to {review}/insights_dropped.json, and signs "
+             "with `hoop-tape-miner coach-insights critic --review {review}`. Any later edit of insights.json "
+             "needs the critic again.",
+         errors=critic_errors),
     Step("momentum", "cmd",
          lambda g: g.no_score_flow() or all((g.folder / n).exists() for n in ("momentum.png", "momentum.en.png")),
          lambda g: [["momentum", "--official", str(g.official), "--game", str(g.gj), "--lineup",
@@ -301,6 +376,7 @@ STEPS = [
          lambda g: [["film", str(g.folder), "--video", _v(g), "--run", str(g.run)]], long=True),
 ]
 NAMES = [s.name for s in STEPS]
+GATED = ("film-review", "insights", "critic")   # checks made stricter: finished games get the LEGACY note
 
 
 def fill(how: str, g: Game) -> str:
@@ -359,6 +435,13 @@ def drive(g: Game, until: str | None = None, redo: str | None = None, publish: b
             continue
         if s.kind == "agent":
             print(f"[run] waiting for the agent: {s.name}\n{g.fill(s.how)}")
+            errs = s.errors(g) if s.errors else []
+            for e in errs[:12]:
+                print(f"[run]   {e}")
+            if len(errs) > 12:
+                print(f"[run]   ... {len(errs) - 12} more")
+            if errs and s.name in GATED and reports_done(g):
+                print(f"[run] note: {LEGACY}")
             return WAITING
         if dry:
             for argv in s.args(g):
@@ -394,6 +477,9 @@ def main(argv=None):
     if a.status:
         for name, kind, ok in status(g):
             print(f"  {'done' if ok else '----'}  {name:13s} {kind}")
+        line = eval_line(g)
+        if line:
+            print(f"  {line}")
         return
     sys.exit(drive(g, a.until, a.redo, a.publish, a.dry))
 
