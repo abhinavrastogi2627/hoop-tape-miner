@@ -8,7 +8,9 @@ score flow in the header, CV lineups per possession, and the game split into N p
     hoop-tape-miner coach-sheets event --run RUN --video V --review R --official O --out DIR [--fps 4]
     hoop-tape-miner coach-sheets event-merge --review R --events DIR --out NEW_R [--official O]   # merge answers
 
-Reads RUN/tracks.pkl, possessions.pkl, player_numbers.json. Writes to --out: p<pid>_<k>.jpg,
+Reads RUN/tracks.pkl, possessions.pkl, player_numbers.json; when present also RUN/ball_track.pkl (ball trail on
+the sheets) and RUN/shot_proposals.json (CV shot-attempt markers + cv_attempts per possession in the manifest and
+part files). Writes to --out: p<pid>_<k>.jpg,
 manifest.json, part<N>.json, lineup_intervals.json, brief_part<N>.md (if the brief template
 exists). Sheet paths in the json files are relative to --out. Optional game.json "review"
 block overrides the layout: every, pre, post, tile [w, h], grid [cols, rows], header,
@@ -29,11 +31,12 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from .review import annotate, use_game
+from .ball import RIM_Z, cameras, facing_points
+from .review import annotate, draw_attempt, draw_ball_trail, use_game
 from .timefmt import mmss
 
 LAYOUT = dict(every=1.0, pre=1.0, post=3.0, tile=[800, 450], grid=[2, 2], header=28, quality=82,
-              lineup_gap=25.0, lineup_min=8.0, window_pad=8.0)
+              lineup_gap=25.0, lineup_min=8.0, window_pad=8.0, trail=0.6, attempt_win=1.0)
 BRIEF = Path(__file__).resolve().parents[2] / "prompts" / "film_review_brief.md"
 
 
@@ -171,7 +174,53 @@ def compose(tiles: list[np.ndarray], header: str, lay: dict) -> np.ndarray:
     return np.vstack([hdr, sheet])
 
 
-def build_sheets(cap, tracks, poss, numbers, flow, lineup, out: Path, lay: dict) -> list[dict]:
+def attempt_text(a: dict) -> str:
+    """Short sheet label of a CV shot-attempt proposal."""
+    lab = a.get("label") or "unlabelled"
+    pts = f" +{a['points']}" if a.get("label") == "made" and a.get("points") else ""
+    return f"CV attempt? {lab}{pts}"
+
+
+def draw_ball_layers(img, t: float, fi: int, ball: pd.DataFrame | None, attempts: list[dict] | None,
+                     cams: dict | None, lay: dict) -> np.ndarray:
+    """Ball trail (ball_track.pkl sx, sy over the last lay['trail'] s) and CV attempt markers (shot_proposals.json,
+    within lay['attempt_win'] s of t) drawn on a full-size frame, in place."""
+    if ball is not None and len(ball):
+        tr = ball[(ball.t > t - lay["trail"]) & (ball.t <= t + 0.05)]
+        if len(tr) and t - tr.t.max() <= 0.3:
+            draw_ball_trail(img, tr[["sx", "sy"]].to_numpy(float))
+    if attempts and cams:
+        frames = cams["frames"]
+        P = cams["P"].get(int(frames[np.abs(frames - fi).argmin()])) if len(frames) else None
+        for a in attempts:
+            if P is None or abs(a["t"] - t) > lay["attempt_win"]:
+                continue
+            arc = np.array(a.get("arc") or [], float).reshape(-1, 3)
+            arc_px = facing_points(P, a["side"], arc[:, 1], arc[:, 2]) if len(arc) else []
+            rim = facing_points(P, a["side"], [0.0], [RIM_Z])[0]
+            draw_attempt(img, arc_px, rim, attempt_text(a))
+    return img
+
+
+def load_ball_layers(run: Path, size=(1280, 720)) -> tuple[pd.DataFrame | None, list[dict] | None, dict | None]:
+    """Optional sheet layers from RUN: ball_track.pkl (ball-track), shot_proposals.json "proposals" (shot-proposals)
+    and the cameras from camera.npz (needed to draw attempt markers). Missing files give None."""
+    ball = pd.read_pickle(run / "ball_track.pkl") if (run / "ball_track.pkl").is_file() else None
+    attempts = cams = None
+    if (run / "shot_proposals.json").is_file():
+        attempts = json.loads((run / "shot_proposals.json").read_text(encoding="utf-8")).get("proposals", [])
+    if attempts and (run / "camera.npz").is_file():
+        P = cameras(dict(np.load(run / "camera.npz")), size)
+        cams = {"frames": np.array(sorted(P), int), "P": P}
+    return ball, attempts, cams
+
+
+def build_sheets(cap, tracks, poss, numbers, flow, lineup, out: Path, lay: dict, ball: pd.DataFrame | None = None,
+                 attempts: list[dict] | None = None, cams: dict | None = None) -> list[dict]:
+    """Sheets per possession (see module doc). Optional layers: ball (ball_track.pkl) draws the ball trail;
+    attempts (shot_proposals.json "proposals") with cams ({"frames": array, "P": {frame: 3x4}}) draws CV shot
+    attempt markers and lists them per possession as cv_attempts in the manifest."""
+    lay = {**LAYOUT, **lay}
     fps = cap.get(cv2.CAP_PROP_FPS)
     by_frame = {f: g for f, g in tracks.groupby("frame")}
     analysed = np.array(sorted(by_frame))
@@ -180,6 +229,8 @@ def build_sheets(cap, tracks, poss, numbers, flow, lineup, out: Path, lay: dict)
     for pid, p in poss.iterrows():
         t0, t1 = p.start - lay["pre"], p.end + lay["post"]
         ev = window_events(flow, t0 - lay["window_pad"], t1 + lay["window_pad"])
+        cv_att = [dict(t=a["t"], side=a["side"], team=a.get("team"), label=a.get("label"), points=a.get("points"))
+                  for a in attempts or [] if t0 <= a["t"] <= t1]
         tiles = []
         for t in np.arange(max(t0, 0.0), t1, lay["every"]):
             fi = int(round(t * fps))
@@ -189,12 +240,17 @@ def build_sheets(cap, tracks, poss, numbers, flow, lineup, out: Path, lay: dict)
                 continue
             near = analysed[np.abs(analysed - fi).argmin()]
             img = annotate(f, by_frame[near], numbers) if abs(near - fi) <= 6 else f
+            if ball is not None or attempts:
+                draw_ball_layers(img, float(t), fi, ball, attempts, cams, lay)
             img = cv2.resize(img, tuple(lay["tile"]))
             cv2.rectangle(img, (0, 0), (120, 24), (0, 0, 0), -1)
             m, s = divmod(t, 60)
             cv2.putText(img, f"{int(m):02d}:{s:04.1f}", (4, 18), 0, 0.6, (0, 255, 255), 2)
             tiles.append(img)
         head = f"P{pid:03d} {p.side} half, CV offence={p.offence} | OFFICIAL: {events_text(ev)}"
+        if cv_att:
+            head = f"P{pid:03d} {p.side} half, CV offence={p.offence}, CV attempts {len(cv_att)} | OFFICIAL: " \
+                   f"{events_text(ev)}"
         sheets = []
         for k in range(0, len(tiles), per_sheet):
             name = f"p{pid:03d}_{k // per_sheet}.jpg"
@@ -203,7 +259,8 @@ def build_sheets(cap, tracks, poss, numbers, flow, lineup, out: Path, lay: dict)
             sheets.append(name)
         manifest.append(dict(pid=int(pid), start=round(float(p.start), 1), end=round(float(p.end), 1),
                              side=p.side, cv_offence=p.offence, period=int(p.period), official_events=ev,
-                             on_court=on_court(lineup, p.start, p.end), sheets=sheets))
+                             on_court=on_court(lineup, p.start, p.end), sheets=sheets,
+                             **({"cv_attempts": cv_att} if attempts is not None else {})))
     return manifest
 
 
@@ -652,8 +709,15 @@ def main(argv=None):
         numbers = {int(k): v for k, v in json.loads((run / "player_numbers.json").read_text()).items()}
         lineup = lineup_intervals(tracks, game.get("periods"), game.get("rosters"), lay["lineup_gap"],
                                   lay["lineup_min"])
-        manifest = build_sheets(cv2.VideoCapture(str(video)), tracks, poss, numbers, official["score_flow"],
-                                lineup, out, lay)
+        cap = cv2.VideoCapture(str(video))
+        size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 720)
+        ball, attempts, cams = load_ball_layers(run, size)
+        layers = (["ball trail"] if ball is not None else []) + \
+            ([f"{len(attempts)} CV shot attempts"] if attempts is not None else [])
+        if layers:
+            print("sheet layers:", ", ".join(layers))
+        manifest = build_sheets(cap, tracks, poss, numbers, official["score_flow"], lineup, out, lay,
+                                ball=ball, attempts=attempts, cams=cams)
         (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
         (out / "lineup_intervals.json").write_text(
             json.dumps({k: [[round(x) for x in s] for s in v] for k, v in lineup.items()}, indent=0))
