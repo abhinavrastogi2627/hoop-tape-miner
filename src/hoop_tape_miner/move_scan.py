@@ -319,7 +319,7 @@ def metrics(seg: dict, d: dict) -> dict:
     contacts = G.foot_contacts(t, kp, conf)
     steps = G.step_metrics(t, kp, conf, contacts)
     real_fps = float(1 / np.median(np.diff(t))) if len(t) > 1 else 0.0
-    out = dict(id=seg["id"], kind=seg["kind"], view=seg["view"], fps=seg.get("fps"), scan_fps=seg.get("scan_fps"),
+    out = dict(id=seg["id"], kind=seg["kind"], view=seg["view"], source=seg.get("source"), fps=seg.get("fps"), scan_fps=seg.get("scan_fps"),
                slowmo=k, real_fps=round(real_fps, 2), metrics_version=G.METRICS_VERSION, measurable=seg["view"] == "side",
                direction=G.direction(t, kp),
                leg_px=G.leg_length(T.masked(kp, conf)),

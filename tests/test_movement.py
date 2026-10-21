@@ -378,13 +378,33 @@ def test_gate_slowmo_in_source_time():
     assert MS.validate(lay, lab)["L1"]["pass"]
 
 
+def test_unlabelled_segment_not_validated_by_other_clip():
+    """A passing label check validates only its own segment and unlabelled segments of the same kind, view, source
+    file and frame rate; another clip of the same kind stays unvalidated and out of the mean."""
+    from hoop_tape_miner import move_summary as MS
+    g = {"S01": _gait("S01", lean=55.0, source="a.mp4"), "S02": _gait("S02", lean=30.0, source="b.mp4"),
+         "S03": _gait("S03", lean=57.0, source="a.mp4"), "S04": _gait("S04", lean=20.0, source="a.mp4", fps=60.0)}
+    lab = {"S01": {"contacts": [{"foot": "LR"[k % 2], "on": c} for k, c in enumerate((1.0, 1.25, 1.5, 1.75))]}}
+    val = MS.validate(g, lab)
+    row = MS.metrics(g, val)["sprint/side/trunk_lean@accel"]
+    assert row["shown"] and set(row["values"]) == {"S01", "S03"} and row["mean"] == 56.0
+    assert set(row["unvalidated"]) == {"S02", "S04"}
+    val["S01"]["pass"] = False
+    row = MS.metrics(g, val)["sprint/side/trunk_lean@accel"]
+    assert not row["shown"] and row["values"] == {} and "S01" in row["reason"]
+    sm = dict(player="17", name="", date="2026-10-20", headline=dict(segments=4, side=4, reviewed=0, seen=0,
+              hypotheses=0, good=0, validated=True, shown_metrics=1), not_measurable=[], not_reviewed=[],
+              faults=[], metrics=MS.metrics(g, MS.validate(g, lab)), validation={}, progress=[], notes=[])
+    assert "S02" in MS.facts(sm) and "unvalidated" in MS.facts(sm)
+
+
 def test_scan_writes_slowmo(tmp_path):
     from hoop_tape_miner import move_scan as MS
     f = _session(tmp_path, [dict(id="S01", kind="sprint", view="side", source="a.mp4", **{"from": 0, "to": 16},
                                  fps=30, scan_fps=15, slowmo=8)])
     MS.scan_segments(f, scanner=_fake_scanner([]))
     g = json.loads((tmp_path / "run" / "gait" / "S01.json").read_text())
-    assert g["slowmo"] == 8 and g["real_fps"] == 120
+    assert g["slowmo"] == 8 and g["real_fps"] == 120 and g["source"] == "a.mp4"
 
 
 def test_behind_view_no_metrics():
