@@ -12,6 +12,7 @@ STAGES = {
     "run": ("hoop_tape_miner.run", "one game end to end: run every stage in order, stop where the agent must judge"),
     "fetch": ("hoop_tape_miner.fetch", "league game url -> game folder, game.json, official.json and the game video"),
     "new-game": ("hoop_tape_miner.new_game", "scaffold workspace/teams/<opponent>/<date>/ with game.json + run/"),
+    "scout": ("hoop_tape_miner.scout", "rematch dossier: past games vs one opponent -> scout.json + scout.md"),
     "extract": ("hoop_tape_miner.extract", "pass 1: detection + court homography + colour features"),
     "embed": ("hoop_tape_miner.embed", "pass 2a: SigLIP embeddings for team classification"),
     "recalib": ("hoop_tape_miner.recalib", "re-run court homography only, reuse detections"),
