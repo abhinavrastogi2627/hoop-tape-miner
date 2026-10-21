@@ -10,7 +10,7 @@ From GitHub/paper research and running the pipeline on full games (2026-10).
 - Tracking measurement: `track-eval` (label-free proxies; HOTA / IDF1 against labelled MOT clips via TrackEval). Clips not labelled yet (see `pipeline.md`, "Labelling clips").
 - Tracklet stitching (`stitch`, pooled jersey votes per chain, at most five per team). Reference game, proxies before -> after: player tracks 2623 -> 1298, p90 track length 18 s -> 38 s, player time in tracks >= 10 s 0.67 -> 0.91, rows with a roster number 0.47 -> 0.65 (0.58 when the old run's reads are pooled the way `analyze` does), tracks with two numbers 33 -> 18, frames where two tracks of a team share a number 0.070 -> 0.002, frames with a sixth player per team 0.049 -> 0.040. Held out (reads of half the voted tracklets hidden, 2 seeds): 45% of the hidden fragments' rows get a number from their chain, 92% of those the hidden one.
 - Joint tracking of both teams measured and kept optional (`tracks --tracking joint`): longer tracklets but more mixed ones and a sixth player per team in 0.17 of frames vs 0.06.
-- Jersey: pose torso crop with a legibility gate, answer probability as the read confidence, weighted vote.
+- Jersey: pose torso crop with a legibility gate, answer probability as the read confidence, weighted vote. Reference game re-run of the jersey stage only (about 37 min on the GPU): the gate passes 61% of the picked crops and drops 11% of the old numeric reads (the old crops it rejects gave a number in 10% of cases vs 53% for the ones it keeps). On kept crops new and old reads agree 84% when both give a number, and agreement rises with confidence (35% below 0.5, 94% above 0.95). Tracklets with a number: 548 (old 549), the same number on 97% of the ones numbered in both. `stitch` on the new reads: 1157 tracks (1298 with the old reads), time in tracks >= 10 s 0.93, rows with a number 0.65, held out (2 seeds) 44% coverage with 96% accuracy. `track-eval` counts every raw read, so "tracks with two numbers" grows to 49 with the new low-confidence reads; with reads of confidence >= 0.8 only it is 5.
 
 ## Todo, by expected gain
 1. Ball track cleanup + ball-contact possession / shot signal (the ball is detected in roughly 70% of frames but unused downstream).
@@ -19,6 +19,7 @@ From GitHub/paper research and running the pipeline on full games (2026-10).
 4. Batched Qwen3-VL reads (re-runs the jersey stage only).
 5. Profile `extract` on a 2-minute clip (fp16, batching, threaded decode).
 6. Stitch: calibrate the similarity per game (cross-fitted on the voted tracklets) instead of fixed LDA-cosine thresholds; the team-centred fallback (fewer than 3 numbers read) links little with the current thresholds.
+7. `track-eval`: count only confident reads (crop records carry `conf`) in "tracks with two numbers", so the proxy stays comparable across jersey runs.
 
 ## Claude Code cost findings (browser-check subagent)
 
