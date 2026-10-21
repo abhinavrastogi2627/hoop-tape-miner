@@ -29,7 +29,10 @@ from markdown_it import MarkdownIt
 from . import clips as clipmod
 from . import game_config as gc
 
-MD = MarkdownIt("commonmark", {"html": True}).enable("table")
+# Raw HTML is off: README text is agent-written and quotes league data, so a <script> or <img onerror> in it must
+# show as text, never run on the published site. Pages use markdown only (clips and images come from markers).
+MD = MarkdownIt("commonmark", {"html": False}).enable("table")
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
 LANGS = [("zh", "zh-CN", "中文", "README.md"), ("en", "en", "EN", "README.en.md")]
 UI = {
     "zh": dict(us="我们", them="对手", half1="上半场", half2="下半场", final="终场", contents="目录", switch="切换语言",
@@ -159,11 +162,20 @@ def data_uri(p: Path) -> str:
     return f"data:{mime};base64,{base64.b64encode(p.read_bytes()).decode()}"
 
 
+def inside(folder: Path, rel: str) -> Path | None:
+    """The file `rel` names, if it resolves inside `folder` (no ../, no absolute or drive paths), else None."""
+    if not rel or re.match(r"^[a-zA-Z][\w+.-]*:|^[\\/]", rel):
+        return None
+    root = folder.resolve()
+    p = (root / rel).resolve()
+    return p if p.is_relative_to(root) else None
+
+
 def inline_images(body: str, folder: Path) -> str:
+    """Embed images that live in the report folder; anything else (other folders, other file types) is left alone."""
     def sub(m):
-        src = m.group(1)
-        p = folder / src
-        if src.startswith(("http:", "https:", "data:")) or src.endswith(".mp4") or not p.exists():
+        p = inside(folder, m.group(1))
+        if p is None or p.suffix.lower() not in IMAGE_EXT or not p.is_file():
             return m.group(0)
         return f'src="{data_uri(p)}"'
     return re.sub(r'src="([^"]+)"', sub, body)
@@ -171,7 +183,8 @@ def inline_images(body: str, folder: Path) -> str:
 
 def duration_s(p: Path) -> float:
     out = subprocess.run([os.environ.get("FFPROBE", "ffprobe"), "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(p)],
-                         capture_output=True, text=True, check=True).stdout
+                         capture_output=True, text=True, encoding="utf8", errors="replace", check=True,
+                         timeout=120).stdout  # a cloud placeholder file can hang ffprobe
     return float(out.strip())
 
 

@@ -13,7 +13,7 @@ Loop:
 - Run `uv run hoop-tape-miner run "$ARGUMENTS" > workspace/logs/run.log 2>&1` in the background (the CV stages take about an hour) and read only the tail of the log. After the first run, pass the game folder it printed instead of the url.
 - Exit 3 means it is waiting for you: do exactly the step the log names, as the playbook section it points to describes, then run it again. Exit 1: read the stage log it names, fix the cause, run again. Exit 0: done.
 - Film review: one subagent per `brief_part<N>.md`, at most 3 at once; they write files and reply in a few lines.
-- Browser checks go to the browser-check subagent. When `qa.md` says PASS, run once more with `--publish`, then have the subagent check the live links.
+- Browser checks go to the browser-check subagent. When `qa.md` says PASS (with the `checked:` stamp the run printed at the QA step), run once more with `--publish`, then have the subagent check the live links.
 
 Rules: one game per session; reuse an existing `run/` and never re-run a CV stage whose output exists; never invent a result ("unclear" / "likely"); never commit anything from `workspace/` or any media.
 

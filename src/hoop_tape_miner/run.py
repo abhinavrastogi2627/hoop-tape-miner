@@ -12,7 +12,10 @@ A league url is fetched first (`fetch`), then the run continues in that game fol
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -181,24 +184,49 @@ def html_done(g: Game) -> bool:
 
 
 def published(g: Game) -> bool:
-    reg = workspace.root() / "publish.json"
-    if not reg.exists():
+    """Every report page was uploaded by a successful `publish --deploy` after its index.html was last built
+    (a failed deploy, or a publish without --deploy, does not count)."""
+    from . import publish
+    path = workspace.root() / "publish.json"
+    if not path.exists():
         return False
-    keys = json.loads(reg.read_text(encoding="utf8")).get("reports", {})
+    reg = publish.load_registry(path)
     root = workspace.root().resolve()
-    want = []
     for d in g.reports():
         try:
-            want.append(d.resolve().relative_to(root).as_posix())
+            key = d.resolve().relative_to(root).as_posix()
         except ValueError:
             return False
-    return all(k in keys for k in want) and all(
-        _newer(reg, d / "index.html") for d in g.reports())
+        if not publish.is_published(reg, key, d / "index.html"):
+            return False
+    return True
+
+
+def qa_hash(g: Game) -> str:
+    """Stamp of what QA checks: the text of each report's pages and READMEs, plus the name and size of its audio
+    and clips. Any edit after QA changes it."""
+    h = hashlib.sha256()
+    for d in g.reports():
+        for p in [d / n for n in ("index.html", "README.md", "README.en.md")]:
+            h.update(f"{p.relative_to(g.folder).as_posix()}\0".encode())
+            h.update(p.read_bytes() if p.exists() else b"-")
+        for p in sorted([*d.glob("listen.*.mp3"), *d.glob("clips/*")]):
+            h.update(f"{p.relative_to(g.folder).as_posix()}\0{p.stat().st_size}\0".encode())
+    return h.hexdigest()[:16]
 
 
 def qa_done(g: Game) -> bool:
+    """qa.md starts with PASS and carries the stamp of the files as they are now (`checked: <qa_hash>`)."""
     qa = g.folder / "qa.md"
-    return qa.exists() and qa.read_text(encoding="utf8").lstrip().upper().startswith("PASS")
+    if not qa.exists():
+        return False
+    text = qa.read_text(encoding="utf8")
+    stamp = re.search(r"checked:\s*([0-9a-f]{16})", text)
+    return text.lstrip().upper().startswith("PASS") and bool(stamp) and stamp.group(1) == qa_hash(g)
+
+
+QA_STAMP = (" Then add the line `checked: {qa}` to qa.md (the stamp of the files you checked; an edit after QA "
+            "changes it and the run asks for QA again).")
 
 
 def _v(g: Game) -> str:
@@ -291,7 +319,7 @@ STEPS = [
     Step("qa", "agent", qa_done,
          how="QA (playbook step 13): have the browser-check subagent serve {folder} over http and check both pages "
              "in both languages, the audio and every clip. Write the result to {folder}/qa.md, first "
-             "word PASS when it passes."),
+             "word PASS when it passes." + QA_STAMP),
     Step("publish", "cmd", published,
          lambda g: [["publish", *map(str, g.reports()), "--deploy"]]),
     Step("film-script", "agent", lambda g: all((g.folder / f"film.{l}.md").exists() for l in g.langs),
@@ -305,7 +333,7 @@ NAMES = [s.name for s in STEPS]
 
 def fill(how: str, g: Game) -> str:
     vals = dict(run=g.run, folder=g.folder, gj=g.gj, video=g.video, review=g.review, focus=g.focus or "<N>",
-                times=calib_times(g), langs=", ".join(g.langs),
+                times=calib_times(g), langs=", ".join(g.langs), qa=qa_hash(g),
                 us_label=game_config.team(g.game, "us").get("label", "?"),
                 them_label=game_config.team(g.game, "them").get("label", "?"))
     return how.format(**vals)
@@ -326,17 +354,24 @@ def tail(path: Path, n: int = 15) -> str:
     return "\n".join(lines[-n:])
 
 
+def child_env() -> dict:
+    """The environment for stage subprocesses: UTF-8 stdio, so Chinese text in a log file or on a cp1252 / GBK
+    Windows console never raises UnicodeEncodeError."""
+    return {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+
+
 def run_cmd(step: Step, g: Game, runner=subprocess.run) -> bool:
     """Run a command step; long ones log to a file and only the tail is printed on failure."""
+    env = child_env()
     for i, argv in enumerate(step.args(g)):
         print(f"[run] {step.name}: hoop-tape-miner {' '.join(argv)}", flush=True)
         if step.long:
             log = logs_dir() / f"{g.folder.parent.name}-{g.folder.name}-{step.name}{i or ''}.log"
             print(f"[run]   log: {log}", flush=True)
             with open(log, "w", encoding="utf8") as fh:
-                rc = runner(stage_cmd(argv), stdout=fh, stderr=subprocess.STDOUT).returncode
+                rc = runner(stage_cmd(argv), stdout=fh, stderr=subprocess.STDOUT, env=env).returncode
         else:
-            log, rc = None, runner(stage_cmd(argv)).returncode
+            log, rc = None, runner(stage_cmd(argv), env=env).returncode
         if rc != 0 and not step.expect_exit:
             print(f"[run] {step.name} failed (exit {rc})" + (f"; last lines of {log}:\n{tail(log)}" if log else ""))
             return False

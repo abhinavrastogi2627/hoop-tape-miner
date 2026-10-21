@@ -19,13 +19,17 @@ The site is unlisted, not access-controlled: anyone holding a link can open it. 
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import html
 import json
+import os
 import re
 import secrets
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from . import render_html
@@ -35,10 +39,13 @@ MAX_FILE = 25 * 1024 * 1024  # Cloudflare static assets per-file limit (25 MiB)
 HEADERS = """/*
   X-Robots-Tag: noindex, nofollow
   Referrer-Policy: no-referrer
-"""
+  X-Content-Type-Options: nosniff
+"""  # publish_worker.js sets these (and a Content-Security-Policy) on every response, its own 206 answers too
 ROBOTS = "User-agent: *\nDisallow: /\n"
 BLANK = '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>.</title>\n'
-LOCAL_SRC = re.compile(r'(?:src|poster)="((?!https?:|data:|#)[^"]+)"')
+LOCAL_SRC = re.compile(r'(src|poster)="((?!https?:|data:|#)[^"]+)"')
+ASSET_EXT = {".mp3", ".mp4", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".vtt"}
+SCRIPT = re.compile(r"<script>(.*?)</script>", re.S)
 
 
 def token() -> str:
@@ -46,9 +53,41 @@ def token() -> str:
 
 
 def load_registry(path: Path) -> dict:
-    reg = json.loads(path.read_text(encoding="utf8")) if path.exists() else {}
+    """publish.json, or its .bak when the file is broken. Exits rather than start over: a fresh registry would
+    mint new tokens, and every link already sent would stop working."""
+    reg = {}
+    for p in (path, path.with_name(path.name + ".bak")):
+        if not p.exists():
+            continue
+        try:
+            reg = json.loads(p.read_text(encoding="utf8"))
+            break
+        except ValueError:
+            print(f"warning: {p} is not valid JSON", file=sys.stderr)
+    else:
+        if path.exists():
+            sys.exit(f"{path} is broken and has no readable .bak: restore it, or delete it to start new links")
     reg.setdefault("reports", {})
     return reg
+
+
+def save_registry(path: Path, reg: dict) -> None:
+    """Write publish.json atomically (temp file + replace), keeping the previous good version as publish.json.bak."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf8")
+    if path.exists():
+        try:
+            json.loads(path.read_text(encoding="utf8"))
+            shutil.copy2(path, path.with_name(path.name + ".bak"))
+        except ValueError:
+            pass  # never back up a broken file over a good .bak
+    os.replace(tmp, path)
+
+
+def is_published(reg: dict, key: str, page: Path) -> bool:
+    """A successful deploy uploaded a build of this report made after `page` (its local index.html) was written."""
+    built = (reg.get("deployed") or {}).get(key)
+    return bool(built) and key in reg["reports"] and (not page.exists() or page.stat().st_mtime <= built + 2.0)
 
 
 def report_key(folder: Path, root: Path) -> str:
@@ -58,25 +97,46 @@ def report_key(folder: Path, root: Path) -> str:
         sys.exit(f"{folder} is not inside the workspace {root} (set HOOP_WORKSPACE)")
 
 
+def pin_scripts(page: str) -> str:
+    """Add a CSP meta tag that lets only the page's own inline script(s) run, by hash, so a script that slips
+    into the page some other way does not."""
+    hashes = " ".join("'sha256-" + base64.b64encode(hashlib.sha256(s.encode("utf8")).digest()).decode() + "'"
+                      for s in SCRIPT.findall(page)) or "'none'"
+    meta = (f'<meta http-equiv="Content-Security-Policy" content="script-src {hashes}; '
+            "object-src 'none'; base-uri 'none'\">")
+    return page.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n' + meta, 1)
+
+
 def build_report(folder: Path, dest: Path) -> list[str]:
-    """Render the web page into dest (emptied first) and copy the audio/clip files it links to.
-    Returns warnings (missing or oversized files)."""
+    """Render the web page into dest (emptied first) and copy the audio/clip files it links to. Only media files
+    inside the report folder are copied; any other reference is dropped from the page with a warning.
+    Returns warnings (missing, outside or oversized files)."""
     page = render_html.page(folder, share=True, embed=False)
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
-    (dest / "index.html").write_text(page, encoding="utf8")
-    warnings = []
-    for rel in sorted(set(LOCAL_SRC.findall(page))):
-        src = folder / rel
-        if not src.is_file():
+    warnings, copy = [], {}
+    root = folder.resolve()
+
+    def keep(m):
+        attr, rel = m.groups()
+        src = render_html.inside(folder, rel)
+        if src is None or src.suffix.lower() not in ASSET_EXT:
+            warnings.append(f"{folder.name}: {rel} is outside the report folder or not a media file; left out")
+            return f'data-{attr}-removed=""'
+        if src.is_file():
+            copy[src.relative_to(root).as_posix()] = src
+        else:
             warnings.append(f"{folder.name}: {rel} is linked but missing")
-            continue
+        return m.group(0)
+    page = pin_scripts(LOCAL_SRC.sub(keep, page))
+    (dest / "index.html").write_text(page, encoding="utf8")
+    for rel, src in sorted(copy.items()):
         if src.stat().st_size > MAX_FILE:
             warnings.append(f"{folder.name}: {rel} is over 25 MiB, Cloudflare will reject it")
         (dest / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest / rel)
-    return warnings
+    return sorted(set(warnings))
 
 
 def title_of(folder: Path) -> str:
@@ -191,18 +251,21 @@ def main(argv=None):
                 shutil.rmtree(site / old)
             reg["reports"][key] = token()
         warnings += build_report(folder, site / reg["reports"][key])
+        reg.setdefault("built", {})[key] = time.time()
     write_site(site, reg, root)
-    reg_path.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf8")
+    save_registry(reg_path, reg)  # tokens are kept even if the deploy below fails, so the links stay the same
     for w in warnings:
         print("warning:", w, file=sys.stderr)
 
     if a.deploy:
         if not reg.get("project"):
             sys.exit("first deploy needs --project <name> (lowercase letters, digits, dashes)")
-        url = deploy(site, reg["project"], root / "publish-worker")
+        url = deploy(site, reg["project"], root / "publish-worker")  # exits on failure: nothing is marked live
         if url and not a.base_url:
             reg["base_url"] = url
-        reg_path.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf8")
+        # the whole site went up, so every report is live as last built
+        reg["deployed"] = {k: reg.get("built", {}).get(k, 0) for k in reg["reports"]}
+        save_registry(reg_path, reg)
     base = reg.get("base_url") or "<site-url>"
     print(f"site folder: {site}")
     if reg.get("hub"):
