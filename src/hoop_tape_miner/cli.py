@@ -18,6 +18,7 @@ STAGES = {
     "calibrate": ("hoop_tape_miner.calibrate", "court calibration keyframes for extract/recalib"),
     "tracks": ("hoop_tape_miner.build_tracks", "pass 2b: team clusters + court-space tracking"),
     "jersey": ("hoop_tape_miner.jersey", "pass 3: jersey numbers with Qwen3-VL"),
+    "stitch": ("hoop_tape_miner.stitch", "pass 3b: split / join tracklets into player chains (stitch.json, used by analyze)"),
     "analyze": ("hoop_tape_miner.analyze", "pass 4: identities, possessions, tactical metrics"),
     "track-eval": ("hoop_tape_miner.track_eval", "tracking quality: label-free proxies from a run; HOTA / IDF1 vs labelled MOT clips"),
     "review": ("hoop_tape_miner.review", "pass 5: annotated possession sheets for event review"),

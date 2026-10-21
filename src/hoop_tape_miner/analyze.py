@@ -93,6 +93,21 @@ def attack_directions(tr: pd.DataFrame, ft: pd.DataFrame, live: pd.Series, group
     return attack
 
 
+def stitched_tracks(run: Path, tr: pd.DataFrame, jersey: dict) -> tuple[pd.DataFrame, dict]:
+    """With RUN/stitch.json from `stitch` for this tracks.pkl: tracks with track = player chain (the old id kept as
+    `tracklet`) and the chains' pooled jersey numbers. Without it, or when it is stale, the inputs unchanged."""
+    from .stitch import apply_stitch, base_tracks, stitched_jersey
+    path = run / "stitch.json"
+    if not path.exists():
+        return tr, jersey
+    st = json.loads(path.read_text())
+    try:
+        return apply_stitch(tr, st), stitched_jersey(st)
+    except ValueError as e:
+        print(f"{path}: ignored, {e}")
+        return base_tracks(tr), jersey
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", required=True)
@@ -103,6 +118,7 @@ def main(argv=None):
     game = json.loads(Path(args.game).read_text(encoding="utf8"))
     tr = pd.read_pickle(run / "tracks.pkl")
     jersey = json.loads((run / "jersey.json").read_text()) if (run / "jersey.json").exists() else {}
+    tr, jersey = stitched_tracks(run, tr, jersey)
     nums = identities(tr, jersey, game.get("rosters", {}))
     (run / "player_numbers.json").write_text(json.dumps(nums, indent=0))
     tr["number"] = tr.track.map(nums)

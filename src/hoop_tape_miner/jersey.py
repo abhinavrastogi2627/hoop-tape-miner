@@ -80,6 +80,46 @@ def vote(reads: list[str], min_agree=2) -> str:
     return n if c >= min_agree and c > len(nums) / 2 else "none"
 
 
+def weighted_vote(reads, min_weight: float = 1.5, roster=None) -> tuple[str, float, float]:
+    """reads: [(number, confidence)] ("none" ignored; reads off a non-empty roster ignored) ->
+    (number, its weight, its share of the weight). The number wins with weight >= min_weight and more than half
+    the weight; with confidence 1 per read this is the old rule (at least 2 agreeing reads, a strict majority)."""
+    roster = {str(x) for x in roster or []}
+    w = Counter()
+    for n, c in reads:
+        n = str(n)
+        if n != "none" and (not roster or n in roster):
+            w[n] += float(c)
+    if not w:
+        return "none", 0.0, 0.0
+    n, top = w.most_common(1)[0]
+    share = top / sum(w.values())
+    return (n if top >= min_weight and share > 0.5 else "none"), top, share
+
+
+def crop_table(jersey: dict) -> pd.DataFrame:
+    """jersey.json -> one row per read crop: track, idx (detections.pkl row), frame, read, conf. Only for runs
+    written with crop records (see legacy_crop_reads for older ones)."""
+    rows = [dict(track=int(t), **c) for t, v in jersey.items() for c in v.get("crops", [])]
+    return pd.DataFrame(rows, columns=["track", "idx", "frame", "read", "conf"])
+
+
+def legacy_crop_reads(tr: pd.DataFrame, det: pd.DataFrame, jersey: dict, k: int = 6) -> pd.DataFrame:
+    """Older jersey.json files keep only the reads per tracklet. The crop pick is deterministic, so picking again
+    on the same tracks.pkl / detections.pkl gives the detection behind each read (tracklets whose pick count does
+    not match their reads are skipped). Returns the crop_table columns, conf 1."""
+    persons = det[det.kind == "person"]
+    rows = []
+    for tid, g in tr[tr.track.isin([int(t) for t in jersey])].groupby("track"):
+        reads = jersey[str(tid)]["reads"]
+        pk = pick_crops(g, persons[persons.frame.isin(g.frame)], k=k)
+        if len(pk) != len(reads):
+            continue
+        rows += [dict(track=int(tid), idx=int(i), frame=int(f), read=str(r), conf=1.0)
+                 for i, f, r in zip(pk.index, pk.frame, reads)]
+    return pd.DataFrame(rows, columns=["track", "idx", "frame", "read", "conf"])
+
+
 def main(argv=None):
     import argparse
     import json
