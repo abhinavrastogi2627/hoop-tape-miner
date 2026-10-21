@@ -42,6 +42,15 @@ def clip_path(folder: Path, start: str, end: str) -> Path:
     return folder / "clips" / f"{clip_name(start, end)}.mp4"
 
 
+def poster_of(mp4: Path) -> Path:
+    """The poster a page shows for a clip: the telestrated `<stem>.mark.jpg` (posters stage) when it is at least as
+    new as the plain first-frame `<stem>.jpg`, else the plain one (which may not exist)."""
+    jpg, mark = mp4.with_suffix(".jpg"), mp4.with_name(mp4.stem + ".mark.jpg")
+    if mark.exists() and (not jpg.exists() or mark.stat().st_mtime >= jpg.stat().st_mtime):
+        return mark
+    return jpg
+
+
 def find_clips(folder: Path, film: bool = True) -> list[tuple[str, str]]:
     """Unique (start, end) windows referenced by the folder's READMEs, in order of first appearance, then (film)
     the shot chart / playlist windows from the reviewed trips."""

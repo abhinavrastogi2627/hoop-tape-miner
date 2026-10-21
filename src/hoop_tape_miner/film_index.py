@@ -342,12 +342,13 @@ def _clip_attrs(e: Event, folder: Path | None, embed: bool, lang: str, names: di
     cap = caption(e, lang, names)
     if embed or not e.window or folder is None:
         return "", cap
-    from .clips import clip_path
+    from .clips import clip_path, poster_of
     mp4 = clip_path(folder, *e.window)
     if not mp4.exists():
         return "", cap
     rel = f"clips/{mp4.name}"
-    poster = f' data-poster="clips/{mp4.with_suffix(".jpg").name}"' if mp4.with_suffix(".jpg").exists() else ""
+    jpg = poster_of(mp4)
+    poster = f' data-poster="clips/{jpg.name}"' if jpg.exists() else ""
     return f' href="{rel}" data-src="{rel}"{poster}', cap
 
 

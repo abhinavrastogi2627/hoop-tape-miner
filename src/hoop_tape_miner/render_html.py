@@ -363,7 +363,7 @@ def clip_players(body: str, folder: Path | None, lang: str, embed: bool, windows
         if mp4 is None or not mp4.exists():
             print(f"warning: clips/{name}.mp4 missing; run `hoop-tape-miner clips {folder}`", file=sys.stderr)
             return f'<figure class="clip missing" id="{lang}-clip-{name}">{cap}<p>{UI[lang]["missing"]}</p></figure>'
-        poster = mp4.with_suffix(".jpg")
+        poster = clipmod.poster_of(mp4)  # the telestrated poster when the posters stage made one
         src = data_uri(mp4) if embed else f"clips/{mp4.name}"
         post = f' poster="{data_uri(poster) if embed else "clips/" + poster.name}"' if poster.exists() else ""
         return (f'<figure class="clip" id="{lang}-clip-{name}"><video controls playsinline preload="none"{post} src="{src}"></video>'
