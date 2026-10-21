@@ -207,6 +207,11 @@ def _v(g: Game) -> str:
     return str(g.video)
 
 
+def _ball_done(name: str) -> Callable[[Game], bool]:
+    """A ball step is done once its RUN file exists, or when the sheets it would feed are already written."""
+    return lambda g: (g.run / name).exists() or (g.review / "manifest.json").exists()
+
+
 STEPS = [
     Step("video", "agent", lambda g: bool(g.video and g.video.exists()),
          how="game.json `video` does not point to a file. Run `hoop-tape-miner fetch <league game url>` "
@@ -258,6 +263,19 @@ STEPS = [
     Step("official", "agent", lambda g: g.official.exists() or bool(g.game.get("no_league_data")),
          how="No {run}/official.json. `fetch` writes it for league games; for another league convert its data "
              '(playbook step 6), or set "no_league_data": true in {gj} to go on from the film alone.'),
+    # ball layers for the sheets (ball trail, CV shot-attempt markers): optional for coach-sheets, so a game whose
+    # sheets already exist skips them (re-run by hand to add the layers to an old review)
+    Step("ball-track", "cmd", _ball_done("ball_track.pkl"),
+         lambda g: [["ball-track", "--run", str(g.run), "--video", _v(g)]],
+         inputs=lambda g: [g.run / "detections.pkl", g.run / "camera.npz"]),
+    Step("rim-scan", "cmd", _ball_done("rim_scan.pkl"),
+         lambda g: [["rim-scan", "--run", str(g.run), "--game", str(g.gj)]], long=True,
+         inputs=lambda g: [g.video, g.run / "camera.npz"]),
+    Step("shot-proposals", "cmd", _ball_done("shot_proposals.json"),
+         lambda g: [["shot-proposals", "--run", str(g.run)]
+                    + (["--official", str(g.official)] if g.official.exists() else [])],
+         inputs=lambda g: [g.run / "rim_scan.pkl", *([g.official] if g.official.exists() else [])],
+         after=("analyze",)),
     Step("coach-sheets", "cmd", lambda g: (g.review / "manifest.json").exists() and parts_listed(g),
          lambda g: [["coach-sheets", "--run", str(g.run), "--game", str(g.gj), "--out", str(g.review), "--parts", "6",
                      "--video", _v(g)]], long=True,

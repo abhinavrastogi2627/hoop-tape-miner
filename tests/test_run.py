@@ -81,6 +81,15 @@ def test_status_lists_every_step_in_order(game):
     assert names[-2:] == ["film-script", "film"]
 
 
+def test_ball_steps_feed_the_sheets(game):
+    names = R.NAMES
+    assert (names.index("analyze") < names.index("ball-track") < names.index("rim-scan")
+            < names.index("shot-proposals") < names.index("coach-sheets"))
+    g = R.Game.load(game)
+    cmd = R.STEPS[names.index("shot-proposals")].args(g)[0]
+    assert cmd[0] == "shot-proposals" and ("--official" in cmd) == g.official.exists()
+
+
 def test_insights_step_order(game):
     names = R.NAMES
     assert names.index("summary") < names.index("insights") < names.index("critic") < names.index("facts")

@@ -151,7 +151,7 @@ uv run hoop-tape-miner analyze --run "$RUN" --game "$GJ"
 
 ## 7. Film review (the core)
 
-0. Ball and shot-attempt candidates (optional, before the sheets; needs `official.json` for labels):
+0. Ball and shot-attempt candidates (before the sheets; `run` does this as the `ball-track`, `rim-scan` and `shot-proposals` steps, and skips them when the sheets already exist; by hand, labels need `official.json`):
 
 ```
 uv run hoop-tape-miner ball-track --run "$RUN" > workspace/logs/ball-track.log 2>&1
