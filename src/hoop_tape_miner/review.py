@@ -38,6 +38,37 @@ def annotate(frame, dets, numbers):
     return out
 
 
+BALL_BGR = (0, 165, 255)  # orange trail
+ATTEMPT_BGR = (255, 255, 0)  # cyan arc + rim ring
+
+
+def draw_ball_trail(img, pts, color=BALL_BGR):
+    """Ball trail in place: pts = [(x, y), ...] oldest first (image px, NaN rows skipped); the newest point gets a
+    ring. Returns img."""
+    p = [(int(round(x)), int(round(y))) for x, y in pts if np.isfinite(x) and np.isfinite(y)]
+    for i in range(1, len(p)):
+        cv2.line(img, p[i - 1], p[i], color, 1 + 2 * i // len(p), cv2.LINE_AA)
+    if p:
+        cv2.circle(img, p[-1], 9, (0, 0, 0), 3, cv2.LINE_AA)
+        cv2.circle(img, p[-1], 9, color, 2, cv2.LINE_AA)
+    return img
+
+
+def draw_attempt(img, arc_px, rim_px, text, color=ATTEMPT_BGR):
+    """CV shot-attempt marker in place: the arc (image px), a ring on the rim and a label such as
+    'CV attempt? likely miss'. Returns img."""
+    p = [(int(round(x)), int(round(y))) for x, y in arc_px if np.isfinite(x) and np.isfinite(y)]
+    for a, b in zip(p, p[1:]):
+        cv2.line(img, a, b, color, 2, cv2.LINE_AA)
+    if rim_px is not None and np.isfinite(rim_px).all():
+        c = (int(round(rim_px[0])), int(round(rim_px[1])))
+        cv2.circle(img, c, 22, color, 2, cv2.LINE_AA)
+        org = (max(0, c[0] - 150), max(20, c[1] - 30))
+        cv2.putText(img, text, org, 0, 0.8, (0, 0, 0), 5, cv2.LINE_AA)
+        cv2.putText(img, text, org, 0, 0.8, color, 2, cv2.LINE_AA)
+    return img
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", required=True)
