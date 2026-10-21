@@ -136,8 +136,22 @@ def draw(jpg: Path, marks: list[tuple], t: float, tracks, out: Path) -> None:
                      "-q:v", "4", Path(part).resolve(), cwd=Path(tmp))
 
 
+STAMP = ".posters.json"
+
+
+def done(folder: Path) -> bool:
+    """mark_all ran after the last change to the folder's plain posters and README captions (its stamp file,
+    folder/.posters.json, is at least as new), so posters left plain do not keep the stage pending."""
+    from .pipeline import newer
+
+    stamp = Path(folder) / STAMP
+    plain = [p for p in (Path(folder) / "clips").glob("*.jpg") if not p.name.endswith(".mark.jpg")]
+    return stamp.exists() and newer(stamp, *plain, *Path(folder).glob("README*.md"))
+
+
 def mark_all(folder: Path, tracks, force: bool = False) -> dict:
-    """Mark every poster in folder/clips; returns counts {posters, marked, plain, skipped}."""
+    """Mark every poster in folder/clips; returns counts {posters, marked, plain, skipped} (also written to
+    folder/.posters.json, the stamp `done` reads)."""
     marks_by = clip_marks(folder)
     n = {"posters": 0, "marked": 0, "plain": 0, "skipped": 0}
     for jpg in sorted((folder / "clips").glob("*.jpg")):
@@ -160,6 +174,7 @@ def mark_all(folder: Path, tracks, force: bool = False) -> dict:
             continue
         draw(jpg, marks, t, tracks, out)
         n["marked"] += 1
+    media.write_json_atomic(Path(folder) / STAMP, n)
     return n
 
 

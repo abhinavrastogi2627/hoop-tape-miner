@@ -90,6 +90,12 @@ def test_ball_steps_feed_the_sheets(game):
     assert cmd[0] == "shot-proposals" and ("--official" in cmd) == g.official.exists()
 
 
+def test_tracking_steps_feed_the_pages(game):
+    names = R.NAMES
+    assert names.index("critic") < names.index("load") < names.index("matchups") < names.index("facts")
+    assert names.index("clips") + 1 == names.index("posters") < names.index("html")
+
+
 def test_insights_step_order(game):
     names = R.NAMES
     assert names.index("summary") < names.index("insights") < names.index("critic") < names.index("facts")

@@ -87,3 +87,7 @@ def test_mark_all_draws_ring_and_dims(tmp_path):
     assert sum(img.getpixel((160, 90))) >= 3 * 0x80 - 15  # the player's body: cut out of the dimming
     assert clips.poster_of(folder / "clips" / "0005-0009.mp4") == mark
     assert posters.mark_all(folder, fd.Tracks(df, 640, 360))["skipped"] == 1
+    assert posters.done(folder)  # the plain poster (nobody tracked) does not keep the stage pending
+    later = (folder / ".posters.json").stat().st_mtime + 10
+    os.utime(folder / "clips" / "0020-0025.jpg", (later, later))  # a re-cut poster: mark again
+    assert not posters.done(folder)

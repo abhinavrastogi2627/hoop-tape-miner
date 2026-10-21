@@ -212,6 +212,25 @@ def _ball_done(name: str) -> Callable[[Game], bool]:
     return lambda g: (g.run / name).exists() or (g.review / "manifest.json").exists()
 
 
+def _pages_built(g: Game) -> bool:
+    """Every report page of the game exists (the html step ran at least once)."""
+    return all((d / "index.html").exists() for d in g.reports())
+
+
+def _with_posters(tail: list[Step]) -> list[Step]:
+    """The shared tail with a games-only `posters` step right after `clips` (marks need the run's tracks). Done
+    when marked, or when the page was built after the current posters (an older game: no redraw after its QA)."""
+    from . import posters
+
+    def done(d: Path) -> bool:
+        plain = [p for p in (d / "clips").glob("*.jpg") if not p.name.endswith(".mark.jpg")]
+        return posters.done(d) or ((d / "index.html").exists() and _newer(d / "index.html", *plain))
+    step = Step("posters", "cmd", lambda g: all(done(d) for d in g.reports()),
+                lambda g: [["posters", str(d), "--video", _v(g)] for d in g.reports()])
+    i = [s.name for s in tail].index("clips") + 1
+    return [*tail[:i], step, *tail[i:]]
+
+
 STEPS = [
     Step("video", "agent", lambda g: bool(g.video and g.video.exists()),
          how="game.json `video` does not point to a file. Run `hoop-tape-miner fetch <league game url>` "
@@ -320,13 +339,24 @@ STEPS = [
                     for l in g.langs],
          inputs=lambda g: None if g.no_score_flow() else [g.official, g.lineup, g.gj],
          params=lambda g: {"langs": list(g.langs)}),
+    # tracking numbers for the pages (and the fact sheets): running load per stint, defender distance and matchups;
+    # a game whose pages are already built skips them (run them by hand, then `--redo html`)
+    Step("load", "cmd", lambda g: _exists("load.json")(g) or _pages_built(g),
+         lambda g: [["load", "--run", str(g.run), "--game", str(g.gj),
+                     *(["--lineup", str(g.lineup)] if g.lineup.exists() else [])]],
+         inputs=lambda g: [g.gj, *([g.lineup] if g.lineup.exists() else [])], after=("analyze",)),
+    Step("matchups", "cmd", lambda g: _exists("matchups.json")(g) or _pages_built(g),
+         lambda g: [["matchups", "--run", str(g.run), "--review", str(g.review), "--game", str(g.gj)]],
+         inputs=lambda g: [g.gj, *sorted(g.review.glob("coach_part*.json")),
+                           *([g.run / "shot_proposals.json"] if (g.run / "shot_proposals.json").exists() else [])],
+         after=("analyze",)),
     Step("facts", "agent",
          lambda g: (g.review / "players_facts.md").exists() and (not g.focus or (g.review / f"player{g.focus}_facts.md").exists()),
          how="Write the fact sheets (playbook step 9): {review}/players_facts.md and {review}/player{focus}_facts.md."),
     Step("reports", "agent", reports_done,
          how="Write the reports (playbook step 10): {readmes} in {folder} (prompts/coach_report.md) "
              "and in {folder}/player-{focus} (prompts/player_deep_dive.md), with clip markers on the key plays."),
-    *tail_steps(
+    *_with_posters(tail_steps(
         lambda g: g.video,
         listen_how="Write the narration scripts listen.<lang>.md for {langs} in {folder} and {folder}/player-{focus} "
                    "(playbook step 11, prompts/narration.md).",
@@ -336,7 +366,7 @@ STEPS = [
         film_script_how="Write the explained-video scripts {folder}/film.<lang>.md for {langs} from the finished team "
                         "report (playbook step 15, prompts/film.md); check them with `hoop-tape-miner film {folder} "
                         "--video {video} --dry`.",
-        film_run=True),
+        film_run=True)),
 ]
 NAMES = [s.name for s in STEPS]
 GATED = ("film-review", "insights", "critic")   # checks made stricter: finished games get the LEGACY note

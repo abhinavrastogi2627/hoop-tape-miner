@@ -34,6 +34,11 @@ All notable changes to this project are documented here. The format follows [Kee
 - `scout --opponent <name>`: a rematch dossier per opponent (`scout.json` + `scout.md`) with record, their top scorers by jersey, pooled Four Factors and points per trip, what decided each game and our past targets checked against the next game; `new-game --dossier` refreshes it.
 - Training sessions start from the last game: `train-new` stores that game's insights for the player's jersey (`game_focus`), and `train-summary` adds a "Game vs practice" make-rate table with sample-size labels.
 - Insights may carry `target_check` (`{number, max and/or min}`, the number also listed in `numbers`); the season page and the scout mark it met or missed in the next game.
+- `load` stage: running load per stint (distance, sprints, top speed, high-speed distance) with tracking coverage; low-coverage stints are flagged and gaps never filled. Shown on the player page.
+- `matchups` stage: defender distance at each reviewed shot (tight / contested / open / unknown) and who guarded whom, weighted by time; both pages get a "Matchups and shot defence" section.
+- `posters` stage: clip posters ring the players the clip is about, dim the rest and draw an arrow from fouler to fouled; pages use the marked poster.
+- `reels` stage: a 9:16 phone reel of one player's clips, the crop following the player, with a title card; never published.
+- `run` runs `load` and `matchups` before the fact sheets and `posters` right after `clips`; games whose pages are already built skip them.
 
 ### Changed
 
