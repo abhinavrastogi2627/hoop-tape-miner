@@ -213,6 +213,14 @@ def test_newer_tolerates_files_copied_together(tmp_path):
     assert not R._newer(a, b)
 
 
+def test_embed_runs_again_after_a_new_extract(game):
+    touch(game, "run/detections.pkl", "run/camera.npz", "run/embeddings.npz")
+    assert dict((n, ok) for n, _, ok in R.status(R.Game.load(game)))["embed"]
+    t = time.time()
+    os.utime(game / "run/detections.pkl", (t + 60, t + 60))
+    assert not dict((n, ok) for n, _, ok in R.status(R.Game.load(game)))["embed"]
+
+
 def test_official_json_next_to_game_json_is_found(game):
     touch(game, "official.json")
     assert R.Game.load(game).official == game / "official.json"

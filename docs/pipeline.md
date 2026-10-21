@@ -36,7 +36,7 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 | `calibrate` | `--video --times --out` [`--grid --points --propagate --step --detections --max-point-err`] | `--grid`: `grid_<t>.jpg` (pixel grid + numbered landmark map) to read without a GUI; `--points`: solve points.json, print PASS/WEAK per frame (exit 2 if weak); without either, click in a window. `<out>/keyframes.json`, overlays |
 | `extract` | `--video --out --calib` [`--fps 10 --start --end`] | per-frame detections (pickle), homographies (`camera.npz`, with `fps`: the rate actually sampled, video fps / the whole-frame step closest to `--fps`; `tracks`, `analyze` and `report` read it, old runs fall back to 10) |
 | `recalib` (optional) | `--run --video --calib` [`--start --end --dry`] | court homography re-run, court coordinates recomputed |
-| `embed` | `--run --video` [`--batch`] | SigLIP embeddings of on-court person crops |
+| `embed` | `--run --video` [`--batch`] | SigLIP embeddings of on-court person crops; incremental, and cached rows that no longer match detections.pkl (a new extract) are dropped and re-embedded (`tracks` refuses stale ones) |
 | `tracks` | `--run --video` [`--game --us --fps`] | pass 1: `cluster_montage.jpg`; pass 2 (after `cluster_names.json` with `us`/`them`/`ref`/`unk`): `tracks.pkl` |
 | `jersey` | `--run --video` [`--min-len --limit`] | jersey number per tracklet (VLM, voting) |
 | `analyze` | `--run --game` [`--fps`] | identities (roster numbers compared as strings), possessions, tactical metrics; attack direction decided once per half (periods 1-2 / 3+ with quarters); a half with no signal takes the other half's switched with a warning, no signal at all stops with an error |

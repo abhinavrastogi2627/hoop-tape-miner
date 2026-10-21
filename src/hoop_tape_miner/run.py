@@ -232,7 +232,7 @@ STEPS = [
     Step("extract", "cmd", extracted,
          lambda g: [["extract", "--video", _v(g), "--out", str(g.run), "--calib", str(g.run / "calib/keyframes.json"),
                      "--fps", "10"]], long=True),
-    Step("embed", "cmd", _exists("embeddings.npz"),
+    Step("embed", "cmd", lambda g: _newer(g.run / "embeddings.npz", g.run / "detections.pkl"),  # new extract: re-embed
          lambda g: [["embed", "--run", str(g.run), "--video", _v(g)]], long=True),
     Step("montage", "cmd", lambda g: any(_exists(f)(g) for f in ("cluster_montage.jpg", "cluster_names.json", "tracks.pkl")),
          lambda g: [["tracks", "--run", str(g.run), "--video", _v(g), "--game", str(g.gj)]], long=True,

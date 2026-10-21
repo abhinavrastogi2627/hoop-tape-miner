@@ -40,6 +40,31 @@ def central_crop(bgr, r):
     return np.ascontiguousarray(c[:, :, ::-1]) if c.size else None
 
 
+def save_cache(path: Path, idx: np.ndarray, emb: np.ndarray, det: pd.DataFrame):
+    """embeddings.npz: idx (detections.pkl row), emb, plus each row's frame / x1 / y1 as a fingerprint, so a
+    later extract that reuses the same row numbers for other detections is recognised (fresh_rows)."""
+    idx = np.asarray(idx, int)
+    d = det.loc[idx]
+    np.savez(path, idx=idx, emb=emb, frame=d.frame.to_numpy(int), x1=d.x1.to_numpy(np.float32),
+             y1=d.y1.to_numpy(np.float32))
+
+
+def fresh_rows(e, det: pd.DataFrame, missing_ok: bool = False) -> np.ndarray:
+    """Per cached row: True when detections.pkl still has the same detection at that idx (frame and box corner).
+    A row missing from `det` is stale, or fresh with missing_ok (det is a filtered subset). Caches written
+    before the fingerprint cannot be checked and count as fresh."""
+    idx = np.asarray(e["idx"], int)
+    if "frame" not in e.files:
+        return np.ones(len(idx), bool)
+    ok = np.isin(idx, det.index.to_numpy())
+    d = det.reindex(idx[ok])
+    same = (d.frame.to_numpy() == e["frame"][ok]) & (np.abs(d.x1.to_numpy() - e["x1"][ok]) < 0.5) \
+        & (np.abs(d.y1.to_numpy() - e["y1"][ok]) < 0.5)
+    out = np.full(len(idx), missing_ok)
+    out[ok] = same
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", required=True)
@@ -55,10 +80,15 @@ def main(argv=None):
     prev_idx, prev_emb = np.array([], int), None
     if (run / "embeddings.npz").exists():  # incremental: only embed new detections
         e = np.load(run / "embeddings.npz")
-        prev_idx, prev_emb = e["idx"], e["emb"]
+        keep = fresh_rows(e, det)
+        if not keep.all():
+            print(f"dropping {int((~keep).sum())} cached embeddings from another extract", flush=True)
+        prev_idx, prev_emb = e["idx"][keep], e["emb"][keep]
         p = p[~p.index.isin(prev_idx)]
     print(f"{len(p)} detections to embed", flush=True)
     if p.empty:
+        if prev_emb is not None:
+            save_cache(run / "embeddings.npz", prev_idx, prev_emb, det)
         return
     by_frame = {f: g for f, g in p.groupby("frame")}
     emb = Embedder()
@@ -90,7 +120,7 @@ def main(argv=None):
         out_emb.append(emb(buf)); out_idx += buf_idx
     idx = np.concatenate([prev_idx, np.array(out_idx)])
     emb = np.concatenate(([prev_emb] if prev_emb is not None else []) + out_emb).astype(np.float16)
-    np.savez(run / "embeddings.npz", idx=idx, emb=emb)
+    save_cache(run / "embeddings.npz", idx, emb, det)
     print("embedded", len(out_idx))
 
 

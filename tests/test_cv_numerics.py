@@ -88,6 +88,24 @@ def test_identities_accept_integer_rosters():
     assert analyze.identities(tr, jersey, {"us": [4, 17], "them": [9]}) == {1: "17", 2: "9"}
 
 
+# ---- embedding cache ------------------------------------------------------------------------------------------
+
+def test_embedding_cache_rows_from_another_extract_are_stale(tmp_path):
+    from hoop_tape_miner import embed
+    det = pd.DataFrame(dict(frame=[0, 0, 6, 6], x1=[10.0, 50.0, 12.0, 52.0], y1=[20.0, 20.0, 21.0, 21.0]))
+    emb = np.ones((4, 3), np.float16)
+    embed.save_cache(tmp_path / "embeddings.npz", det.index.to_numpy(), emb, det)
+    e = np.load(tmp_path / "embeddings.npz")
+    assert embed.fresh_rows(e, det).all()
+    redo = pd.DataFrame(dict(frame=[0, 6, 6, 12, 12], x1=[10.0, 12.0, 52.0, 9.0, 40.0], y1=[20.0, 21.0, 21.0, 5.0, 5.0]))
+    assert embed.fresh_rows(e, redo).tolist() == [True, False, False, False]   # same index, other detections
+    sub = det.iloc[[0, 2]]                                                      # filtered subset of the same extract
+    assert embed.fresh_rows(e, sub).tolist() == [True, False, True, False]
+    assert embed.fresh_rows(e, sub, missing_ok=True).all()
+    np.savez(tmp_path / "old.npz", idx=np.arange(4), emb=emb)                   # cache from before fingerprints
+    assert embed.fresh_rows(np.load(tmp_path / "old.npz"), det).all()
+
+
 # ---- slugs ----------------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("name, slug", [("Red Foxes", "red-foxes"), ("Bulls/Bears", "bulls-bears"),

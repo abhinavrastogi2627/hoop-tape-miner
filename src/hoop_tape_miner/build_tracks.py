@@ -60,7 +60,12 @@ def classify_colours(p: pd.DataFrame, run: Path, video: str, seed=0) -> pd.DataF
     from sklearn.cluster import KMeans
     from sklearn.linear_model import LogisticRegression
 
+    from .embed import fresh_rows
     e = np.load(run / "embeddings.npz")
+    stale = ~fresh_rows(e, p, missing_ok=True)   # p is the on-court subset of detections.pkl
+    if stale.any():
+        raise SystemExit(f"{run / 'embeddings.npz'}: {int(stale.sum())} embeddings belong to another extract of "
+                         "detections.pkl; run `hoop-tape-miner embed` again (it drops them), then tracks")
     p = p.loc[p.index.intersection(e["idx"])].copy()
     pos = pd.Series(np.arange(len(e["idx"])), index=e["idx"])
     X = e["emb"][pos.loc[p.index].to_numpy()].astype(np.float32)
