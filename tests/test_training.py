@@ -100,6 +100,19 @@ def test_time_formats():
     assert T.mmss(83.44) == "01:23.4"
     assert T.seconds("01:23.4") == pytest.approx(83.4)
     assert T.seconds("1:05") == 65
+    assert T.mmss(59.97) == "01:00.0" and T.mmss(119.96) == "02:00.0"
+    assert T.seconds("1:02:03.5") == pytest.approx(3723.5)
+    from hoop_tape_miner import move_scan as MS
+    assert MS._mmss(59.97) == "01:00.0"
+
+
+def test_earlier_sessions_sort_by_date_then_number(tmp_path):
+    for n in ("2026-10-19", "2026-10-20", "2026-10-20-2", "2026-10-20-10", "2026-10-20-11", "2026-10-21", "notes"):
+        (tmp_path / n).mkdir()
+        (tmp_path / n / "session.json").write_text("{}", encoding="utf8")
+    got = [p.name for p in T.earlier_sessions(tmp_path / "2026-10-20-11")]
+    assert got == ["2026-10-19", "2026-10-20", "2026-10-20-2", "2026-10-20-10"]
+    assert [p.name for p in T.earlier_sessions(tmp_path / "2026-10-20-2")] == ["2026-10-19", "2026-10-20"]
 
 
 REVIEW = [
@@ -141,6 +154,8 @@ def test_form_stats_split_by_result():
             {"result": "miss", "knee_bend": None}]
     f = T.form_stats(reps)["knee_bend"]
     assert (f["n"], f["make_mean"], f["miss_mean"]) == (3, 45.0, 20.0)
+    assert f["sd"] == pytest.approx(15.28, abs=0.01)  # sample sd of 40, 50, 20
+    assert T.form_stats(reps[:2])["knee_bend"]["sd"] is None  # two reps: no spread shown
 
 
 def _two_people_raw() -> dict:

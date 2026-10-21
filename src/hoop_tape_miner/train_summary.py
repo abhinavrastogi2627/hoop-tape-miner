@@ -178,7 +178,7 @@ def facts(sm: dict) -> str:
                        ("Finishing form", "form_finish")):
         if sm[key]:
             L += [f"## {title}", "", "| metric | mean | spread (sd) | n | makes | misses |", "|---|---|---|---|---|---|"]
-            L += [f"| {k} | {v['mean']} | {v['sd']} | {v['n']} | {dash(v['make_mean'])} | {dash(v['miss_mean'])} |" for k, v in sm[key].items()]
+            L += [f"| {k} | {v['mean']} | {dash(v['sd'])} | {v['n']} | {dash(v['make_mean'])} | {dash(v['miss_mean'])} |" for k, v in sm[key].items()]
             L += [""]
     dr = sm["dribble"]
     L += ["## Dribbling", "", f"- {dr['seconds'] / 60:.1f} min" + ("" if dr["confirmed"] else " (detected by pose, NOT confirmed by the review)")

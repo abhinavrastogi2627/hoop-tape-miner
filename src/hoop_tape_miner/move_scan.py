@@ -305,6 +305,7 @@ def who_sheet(seg: dict, raw: dict, out: Path, times: list[float] | None = None)
 
 
 def _mmss(x: float) -> str:
+    x = round(float(x), 1)  # round first: 59.97 -> '01:00.0', not '00:60.0'
     return f"{int(x // 60):02d}:{x % 60:04.1f}"
 
 

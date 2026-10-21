@@ -100,11 +100,24 @@ def path(folder: Path, m: dict, key: str, default: str) -> Path:
     return p if p.is_absolute() else Path(folder) / p
 
 
+def folder_order(name: str) -> tuple:
+    """Sort key of a dated session folder: '2026-10-20' < '2026-10-20-2' < '2026-10-20-10' < '2026-10-21'."""
+    m = re.match(r"(\d{4}-\d{2}-\d{2})(?:-(\d+))?$", name)
+    return (m.group(1), int(m.group(2) or 1), "") if m else (name[:10], 0, name)
+
+
+def earlier_folders(folder: Path, keep) -> list[Path]:
+    """Dated sibling folders that sort before this one and pass keep(), oldest first."""
+    folder = Path(folder)
+    me = folder_order(folder.name)
+    return sorted((d for d in folder.parent.iterdir()
+                   if d.is_dir() and re.match(r"\d{4}-\d{2}-\d{2}", d.name) and folder_order(d.name) < me and keep(d)),
+                  key=lambda d: folder_order(d.name))
+
+
 def earlier(folder: Path) -> list[Path]:
     """Sibling movement sessions that sort before this one, oldest first."""
-    folder = Path(folder)
-    return sorted(d for d in folder.parent.iterdir()
-                  if d.is_dir() and d.name < folder.name and is_movement(d) and re.match(r"\d{4}-\d{2}-\d{2}", d.name))
+    return earlier_folders(folder, is_movement)
 
 
 def secs(v) -> float:
