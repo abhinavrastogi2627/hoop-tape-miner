@@ -178,14 +178,21 @@ def finished_until_html(folder: Path):
                                         "listen.zh.mp3", "listen.en.mp3")))
 
 
+def qa_pass(folder: Path):
+    """What the QA agent writes after the browser check: PASS plus the stamp `run` printed."""
+    (folder / "qa.md").write_text(f"PASS: both pages\nchecked: {R.qa_hash(R.Game.load(folder))}\n", encoding="utf8")
+
+
 def test_publish_needs_the_flag_and_the_film_still_renders(game, capsys):
     finished_until_html(game)
-    touch(game, "qa.md", "film.zh.md", "film.en.md")
-    (game / "qa.md").write_text("PASS: both pages", encoding="utf8")
+    touch(game, "film.zh.md", "film.en.md")
     runner = Runner(game, {"html": ["index.html", "player-17/index.html"],
                            "film": ["film.zh.mp4", "film.en.mp4"]})
-    later = time.time() + 10
-    os.utime(game / "qa.md", (later, later))
+    assert R.drive(R.Game.load(game), runner=runner) == R.WAITING  # html built, QA not done yet
+    out = capsys.readouterr().out
+    stamp = R.qa_hash(R.Game.load(game))
+    assert "waiting for the agent: qa" in out and f"checked: {stamp}" in out
+    qa_pass(game)
     assert R.drive(R.Game.load(game), runner=runner) == 0
     stages = [c[0] for c in runner.calls]
     assert "publish" not in stages and stages[-1] == "film"
@@ -193,10 +200,36 @@ def test_publish_needs_the_flag_and_the_film_still_renders(game, capsys):
     assert "publish skipped" in out and "film.zh.mp4" in out
 
 
+def test_qa_pass_is_bound_to_the_checked_files(game):
+    finished_until_html(game)
+    touch(game, "index.html", "player-17/index.html")
+    g = R.Game.load(game)
+    (game / "qa.md").write_text("PASS", encoding="utf8")
+    assert not R.qa_done(g)  # no stamp: which pages were checked is unknown
+    qa_pass(game)
+    assert R.qa_done(g)
+    (game / "player-17" / "README.en.md").write_text("# edited after QA\n", encoding="utf8")
+    assert not R.qa_done(g)  # the page that would ship was never checked
+    (game / "qa.md").write_text(f"FAIL: clip 3 is black\nchecked: {R.qa_hash(g)}\n", encoding="utf8")
+    assert not R.qa_done(g)
+
+
+def test_child_stages_run_with_utf8_io(game):
+    touch(game, "run/calib/keyframes.json")
+    seen = []
+
+    def runner(cmd, **kw):
+        seen.append(kw.get("env") or {})
+        return subprocess.CompletedProcess(cmd, 1)
+    R.drive(R.Game.load(game), runner=runner)
+    assert seen and seen[0].get("PYTHONUTF8") == "1" and seen[0].get("PYTHONIOENCODING") == "utf-8"
+    assert "PATH" in seen[0] or "Path" in seen[0]  # the rest of the environment is kept
+
+
 def test_publish_with_flag_deploys_both_pages(game):
     finished_until_html(game)
     touch(game, "index.html", "player-17/index.html")
-    (game / "qa.md").write_text("PASS", encoding="utf8")
+    qa_pass(game)
     runner = Runner(game)
     R.drive(R.Game.load(game), publish=True, until="publish", runner=runner)
     assert runner.calls[0][0] == "publish" and "--deploy" in runner.calls[0]

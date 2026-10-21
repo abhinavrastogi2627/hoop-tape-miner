@@ -57,7 +57,8 @@ class Session(R.Game):
 
     def fill(self, how: str) -> str:
         return how.format(folder=self.folder, mj=self.gj, run=self.run, review=self.review, video=self.video,
-                          overlay=self.overlay, langs=", ".join(self.langs), player=self.game.get("player"))
+                          overlay=self.overlay, langs=", ".join(self.langs), player=self.game.get("player"),
+                          qa=R.qa_hash(self))
 
     def finished(self):
         print(f"[move] done. Page: {self.folder / 'index.html'}")
@@ -156,7 +157,8 @@ MOVE_STEPS = [
     R.Step("html", "cmd", R.html_done, lambda g: [["html", str(g.folder)]]),
     R.Step("qa", "agent", R.qa_done,
            how="QA: have the browser-check subagent serve {folder} over http and check the page in both languages, "
-               "the audio and every clip. Write the result to {folder}/qa.md, first word PASS when it passes."),
+               "the audio and every clip. Write the result to {folder}/qa.md, first word PASS when it passes."
+               + R.QA_STAMP),
     R.Step("publish", "cmd", R.published, lambda g: [["publish", str(g.folder), "--deploy"]]),
     R.Step("film-script", "agent", lambda g: all((g.folder / f"film.{l}.md").exists() for l in g.langs),
            how="Write the explained-video scripts {folder}/film.<lang>.md for {langs} from the finished report "
