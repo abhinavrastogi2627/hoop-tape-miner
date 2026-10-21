@@ -41,9 +41,20 @@ def load_reviews(review_dir: Path) -> list[dict]:
 
 # ---- validation ----------------------------------------------------------------------------------------------
 
+def slowmo_of(g: dict) -> float:
+    """How many times slower than real life a segment's source plays: gait.json "slowmo", else real_fps / scan_fps
+    (gait.json from before "slowmo" was written), else 1."""
+    if g.get("slowmo"):
+        return float(g["slowmo"])
+    r, s = g.get("real_fps"), g.get("scan_fps")
+    return max(1.0, round(float(r) / float(s), 2)) if r and s else 1.0
+
+
 def validate(gaits: dict[str, dict], labels: dict) -> dict:
     """Per labelled side segment: detected contacts inside the labelled window vs the hand labels (gait.compare_contacts
-    with a tolerance of 3 frames, at least 0.05 s), take-off check for layups, and `pass` (gait.gate). `window` = the
+    with a tolerance of 3 frames, at least 0.05 s), take-off check for layups, and `pass` (gait.gate). Label and
+    detection times are source seconds; they are compared in real seconds (divided by the segment's slowmo), so the
+    tolerance, the MAE (mae_s, tol_s) and the gate are all in real time and frames at the real fps. `window` = the
     label strip span [lo, hi] in source seconds (default: the labelled contacts +- the tolerance)."""
     out = {}
     for sid, lab in labels.items():
@@ -51,19 +62,22 @@ def validate(gaits: dict[str, dict], labels: dict) -> dict:
         if not g.get("measurable"):
             continue
         fps = float(g.get("real_fps") or g.get("scan_fps") or 30)
+        k = slowmo_of(g)
         tol = max(0.05, 3 / fps)
         cons = lab.get("contacts") or []
-        lo, hi = lab.get("window") or ((min(c["on"] for c in cons) - tol, max(c["on"] for c in cons) + tol)
+        lo, hi = lab.get("window") or ((min(c["on"] for c in cons) - tol * k, max(c["on"] for c in cons) + tol * k)
                                         if cons else (None, None))
         det = [c for c in g.get("contacts") or [] if lo is not None and lo <= c["on"] <= hi]
-        chk = G.compare_contacts(det, cons, tol)
+        real = lambda cs: [dict(c, on=c["on"] / k) for c in cs]
+        chk = G.compare_contacts(real(det), real(cons), tol)
         ok = G.gate(chk, fps)
         to_lab, to_det = lab.get("takeoff"), (g.get("layup") or {}).get("takeoff_t")
         if to_lab is not None:
-            chk["takeoff_err_s"] = None if to_det is None else round(abs(to_det - to_lab), 3)
-            ok = ok and to_det is not None and abs(to_det - to_lab) <= tol
-        out[sid] = dict({k: (round(v, 3) if isinstance(v, float) else v) for k, v in chk.items()}, fps=fps, tol_s=tol,
-                        **{"pass": bool(ok)})
+            err = None if to_det is None else abs(to_det - to_lab) / k
+            chk["takeoff_err_s"] = None if err is None else round(err, 3)
+            ok = ok and err is not None and err <= tol + 1e-9
+        out[sid] = dict({k_: (round(v, 4) if isinstance(v, float) else v) for k_, v in chk.items()}, fps=fps,
+                        slowmo=k, tol_s=tol, **{"pass": bool(ok)})
     return out
 
 

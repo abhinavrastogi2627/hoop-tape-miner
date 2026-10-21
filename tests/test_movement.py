@@ -360,6 +360,33 @@ def test_gate_hides_metric():
     assert "| sprint/side/trunk_lean@accel |" not in text and "No measurement is shown" in text
 
 
+def test_gate_slowmo_in_source_time():
+    """A 240 fps clip exported to play at 30 (slowmo 8), scanned at 15 file fps = 120 real fps: labels one scanned
+    frame (1/15 source s) off the detections still pass; three frames off fail."""
+    from hoop_tape_miner import move_summary as MS
+    on = (100.0, 102.0, 104.0, 106.0)  # source seconds, 0.25 real s apart
+    g = {"S01": _gait(contacts=on, fps=120.0, scan_fps=15.0, slowmo=8)}
+    one = {"S01": {"contacts": [{"foot": "LR"[k % 2], "on": c + 1 / 15} for k, c in enumerate(on)]}}
+    v = MS.validate(g, one)["S01"]
+    assert v["pass"] and v["matched"] == 4 and abs(v["mae_s"] - 1 / 120) < 1e-3  # error in real seconds
+    three = {"S01": {"contacts": [{"foot": "LR"[k % 2], "on": c + 3 / 15} for k, c in enumerate(on)]}}
+    assert not MS.validate(g, three)["S01"]["pass"]
+    old = {"S01": _gait(contacts=on, fps=120.0, scan_fps=15.0)}  # gait.json from before "slowmo" was written
+    assert MS.validate(old, one)["S01"]["pass"]
+    lay = {"L1": _gait("L1", "layup", contacts=on, fps=120.0, scan_fps=15.0, slowmo=8, layup={"takeoff_t": 106.0})}
+    lab = {"L1": dict(one["S01"], takeoff=106.0 + 1 / 15)}
+    assert MS.validate(lay, lab)["L1"]["pass"]
+
+
+def test_scan_writes_slowmo(tmp_path):
+    from hoop_tape_miner import move_scan as MS
+    f = _session(tmp_path, [dict(id="S01", kind="sprint", view="side", source="a.mp4", **{"from": 0, "to": 16},
+                                 fps=30, scan_fps=15, slowmo=8)])
+    MS.scan_segments(f, scanner=_fake_scanner([]))
+    g = json.loads((tmp_path / "run" / "gait" / "S01.json").read_text())
+    assert g["slowmo"] == 8 and g["real_fps"] == 120
+
+
 def test_behind_view_no_metrics():
     from hoop_tape_miner import move_summary as MS
     assert MS.metrics({"S01": _gait(view="behind")}, {}) == {}
