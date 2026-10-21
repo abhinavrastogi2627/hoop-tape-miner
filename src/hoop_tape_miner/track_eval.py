@@ -46,9 +46,11 @@ def tracks_to_mot(tr: pd.DataFrame, frame0: int = 0, frame1: int | None = None, 
                              h=(s.y2 - s.y1).to_numpy())).sort_values(["frame", "id"]).reset_index(drop=True)
 
 
-def write_mot(mot: pd.DataFrame, path: str | Path, frame0: int = 0):
-    """MOT 1.1 txt for CVAT import (frames renumbered from 1 at frame0, considered=1, class 1, visibility 1)."""
-    out = mot.assign(frame=mot.frame - frame0 + 1, considered=1, cls=1, vis=1.0)
+def write_mot(mot: pd.DataFrame, path: str | Path, frame0: int = 0, step: int = 1):
+    """MOT 1.1 txt for CVAT import: video frame frame0 + k * step becomes clip frame k + 1 (a clip cut at the
+    sampled rate), considered=1, class 1, visibility 1."""
+    mot = mot[(mot.frame - frame0) % step == 0]
+    out = mot.assign(frame=(mot.frame - frame0) // step + 1, considered=1, cls=1, vis=1.0)
     out[MOT_COLS + ["considered", "cls", "vis"]].to_csv(path, header=False, index=False, float_format="%.1f")
 
 
@@ -174,8 +176,12 @@ def main(argv=None):
     out = {"proxy": proxy_metrics(tr, numbers, reads, fps)}
     f0 = round(args.gt_start * vfps)
     if args.export_mot:
-        write_mot(tracks_to_mot(tr, f0, f0 + round(args.gt_len * vfps)), args.export_mot, frame0=f0)
-        print(f"wrote {args.export_mot} (frame 1 = video frame {f0})")
+        cf = cam["frame"].astype(int)
+        f0 = int(cf[np.argmin(abs(cf - f0))]) if len(cf) else f0      # a frame extract kept
+        step = max(int(round(vfps / fps)), 1)
+        write_mot(tracks_to_mot(tr, f0, f0 + round(args.gt_len * vfps)), args.export_mot, frame0=f0, step=step)
+        print(f"wrote {args.export_mot}: clip frame 1 = video frame {f0}; cut the clip at {f0 / vfps:.3f} s with "
+              f"fps={fps:g} and score it with --gt-start {f0 / vfps:.3f} --gt-fps {fps:g}")
     if args.gt:
         gt = gt_to_video_frames(read_mot(args.gt), args.gt_start, args.gt_fps or fps, vfps)
         pred = tracks_to_mot(tr[tr.team.isin(TEAMS + ("ref",))], gt.frame.min(), gt.frame.max() + 1)

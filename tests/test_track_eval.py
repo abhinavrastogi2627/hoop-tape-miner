@@ -33,6 +33,15 @@ def test_tracks_to_mot_window_and_one_based_ids():
     assert mot.w.iloc[0] == 40 and mot.h.iloc[0] == 100
 
 
+def test_mot_prelabels_of_a_sampled_clip_round_trip(tmp_path):
+    tr = _tracks([(0, 720, "us", 10), (0, 726, "us", 12), (0, 729, "us", 13), (5, 732, "them", 90)])
+    p = tmp_path / "pre.txt"
+    te.write_mot(te.tracks_to_mot(tr, 720, 800), p, frame0=720, step=6)
+    back = te.read_mot(p)
+    assert back.frame.tolist() == [1, 2, 3]                       # frame 729 is off the 10 fps grid
+    assert te.gt_to_video_frames(back, 12.0, 10, 60).frame.tolist() == [720, 726, 732]
+
+
 def test_gt_frames_map_to_video_frames():
     gt = pd.DataFrame(dict(frame=[1, 2, 3], id=1, x=0.0, y=0.0, w=1.0, h=1.0))
     # a 10 fps clip cut at 12.0 s of a 60 fps video: clip frame k -> video frame 720 + 6 (k - 1)
