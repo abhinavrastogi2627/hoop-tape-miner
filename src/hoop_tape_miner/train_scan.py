@@ -11,6 +11,8 @@ trainer or partner in frame) and writes to the session's run folder:
   reps.json      shot / finish candidates with form metrics (training.find_reps); the film review confirms them
   dribble.json   dribble segments from wrist rhythm (training.find_dribbles), ball_seen when the ball was detected
   activity.json  per 5 s window: player visible share and hip speed; totals
+Both npz files store the inputs they were made from: pose_all.npz is scanned again when the video's content,
+--fps or the ball pass change, pose.npz is picked again from pose_all.npz when the seed or follow change.
 Weights download once to ~/.cache/hoop-tape-miner/. GPU when available, else CPU (slower, still fine for a short
 session).
 """
@@ -149,7 +151,7 @@ def scan(video: Path, fps: float = 15.0, ball: bool = True, t0: float = 0.0, t1:
         if len(batch) == BATCH:
             run(batch)
             batch = []
-        if n and n % (int(fps) * 60) == 0:
+        if n and n % max(1, int(fps) * 60) == 0:
             print(f"[train-scan] {t / 60:.0f} min", flush=True)
     if batch:
         run(batch)
@@ -216,8 +218,8 @@ def activity(d: dict, window: float = 5.0) -> dict:
 
 
 def write(run: Path, d: dict):
+    """reps.json, dribble.json and activity.json from the main player's pose (pose.npz is saved by pose_for)."""
     run.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(run / "pose.npz", **d)
     reps = T.find_reps(d["t"], d["kp"], d["conf"])
     drib = T.find_dribbles(d["t"], d["kp"], d["conf"], d["ball"] if np.isfinite(d["ball"]).any() else None)
     act = activity(d)
@@ -251,22 +253,40 @@ def main(argv=None):
         sys.exit(f"session video not found: {video}")
     seed = tuple(map(float, a.seed.split(","))) if a.seed else (tuple(s["seed"]) if s.get("seed") else None)
     follow = a.follow or s.get("follow") or "player"
-    if a.repick:
-        if not (run / "pose_all.npz").exists():
-            sys.exit(f"--repick needs {run / 'pose_all.npz'} (scans before this option kept only the main player)")
-        z = np.load(run / "pose_all.npz")
-        d = pick({k: z[k] for k in z.files}, seed, follow)
-        print("[train-scan] re-picked the player from pose_all.npz")
-    elif (run / "pose.npz").exists() and not a.force:
-        z = np.load(run / "pose.npz")
-        d = {k: z[k] for k in z.files}
-        print("[train-scan] reusing pose.npz (--force to re-run the models)")
-    else:
-        raw = scan(video, a.fps, not a.no_ball)
+    if a.repick and not (run / "pose_all.npz").exists():
+        sys.exit(f"--repick needs {run / 'pose_all.npz'} (scans before this option kept only the main player)")
+    write(run, pose_for(run, video, a.fps, not a.no_ball, seed, follow, a.force, a.repick))
+
+
+def pose_for(run: Path, video: Path, fps: float, ball: bool, seed, follow: str, force: bool = False,
+             repick: bool = False, scanner=None) -> dict:
+    """The main player's pose (pose.npz content), reusing the caches while their inputs are unchanged:
+    pose_all.npz is scanned again when the video's content, --fps or the ball pass changed (files from before keys
+    are reused); pose.npz is picked again from pose_all.npz when the seed or follow changed (or with --repick)."""
+    scanner = scanner or scan
+    rk = dict(video=fingerprint(video), fps=float(fps), ball=bool(ball))
+    pk = dict(raw=rk, seed=list(seed) if seed else None, follow=follow)
+    all_p, pose_p = run / "pose_all.npz", run / "pose.npz"
+    raw = None
+    if all_p.exists() and not force:
+        raw, k = load_npz(all_p)
+        if k is not None and not same_key(k, rk):
+            print("[train-scan] the video, --fps or the ball pass changed: scanning again")
+            raw = None
+    if pose_p.exists() and not force and not repick:
+        d, k = load_npz(pose_p)
+        if same_key(k, pk) or (raw is None and not all_p.exists() and k is None):
+            print("[train-scan] reusing pose.npz (--force to re-run the models)")
+            return d
+    if raw is None:
+        raw = scanner(video, fps, ball)
         run.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(run / "pose_all.npz", **raw)
-        d = pick(raw, seed, follow)
-    write(run, d)
+        save_npz(all_p, raw, rk)
+    else:
+        print("[train-scan] picked the player from pose_all.npz (seed / follow changed, or --repick)")
+    d = pick(raw, seed, follow)
+    save_npz(pose_p, d, pk)
+    return d
 
 
 if __name__ == "__main__":
