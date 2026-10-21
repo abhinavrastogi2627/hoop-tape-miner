@@ -188,8 +188,9 @@ FF_UI = {
     "zh": dict(title="四要素 Four Factors", side="", efg="有效命中率 eFG%", tov="失误率 TOV%", live="活球", dead="死球",
                orb="进攻篮板率 ORB%", ft="罚球率（罚中/出手）", poss="回合数", ppp="每回合得分",
                transition="转换进攻 每次得分", half_court="阵地进攻 每次得分", second_chance="二次进攻 每次得分",
-               after_live_turnover="对方活球失误后 每次得分", trips="次",
-               note="来源：联赛数据（命中）+ 录像复盘（出手、失误、篮板、回合）。百分比 = 每 100 次。",
+               after_live_turnover="对方活球失误后 每次得分", trips="次", trip="次",
+               note="来源：联赛数据（命中）+ 录像复盘（出手、失误、篮板、回合）。百分比 = 每 100 次。"
+                    "回合数 = 复盘的进攻次数减去抢到前场篮板后的二次进攻；每回合得分用录像里的得分。",
                factors=dict(efg="投篮（eFG%）", tov="失误（TOV%）", orb="进攻篮板（ORB%）", ft="罚球（罚球率）"),
                decided="决定比赛的因素：{f}，我们 {a} 对 对手 {b}，{who}领先 {gap} 个百分点（加权 {w}）。",
                us_word="我们", them_word="对手",
@@ -198,12 +199,13 @@ FF_UI = {
                dead="dead", orb="Offensive rebounding (ORB%)", ft="Free-throw rate (FTM/FGA)", poss="Possessions",
                ppp="Points per possession", transition="Transition, points per trip",
                half_court="Half-court, points per trip", second_chance="Second chance, points per trip",
-               after_live_turnover="After their live-ball turnover, points per trip", trips="trips",
+               after_live_turnover="After their live-ball turnover, points per trip", trips="trips", trip="trip",
                note="Sources: league sheet (makes) + film review (attempts, turnovers, rebounds, possessions). "
-                    "Percentages are per 100.",
+                    "Percentages are per 100. Possessions = reviewed trips minus second-chance trips (after an "
+                    "offensive rebound); points per possession uses the points seen on film.",
                factors=dict(efg="shooting (eFG%)", tov="turnovers (TOV%)", orb="offensive rebounding (ORB%)",
                             ft="free throws (FT rate)"),
-               decided="The factor that decided the game: {f}, us {a} vs them {b}, {gap} points in favour of {who} "
+               decided="The factor that decided the game: {f}, us {a} vs them {b}, {gap} percentage points in favour of {who} "
                        "(weighted {w}).",
                us_word="us", them_word="them",
                unclear="The factor that decided the game: unclear (sample or gap too small)."),
@@ -271,7 +273,8 @@ def four_factors_panel(folder: Path, names: dict | None = None, langs: list[tupl
 
         def ppp_cell(side, k):
             g = (pp.get(side) or {}).get(k) or {}
-            return f'{num(g.get("ppp"))} <small>({g.get("trips", 0)} {t["trips"]})</small>' if g.get("trips") else "–"
+            n = g.get("trips", 0)
+            return f'{num(g.get("ppp"))} <small>({n} {t["trip"] if n == 1 else t["trips"]})</small>' if n else "–"
         rows = [(t["efg"], _ff_pct(us.get("efg_pct")), _ff_pct(them.get("efg_pct"))),
                 (t["tov"], tov(us), tov(them)),
                 (t["orb"], orb(us), orb(them)),

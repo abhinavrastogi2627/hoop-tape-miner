@@ -279,7 +279,7 @@ def decided(us: dict, them: dict, min_poss: int = MIN_POSS) -> dict:
     fav = "us" if weighted[f] > 0 else "them"
     out.update(status="ok", factor=f, favours=fav, gap=gaps[f],
                text=(f"The factor that decided the game: {FACTOR_NAMES[f]}, us {us[key]} vs them {them[key]} "
-                     f"({abs(gaps[f])} points in favour of {fav}; weighted {abs(weighted[f])})."))
+                     f"({abs(gaps[f])} percentage points in favour of {fav}; weighted {abs(weighted[f])})."))
     return out
 
 

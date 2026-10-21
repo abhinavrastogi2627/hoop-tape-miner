@@ -383,7 +383,8 @@ def build(root: Path, season_id: str | None = None) -> tuple[dict, list[dict]]:
     games = [load_game_data(f) for f in game_folders(root)]
     if not games:
         sys.exit(f"no game folders with game.json under {root / 'teams'}")
-    sid = season_id or ws.profile().get("season") or f"{games[0]['date']}_{games[-1]['date']}"
+    first, last = games[0]["date"], games[-1]["date"]
+    sid = season_id or ws.profile().get("season") or (first if first == last else f"{first}_{last}")
     known = [g for g in games if g["result"]["source"]]
     rec = Counter(g["result"]["outcome"] for g in known)
     checks = [{"from": a["key"], "from_date": a["date"], "checked_in": b["key"], "checked_date": b["date"],
