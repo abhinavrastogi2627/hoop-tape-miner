@@ -7,6 +7,10 @@ any segment with "follow": "ball") on the segment's window of its *source* video
 real frames per second), picks the player and writes to the session's run folder:
   seg/<id>.raw.npz everyone the models saw; --repick chooses the player again from it without re-running them
   seg/<id>.npz     the player: t (source s), kp, conf, box, ball, size; reused on the next run (--force to redo)
+Both store the inputs they were made from ("key"): raw.npz is scanned again when the source video's content, the
+window, the scan rate or the ball pass changed; the player is chosen again from raw.npz when the picks, seed,
+anchor, release or follow changed, so a plain move-scan after filling who.json uses the picked person. A pick is
+pinned to its box ("xyxy") from the scan its sheet showed, so it survives a --force re-scan.
 The player, by the first identity source the segment has: "who" (an agent picked the player's numbered box on
 run/move_review/who_<id>.jpg; "more" adds picks at other times), followed through the window by the cheapest path
 over the detected boxes (movement between frames + how unlike the player each box looks, from the clothing colours of
@@ -42,6 +46,7 @@ MAX_MOVE = 1.5        # a box further than this many body heights from the last 
 PATH_W = 0.5          # best_path: weight of the session appearance cost (in spreads) against the move per frame
 JUMP_COST = 10.0      # best_path: cost of a move of more than MAX_MOVE body heights between two frames
 WHO_TILE_H = 420
+PIN_IOU = 0.3         # a pinned pick finds its box again after a re-scan by at least this overlap
 
 
 def ball_anchor(raw: dict, anchor_t: float) -> tuple[int, int] | None:
@@ -194,23 +199,62 @@ def best_path(boxes: list[np.ndarray], cost: list[np.ndarray] | None, anchors: d
     return [sel.get(i) for i in range(len(boxes))]
 
 
-def who_picks(seg: dict, raw: dict) -> dict[int, int]:
-    """{frame index: box} from the segment's "who" pick and its "more" picks. The main pick's caption time (rounded
+def _picks(seg: dict, raw: dict) -> list[tuple[int, dict]]:
+    """(frame index, pick) for the segment's "who" pick and its "more" picks. The main pick's caption time (rounded
     to 0.1 s) is snapped to the identity-sheet frame it belongs to; a "more" time to the nearest scanned frame, the
     same frame its sheet showed."""
     t = np.asarray(raw["t"], float)
     who = seg.get("who") or {}
     if not len(t) or who.get("box") is None or who.get("t") is None:
-        return {}
+        return []
     tw = M.secs(who["t"])
     sheet = min(who_times(seg, raw), key=lambda x: abs(x - tw))
     if abs(sheet - tw) <= 0.06:  # captions are rounded to 0.1 s: use the exact sheet frame the numbers belong to
         tw = sheet
-    out = {int(np.argmin(np.abs(t - tw))): int(who["box"])}
+    out = [(int(np.argmin(np.abs(t - tw))), who)]
     for p in who.get("more") or []:
         if p.get("box") is not None and p.get("t") is not None:
-            out[int(np.argmin(np.abs(t - M.secs(p["t"]))))] = int(p["box"])
+            out.append((int(np.argmin(np.abs(t - M.secs(p["t"])))), p))
     return out
+
+
+def _iou(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """IoU of box a (4,) with each of boxes b (M, 4), xyxy."""
+    w = np.clip(np.minimum(a[2], b[:, 2]) - np.maximum(a[0], b[:, 0]), 0, None)
+    h = np.clip(np.minimum(a[3], b[:, 3]) - np.maximum(a[1], b[:, 1]), 0, None)
+    inter = w * h
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1]) - inter
+    return inter / np.maximum(union, 1e-9)
+
+
+def who_picks(seg: dict, raw: dict) -> dict[int, int]:
+    """{frame index: box} from the segment's "who" pick and its "more" picks (see _picks). A pick pinned to its box
+    ("xyxy", written by pin_picks) finds that box again by overlap (IoU >= PIN_IOU), so it survives a re-scan that
+    numbers the boxes differently; a pinned pick with no such box is dropped. -1 stays -1."""
+    out, boxes = {}, valid_boxes(raw)
+    for i, p in _picks(seg, raw):
+        k = int(p["box"])
+        if k >= 0 and p.get("xyxy") is not None:
+            b = boxes[i]
+            iou = _iou(np.asarray(p["xyxy"], float), b) if len(b) else np.zeros(0)
+            if not len(iou) or iou.max() < PIN_IOU:
+                print(f"[move-scan] {seg.get('id')}: no box at {p['t']} overlaps the picked one; pick dropped")
+                continue
+            k = int(np.argmax(iou))
+        out[i] = k
+    return out
+
+
+def pin_picks(seg: dict, raw: dict) -> bool:
+    """Store the picked box ("xyxy") next to each pick's box number, from the scan the identity sheet was drawn
+    from; True when the segment's "who" changed."""
+    boxes, changed = valid_boxes(raw), False
+    for i, p in _picks(seg, raw):
+        k = int(p["box"])
+        if k >= 0 and p.get("xyxy") is None and k < len(boxes[i]):
+            p["xyxy"] = [round(float(x), 1) for x in boxes[i][k]]
+            changed = True
+    return changed
 
 
 def who_times(seg: dict, raw: dict) -> list[float]:
@@ -364,27 +408,40 @@ def scan_segments(folder: Path, force: bool = False, only: list[str] | None = No
             g = dict(id=sid, kind=seg["kind"], view="game", metrics=None, measurable=False)
         else:
             npz, raw_npz = run / "seg" / f"{sid}.npz", run / "seg" / f"{sid}.raw.npz"
-            raw = None
+            rk, raw = raw_key(seg), None
             if raw_npz.exists() and not force:
-                z = np.load(raw_npz)
-                raw = {k: z[k] for k in z.files}
+                raw, k = S.load_npz(raw_npz)
+                if k is not None and not S.same_key(k, rk):  # window, frame rate or source changed
+                    print(f"[move-scan] {sid}: the segment changed since its scan, scanning it again")
+                    raw = None
+            d = None
             if npz.exists() and not force and not repick:
-                z = np.load(npz)
-                d = {k: z[k] for k in z.files}
-            else:
-                if raw is None:
+                d, k = S.load_npz(npz)
+                if raw is not None:
+                    if not S.same_key(k, pick_key(seg, m, rk)):
+                        d = None  # picks, seed or anchor changed (or a track from before keys): choose again from raw
+                elif raw_npz.exists() or (k is not None and not S.same_key(k.get("raw"), rk)):
+                    d = None  # the scan is stale: run pose again
+            if d is None:
+                fresh = raw is None
+                if fresh:
                     a, b = M.seg_seconds(seg)
                     print(f"[move-scan] {sid} {seg['kind']}/{seg['view']} {seg['from']}-{seg['to']} at "
                           f"{seg.get('scan_fps')} fps", flush=True)
                     ball = seg["kind"] in BALL_KINDS or seg.get("follow") == "ball"
                     raw = scanner(Path(seg["source"]), float(seg.get("scan_fps") or 30), ball, a, b)
-                    np.savez_compressed(raw_npz, **raw)
+                    S.save_npz(raw_npz, raw, rk)
                     scanned.append(sid)
+                    if any(p.get("xyxy") is None and int(p["box"]) >= 0 for _, p in _picks(seg, raw)):
+                        print(f"[move-scan] warning: {sid} was scanned again and its who picks are box numbers of "
+                              "the old scan: check who_<id>.jpg again")
+                elif pin_picks(seg, raw):
+                    M.save(folder, m)
                 feats = None
                 if crowded(raw) and Path(seg["source"]).is_file():
-                    feats = cached_features(seg, raw, run / "seg" / f"{sid}.feat.npz", force)
+                    feats = cached_features(seg, raw, run / "seg" / f"{sid}.feat.npz", force or fresh)
                 d = pick_segment(seg, raw, feats, model)
-                np.savez_compressed(npz, **d)
+                S.save_npz(npz, d, pick_key(seg, m, rk))
             g = metrics(seg, d)
             g["crowded"] = raw is not None and crowded(raw)
             if g["crowded"] and (seg.get("who") or {}).get("box") is None and Path(seg["source"]).is_file():
@@ -424,13 +481,50 @@ def merge_who(m: dict, who_all: dict) -> bool:
         t = e.get("t") or (times[len(times) // 2] if times else None)
         if t is None:
             continue
-        new = {"t": t, "box": int(e["box"])}
-        more = [{"t": x["t"], "box": int(x["box"])} for x in e.get("more") or [] if x.get("box") is not None and x.get("t")]
+        old = seg.get("who") or {}
+        new = _keep_pin({"t": t, "box": int(e["box"])}, [old])
+        more = [_keep_pin({"t": x["t"], "box": int(x["box"])}, old.get("more") or [])
+                for x in e.get("more") or [] if x.get("box") is not None and x.get("t")]
         if more:
             new["more"] = more
         if seg.get("who") != new:
             seg["who"], changed = new, True
     return changed
+
+
+def _keep_pin(new: dict, olds: list[dict]) -> dict:
+    """A pick keeps the box it was pinned to (pin_picks) while its time and number stay the same."""
+    for o in olds:
+        if o.get("xyxy") is not None and o.get("t") == new["t"] and o.get("box") == new["box"]:
+            return dict(new, xyxy=o["xyxy"])
+    return new
+
+
+def raw_key(seg: dict) -> dict:
+    """What seg/<id>.raw.npz depends on: the source video's content, the window, the scan rate and the ball pass."""
+    return dict(source=S.fingerprint(Path(seg["source"])), window=list(M.seg_seconds(seg)),
+                scan_fps=float(seg.get("scan_fps") or 30),
+                ball=seg["kind"] in BALL_KINDS or seg.get("follow") == "ball")
+
+
+def pick_key(seg: dict, m: dict, rk: dict | None = None) -> dict:
+    """What seg/<id>.npz depends on: the raw scan and every identity input of pick_segment; with a who pick also the
+    session's other picks (they build the clothing-colour model)."""
+    key = dict(raw=rk or raw_key(seg), **{k: seg.get(k) for k in ("who", "anchor", "release", "seed", "follow")})
+    if (seg.get("who") or {}).get("box") is not None:
+        key["session_picks"] = {s["id"]: s["who"] for s in m.get("segments", [])
+                                if (s.get("who") or {}).get("box") is not None}
+    return key
+
+
+def pick_fresh(run: Path, seg: dict, m: dict) -> bool:
+    """True when seg/<id>.npz was picked with the segment's current identity inputs (pick_key)."""
+    npz = run / "seg" / f"{seg['id']}.npz"
+    if not npz.exists():
+        return False
+    z = np.load(npz)
+    key = json.loads(str(z["key"])) if "key" in z.files else None
+    return S.same_key(key, pick_key(seg, m))
 
 
 def session_model(m: dict, run: Path) -> dict | None:
@@ -441,8 +535,7 @@ def session_model(m: dict, run: Path) -> dict | None:
         raw_npz, feat_npz = run / "seg" / f"{seg['id']}.raw.npz", run / "seg" / f"{seg['id']}.feat.npz"
         if (seg.get("who") or {}).get("box") is None or not raw_npz.exists() or not feat_npz.exists():
             continue
-        z = np.load(raw_npz)
-        raw = {k: z[k] for k in z.files}
+        raw, _ = S.load_npz(raw_npz)
         feats = cached_features(seg, raw, feat_npz)
         samples += [(feats[i], k) for i, k in who_picks(seg, raw).items() if 0 <= k < len(feats[i])]
     return appearance_model(samples)

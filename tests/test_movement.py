@@ -232,6 +232,51 @@ def test_who_more_picks():
     assert MS.who_picks(seg, raw) == {15: 0, 27: 0}
 
 
+def _crossing_scanner(calls, swap=False):
+    def scanner(video, fps, ball, t0, t1):
+        calls.append(dict(t0=t0, t1=t1))
+        raw = _crossing()
+        if swap:  # a re-scan that lists the two people in the other order
+            for k in ("boxes", "kps", "confs"):
+                raw[k] = raw[k][:, [1, 0, 2]]
+        return raw
+    return scanner
+
+
+def test_plain_scan_repicks_after_who_and_window_change(tmp_path):
+    """who.json filled after the first scan: a plain move-scan (no --repick) follows the picked person, and the
+    picks survive a --force re-scan that numbers the boxes differently; a changed window re-runs pose."""
+    from hoop_tape_miner import move_scan as MS
+    f = _session(tmp_path, [dict(id="L1", kind="layup", view="behind", source="a.mp4", **{"from": 10, "to": 11})])
+    calls, run = [], tmp_path / "run"
+    MS.scan_segments(f, scanner=_crossing_scanner(calls))
+    y0 = lambda: np.load(run / "seg" / "L1.npz")["box"][0][1]
+    assert y0() == 180 and MS.pick_fresh(run, M.load(f)["segments"][0], M.load(f))  # the trainer, no pick yet
+    m = M.load(f)
+    m["segments"][0]["who"] = {"t": "00:10.0", "box": 0}
+    assert not MS.pick_fresh(run, m["segments"][0], m)  # a pick the track was not made with
+    (run / "move_review").mkdir(exist_ok=True)
+    (run / "move_review" / "who.json").write_text(json.dumps(
+        {"L1": {"times": ["00:10.0", "00:10.5", "00:11.0"], "t": "00:10.0", "box": 0,
+                "more": [{"t": "00:11.0", "box": 0}]}}))
+    assert MS.scan_segments(f, scanner=_crossing_scanner(calls)) == [] and len(calls) == 1
+    m = M.load(f)
+    assert y0() == 300 and MS.pick_fresh(run, m["segments"][0], m)  # the player, from the cached raw.npz
+    assert m["segments"][0]["who"]["xyxy"] == [160.0, 300.0, 240.0, 500.0]  # the pick is pinned to its box
+    MS.scan_segments(f, force=True, scanner=_crossing_scanner(calls, swap=True))
+    assert len(calls) == 2 and y0() == 300  # box 0 is now the trainer, the pinned box still finds the player
+    from types import SimpleNamespace
+    from hoop_tape_miner import move_run as MR
+    assert MR.who_done(SimpleNamespace(game=M.load(f), run=run))
+    stale = M.load(f)
+    stale["segments"][0]["who"]["box"] = 1  # a new pick the track was not made with
+    assert not MR.who_done(SimpleNamespace(game=dict(stale, who_checked=True), run=run))
+    m["segments"][0]["to"] = 10.9
+    M.save(f, m)
+    MS.scan_segments(f, scanner=_crossing_scanner(calls, swap=True))
+    assert len(calls) == 3 and calls[-1]["t1"] == 10.9
+
+
 def test_summary_drops_wrong_person_findings():
     from hoop_tape_miner import move_summary as MSum
     rv = [{"segments": [{"id": "L1", "identity_ok": True, "wrong_person": ["35:09.9-35:10.4"],

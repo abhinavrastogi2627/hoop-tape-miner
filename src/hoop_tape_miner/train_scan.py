@@ -71,6 +71,43 @@ def frames(video: Path, fps: float, t0: float = 0.0, t1: float | None = None):
 
 
 MAX_PEOPLE, MAX_BALLS = 6, 4  # per frame, kept in pose_all.npz (largest people, most confident balls)
+FP_BYTES = 1 << 20  # fingerprint: the first and last MiB of a video, plus its size
+
+
+# ---- cache keys ----------------------------------------------------------------------------------------------
+
+def fingerprint(path: Path) -> str:
+    """Content key of a video that survives a copy or a move: size + sha1 of its first and last MiB; "" when the
+    file is missing (the key then cannot tell, and a cache is reused)."""
+    import hashlib
+    p = Path(path)
+    if not p.is_file():
+        return ""
+    n = p.stat().st_size
+    h = hashlib.sha1(str(n).encode())
+    with open(p, "rb") as f:
+        h.update(f.read(FP_BYTES))
+        if n > 2 * FP_BYTES:
+            f.seek(-FP_BYTES, 2)
+            h.update(f.read(FP_BYTES))
+    return f"{n}:{h.hexdigest()[:16]}"
+
+
+def save_npz(path: Path, d: dict, key: dict | None = None) -> None:
+    """np.savez_compressed with the inputs the arrays were made from stored as "key" (a json string)."""
+    extra = {} if key is None else {"key": np.array(json.dumps(key, sort_keys=True))}
+    np.savez_compressed(path, **{k: v for k, v in d.items() if k != "key"}, **extra)
+
+
+def load_npz(path: Path) -> tuple[dict, dict | None]:
+    """(arrays, key) of a save_npz file; key None for files written before keys were stored."""
+    z = np.load(path)
+    key = json.loads(str(z["key"])) if "key" in z.files else None
+    return {k: z[k] for k in z.files if k != "key"}, key
+
+
+def same_key(stored: dict | None, key: dict) -> bool:
+    return stored is not None and json.dumps(stored, sort_keys=True) == json.dumps(key, sort_keys=True)
 
 
 def scan(video: Path, fps: float = 15.0, ball: bool = True, t0: float = 0.0, t1: float | None = None) -> dict:
