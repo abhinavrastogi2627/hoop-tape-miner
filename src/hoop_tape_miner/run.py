@@ -275,9 +275,15 @@ STEPS = [
     Step("jersey", "cmd", _exists("jersey.json"),
          lambda g: [["jersey", "--run", str(g.run), "--video", _v(g)]], long=True,
          inputs=lambda g: [g.run / "detections.pkl"], after=("tracks",)),
+    # stitch joins tracklets into player chains for analyze; a game analysed before stitch existed keeps its
+    # possessions (and so its review) unless stitch is run by hand
+    Step("stitch", "cmd", lambda g: _exists("stitch.json")(g) or _exists("possessions.pkl")(g),
+         lambda g: [["stitch", "--run", str(g.run), "--game", str(g.gj)]], long=True,
+         inputs=lambda g: [g.run / "jersey.json"], after=("tracks",)),
     Step("analyze", "cmd", _exists("possessions.pkl", "possession_metrics.pkl"),
          lambda g: [["analyze", "--run", str(g.run), "--game", str(g.gj)]], long=True,
-         inputs=lambda g: [g.run / "jersey.json", g.run / "camera.npz"], after=("tracks",),
+         inputs=lambda g: [g.run / "jersey.json", g.run / "camera.npz",
+                           *([g.run / "stitch.json"] if (g.run / "stitch.json").exists() else [])], after=("tracks",),
          params=lambda g: {k: g.game.get(k) for k in ("periods", "rosters")}),
     Step("official", "agent", lambda g: g.official.exists() or bool(g.game.get("no_league_data")),
          how="No {run}/official.json. `fetch` writes it for league games; for another league convert its data "

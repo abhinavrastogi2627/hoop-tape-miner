@@ -39,6 +39,9 @@ All notable changes to this project are documented here. The format follows [Kee
 - `posters` stage: clip posters ring the players the clip is about, dim the rest and draw an arrow from fouler to fouled; pages use the marked poster.
 - `reels` stage: a 9:16 phone reel of one player's clips, the crop following the player, with a title card; never published.
 - `run` runs `load` and `matchups` before the fact sheets and `posters` right after `clips`; games whose pages are already built skip them.
+- `stitch` stage (a `run` step between `jersey` and `analyze`): splits and joins tracklets into player chains (at most five per team) and pools jersey reads per chain; `analyze` uses it. Games analysed before keep their possessions unless it is run by hand.
+- `track-eval` stage: label-free tracking proxies from a run, plus HOTA / IDF1 against labelled MOT clips (`--export-mot` writes pre-labels).
+- `jersey` reads a pose torso crop behind a legibility gate and weights votes by read confidence (needs the yolo11s-pose weights); `tracks --tracking joint` tracks both teams together as an option.
 
 ### Changed
 

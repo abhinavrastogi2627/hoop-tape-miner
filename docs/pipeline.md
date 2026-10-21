@@ -38,9 +38,11 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 | `extract` | `--video --out --calib` [`--fps 10 --start --end`] | per-frame detections (pickle), homographies (`camera.npz`, with `fps`: the rate actually sampled, video fps / the whole-frame step closest to `--fps`; `tracks`, `analyze` and `report` read it, old runs fall back to 10) |
 | `recalib` (optional) | `--run --video --calib` [`--start --end --dry`] | court homography re-run, court coordinates recomputed |
 | `embed` | `--run --video` [`--batch`] | SigLIP embeddings of on-court person crops; incremental, and cached rows that no longer match detections.pkl (a new extract) are dropped and re-embedded (`tracks` refuses stale ones) |
-| `tracks` | `--run --video` [`--game --us --fps`] | pass 1: `cluster_montage.jpg`; pass 2 (after `cluster_names.json` with `us`/`them`/`ref`/`unk`): `tracks.pkl` |
-| `jersey` | `--run --video` [`--min-len --limit`] | jersey number per tracklet (VLM, voting) |
-| `analyze` | `--run --game` [`--fps`] | identities (roster numbers compared as strings), possessions, tactical metrics; attack direction decided once per half (periods 1-2 / 3+ with quarters); a half with no signal takes the other half's switched with a warning, no signal at all stops with an error |
+| `tracks` | `--run --video` [`--game --us --fps --tracking colour\|joint`] | pass 1: `cluster_montage.jpg`; pass 2 (after `cluster_names.json` with `us`/`them`/`ref`/`unk`): `tracks.pkl` with the class probabilities (`prob_<label>`); `--tracking joint` tracks everybody with one tracker and takes the team per tracklet (default `colour`: one tracker per team colour, see "Tracking quality") |
+| `jersey` | `--run --video` [`--min-len --limit --tracks --out --no-pose`] | `jersey.json`: number per tracklet from up to 6 crops each. yolo11s-pose finds the torso; a crop whose shoulders and hips are not both seen, or whose torso is side-on, is not read (`--no-pose`: the old upper-60% box crop, all read). Qwen3-VL reads the torso; each read keeps its probability, and the vote weights reads by it (>= 1.5 and a majority). Per crop record (`crops`: detection row, frame, read, conf, legible) for `stitch`. Reads tracklets (`tracklet` column) also after a stitch |
+| `stitch` | `--run` [`--game --tracks --jersey --out`, thresholds] | `stitch.json`: tracklets split and joined into player chains (below); `analyze` applies it when it matches `tracks.pkl` (else warns and ignores it). Older `jersey.json` files without crop records: the crops are picked again from `detections.pkl` (deterministic) |
+| `analyze` | `--run --game` [`--fps`] | identities (roster numbers compared as strings; with `stitch.json` a track is a player chain, the original id stays in `tracklet` / `team_raw`, non-players get team `extra`), possessions, tactical metrics; attack direction decided once per half (periods 1-2 / 3+ with quarters); a half with no signal takes the other half's switched with a warning, no signal at all stops with an error |
+| `track-eval` (optional) | `--run` [`--tracks --jersey --stitch --gt --gt-start --gt-fps --export-mot --gt-len --out`] | tracking quality as JSON: label-free proxies of a run (or of its stitch), and with `--gt` a labelled MOT clip: HOTA, DetA, AssA, IDF1, MOTA, ID switches (TrackEval, a dev dependency); `--export-mot` writes the tracks of a clip as MOT pre-labels |
 | `official` (optional; `fetch` does this for league links) | `--boxscore --pointchart --us-home --out` [`--video --official-video --fps`] | `official.json`: box score, score flow, video alignment (one league JSON format for now) |
 | `ball-track` | `--run` [`--video --out`] | `run/ball_track.pkl`: one ball per sampled frame from extract's candidates (motion-consistent tracklets, static objects dropped, gaps interpolated), smoothed per tracklet by a constant-velocity Kalman filter + RTS smoother that drops innovation outliers, plus the ball-to-rim distance per side in metres (camera pose from the court homography, rim at 3.05 m); `ball_track.json` (coverage raw vs track). No video pass. Feeds the ball trail on the coach sheets; near the rim the extract detections rarely see the ball, so shots come from `rim-scan` |
 | `rim-scan` | `--run` (`--game` or `--video`) [`--out --step 2 --from --to`] | `run/rim_scan.pkl`: ball-sized movers in the air at each rim. Per frame (every 2nd), a camera-facing patch above each rim (2.4 m wide, 2.6-4.6 m high, 3 cm cells) is rectified with the court homography, registered to the last second of patches (phase correlation), differenced against their median and cleaned with a 3x3 opening; blobs of ball size are kept. CPU only, about 5-6 min for a 36 min video; separate from `extract` (no re-run) |
@@ -83,6 +85,32 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 `uv run hoop-tape-miner <stage> -h` is authoritative; `docs/playbook.md` shows each stage with real paths. Team names, colours (`us.hex` / `them.hex`), focus player, periods, rosters, result and narration voices come from `game.json`.
 
 Current limits: the HTML page and narration know two languages, Chinese (`README.md`, `listen.zh.md`) and English (`README.en.md`, `listen.en.md`); team.json `languages` picks both (default) or one, and the drivers, `narrate` (default: the scripts present) and `html` (only the READMEs present, no switch for one) follow it; `official` reads one league's box-score/point-chart JSON format; court dimensions are FIBA.
+
+## Tracking quality
+
+ByteTrack breaks a player into many short tracklets (screens, occlusion, camera cuts), and a jersey is read on few of them. `stitch` turns tracklets into player chains offline, without re-running `extract`, in the spirit of global tracklet association (GTA):
+
+1. Re-ID space: an LDA fitted per game on the SigLIP embeddings of tracklets whose jersey vote is clear (class = team + number), so teammates in one kit separate (held-out AUC ~0.93-0.97 on a reference game vs ~0.7 for raw SigLIP cosine); team-centred SigLIP when fewer than 3 numbers are known.
+2. Split a tracklet where its jersey reads change number (A A .. B B, the cut placed where the appearance changes), where its team probability changes, or at an appearance jump.
+3. Join segments of one team that do not overlap, are reachable in court space (7 m/s plus 1.5 m), look alike (LDA cosine >= 0.9 within 2 s, 0.95 up to 6 s, with a small distance penalty) and do not carry two numbers; greedy by score, each join checked chain against chain.
+4. At most five per team: short chains (< 5 s) that are mostly the sixth or later of their team in a frame become team `extra` (bench, staff, duplicates).
+5. Numbers pooled per chain (confidence-weighted, roster-gated); one chain per team and number at a time, the heavier keeps it.
+
+Thresholds were set on a reference game by hiding the jersey reads of a random half of the voted tracklets and scoring how well chains carry the hidden numbers (`stitch.json` keeps the accepted `links` with gap, similarity and score for such checks).
+
+`track-eval --run RUN [--stitch stitch.json]` reports the label-free proxies: tracklets and their length (median, p90, share of player time in tracks >= 10 s), `id_coverage` (share of player rows whose track has a roster number), `mixed_tracks` / `implied_switches` (tracks whose reads hold two well-supported numbers), `number_conflict_frames` (two tracks of a team with one number in a frame) and `over5_frames` (frames with more than five tracks of a team).
+
+Joint tracking (`tracks --tracking joint`) was measured on the same game against the colour split: longer tracklets (median 3.9 s vs 3.1 s) but more mixed tracklets (59 vs 39) and many more frames with a sixth player per team (0.17 vs 0.06), because unsure, bench and staff detections stay in the tracker. So the colour split stays the default and `stitch` does the joining.
+
+### Labelling clips for HOTA / IDF1
+
+The proxies cannot see a wrong join between two unread fragments; three labelled 2-minute clips can. Not done yet; to do it:
+
+1. Pick 3 x 2 minutes of live play (a half-court set, a transition, a scramble with screens).
+2. `track-eval --run RUN --export-mot clip1_pre.txt --gt-start <about where it starts> --gt-len 120` snaps the start to a frame `extract` kept, writes the current tracks of the window as MOT 1.1 pre-labels (clip frame 1 = that frame) and prints the exact start `S` and rate `F` to cut with.
+3. Cut the clip on the same grid: `ffmpeg -ss S -t 120 -i <video> -vf fps=F -q:v 2 clip1/%06d.jpg`.
+4. In CVAT, create a task from the frames, import the pre-labels as "MOT 1.1", fix boxes and identities (one id per player for the whole clip; referees optional), export as "MOT 1.1". Keep the files in the game's workspace folder, never in the repo.
+5. Score: `track-eval --run RUN --gt clip1_gt.txt --gt-start S --gt-fps F` (add `--stitch RUN/stitch.json` to score the chains); only frames `extract` kept are scored. Needs `uv sync` with the dev group (TrackEval).
 
 ## Key design decisions
 

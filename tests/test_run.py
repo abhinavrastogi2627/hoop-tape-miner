@@ -81,6 +81,13 @@ def test_status_lists_every_step_in_order(game):
     assert names[-2:] == ["film-script", "film"]
 
 
+def test_stitch_runs_between_jersey_and_analyze(game):
+    names = R.NAMES
+    assert names.index("jersey") + 1 == names.index("stitch") == names.index("analyze") - 1
+    cmd = R.STEPS[names.index("stitch")].args(R.Game.load(game))[0]
+    assert cmd[:2] == ["stitch", "--run"] and "--game" in cmd
+
+
 def test_ball_steps_feed_the_sheets(game):
     names = R.NAMES
     assert (names.index("analyze") < names.index("ball-track") < names.index("rim-scan")

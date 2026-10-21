@@ -35,7 +35,7 @@ Steps in order (agent steps marked *):
 | periods* | 2 |
 | calib-grid, calibrate* | 3 |
 | extract, embed, montage | 4 |
-| clusters*, tracks, jersey, analyze | 5 |
+| clusters*, tracks, jersey, stitch, analyze | 5 |
 | official* | 6 |
 | ball-track, rim-scan, shot-proposals, coach-sheets, film-review*, features, coach-eval, summary*, insights*, critic* | 7 |
 | momentum, load, matchups | 8 |
