@@ -24,7 +24,10 @@ GATE_RECALL, GATE_PRECISION, GATE_MAE_FRAMES = 0.8, 0.8, 1.5  # hand-label check
 
 
 def _fps(t: np.ndarray) -> float:
-    return float(1 / np.median(np.diff(t))) if len(t) > 1 else 0.0
+    """Frame rate from the median gap between distinct timestamps (repeated ones would give inf); 0 when unknown."""
+    dt = np.diff(np.asarray(t, float))
+    dt = dt[np.isfinite(dt) & (dt > 0)]
+    return float(1 / np.median(dt)) if len(dt) else 0.0
 
 
 def _pair(kp: np.ndarray, i: int, j: int) -> np.ndarray:

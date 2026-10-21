@@ -473,6 +473,15 @@ def test_faults_merge():
     assert rows["MV-landing"]["seen"] == ["L01", "L02"] and rows["MV-landing"]["times"] == ["31:46.2", "32:40.0"]
     assert rows["MV-accel-posture"]["status"] == "hypothesis"  # running fault from a behind camera
     assert rows["MV-one-foot-takeoff"]["status"] == "good"
+    r3 = {"segments": [{"id": "L01", "faults": [{"status": "seen", "t": "1:00", "note": "no slug"}],
+                        "good": [{"t": "1:01"}]}]}
+    assert MS.faults([r3], gaits) == []  # items without a kb slug are skipped, not a KeyError
+
+
+def test_fps_ignores_repeated_timestamps():
+    from hoop_tape_miner import gait as G
+    assert G._fps(np.array([0.0, 0.0, 0.0, 0.1, 0.1, 0.2])) == pytest.approx(10.0)
+    assert G._fps(np.array([1.0, 1.0])) == 0.0 and G._fps(np.array([])) == 0.0
 
 
 def test_facts_unknown_not_zero():

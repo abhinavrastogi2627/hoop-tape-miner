@@ -202,6 +202,8 @@ def faults(reviews: list[dict], gaits: dict[str, dict]) -> list[dict]:
             side = (gaits.get(s["id"]) or {}).get("view") == "side"
             wrong = wrong_spans(s)
             for f in s.get("faults") or []:
+                if not f.get("kb"):  # a reviewer item without a knowledge-base slug cannot be filed
+                    continue
                 if f.get("status") in ("seen", "hypothesis") and in_spans(f.get("t"), wrong):
                     continue
                 st = f.get("status")
@@ -217,7 +219,7 @@ def faults(reviews: list[dict], gaits: dict[str, dict]) -> list[dict]:
                     if f.get("note"):
                         row["notes"].append(f"{s['id']}: {f['note']} ({f.get('confidence', '?')})")
             for gd in s.get("good") or []:
-                if in_spans(gd.get("t"), wrong):
+                if not gd.get("kb") or in_spans(gd.get("t"), wrong):
                     continue
                 row = good.setdefault(gd["kb"], {"segments": [], "times": [], "notes": []})
                 row["segments"].append(s["id"])
