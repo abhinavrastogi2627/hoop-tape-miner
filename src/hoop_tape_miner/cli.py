@@ -19,6 +19,7 @@ STAGES = {
     "tracks": ("hoop_tape_miner.build_tracks", "pass 2b: team clusters + court-space tracking"),
     "jersey": ("hoop_tape_miner.jersey", "pass 3: jersey numbers with Qwen3-VL"),
     "analyze": ("hoop_tape_miner.analyze", "pass 4: identities, possessions, tactical metrics"),
+    "track-eval": ("hoop_tape_miner.track_eval", "tracking quality: label-free proxies from a run; HOTA / IDF1 vs labelled MOT clips"),
     "review": ("hoop_tape_miner.review", "pass 5: annotated possession sheets for event review"),
     "coach-sheets": ("hoop_tape_miner.coach_review", "film-review sheets + lineup intervals for the coach review"),
     "merge-reviews": ("hoop_tape_miner.merge_reviews", "merge reviewed event parts after checking sheet coverage"),
