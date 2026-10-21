@@ -409,9 +409,9 @@ def readme_name(code: str) -> str:
 
 def report_langs(folder: Path) -> list[tuple]:
     """LANGS entries whose README exists in folder, in LANGS order (zh first); the first one is the default."""
-    langs = [l for l in LANGS if (folder / l[3]).exists()]
+    langs = [locale_entry for locale_entry in LANGS if (folder / locale_entry[3]).exists()]
     if not langs:
-        raise SystemExit(f"{folder} has no report README ({' / '.join(l[3] for l in LANGS)})")
+        raise SystemExit(f"{folder} has no report README ({' / '.join(locale_entry[3] for locale_entry in LANGS)})")
     return langs
 
 

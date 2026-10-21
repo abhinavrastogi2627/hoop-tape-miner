@@ -16,8 +16,8 @@ SIZE = (1280, 720)
 def synth_camera(centre=(14.0, -9.0, 7.5), look=(14.0, 7.5, 0.0), f=1900.0, size=SIZE):
     """3x4 P for a camera at `centre` looking at `look` (court metres, z up), square pixels, centred principal
     point; image v grows downwards."""
-    c, l = np.array(centre), np.array(look)
-    zc = (l - c) / np.linalg.norm(l - c)  # optical axis
+    c, look_point = np.array(centre), np.array(look)
+    zc = (look_point - c) / np.linalg.norm(look_point - c)  # optical axis
     xc = np.cross(zc, [0, 0, 1.0])
     xc /= np.linalg.norm(xc)  # image right
     yc = np.cross(zc, xc)  # image down

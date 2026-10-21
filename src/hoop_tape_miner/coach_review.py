@@ -496,7 +496,8 @@ def merge_event_answers(trips: list[dict], windows: list[dict], answers: dict, b
         log.append(f"{tag} {aid}: #{j} not taken, exceeds box score ({have} + {pts} > {cap})")
         return False
 
-    ok = lambda a: a.get("confidence") in ("high", "medium") and a.get("evidence_t")
+    def ok(a):
+        return a.get("confidence") in ("high", "medium") and a.get("evidence_t")
     by_key = {_trip_key(x): x for x in trips}
     for w in windows:
         ans = answers.get(int(w["window"]))

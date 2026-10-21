@@ -163,7 +163,7 @@ def pick(raw: dict, seed: tuple[float, float] | None = None, follow: str = "play
     """The main player's track from scan() output (pose.npz content): t, kp, conf, box, ball (nearest the
     player's hands), size. follow "player" = the seed / largest person by position; "ball" = whoever holds the
     ball (a trainer or partner in frame, see training.pick_ball_carrier)."""
-    ts, size = raw["t"], tuple(int(v) for v in raw["size"])
+    _ts, size = raw["t"], tuple(int(v) for v in raw["size"])
     valid = [np.isfinite(b[:, 0]) for b in raw["boxes"]]
     boxes = [b[m] for b, m in zip(raw["boxes"], valid)]
     if follow == "ball":

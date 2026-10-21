@@ -49,7 +49,7 @@ def summary_done(g: Session) -> bool:
 
 
 def report_done(g: Session) -> bool:
-    return all((g.folder / n).exists() for n in (*(P.readme(l) for l in g.langs), "plan.json"))
+    return all((g.folder / n).exists() for n in (*(P.readme(language) for language in g.langs), "plan.json"))
 
 
 TRAIN_STEPS = [

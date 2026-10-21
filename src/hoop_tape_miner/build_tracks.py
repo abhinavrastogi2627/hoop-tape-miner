@@ -130,7 +130,7 @@ def track_people(p: pd.DataFrame, teams: dict[str, str], fps: float, mode: str =
         p["colour"] = p.track.map(tracklet_colours(p))
     elif mode == "colour":
         p["track"] = -1
-        order = sorted(l for l in teams if l != "ref") + ["ref"]  # navy < teal: track ids as before
+        order = sorted(label for label in teams if label != "ref") + ["ref"]  # navy < teal: track ids as before
         for i, col in enumerate(order):
             m = p.colour == col
             ids = track_team(p[m], fps)

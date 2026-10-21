@@ -88,7 +88,7 @@ class Game(Unit):
     def finished(self):
         print("[run] done. Pages: " + ", ".join(str(d / "index.html") for d in self.reports()))
         print("[run] explained video (send it yourself, it is not published): "
-              + ", ".join(str(self.folder / f"film.{l}.mp4") for l in self.langs))
+              + ", ".join(str(self.folder / f"film.{language}.mp4") for language in self.langs))
 
     @classmethod
     def load(cls, folder: Path) -> "Game":
@@ -339,10 +339,10 @@ STEPS = [
              "needs the critic again.",
          errors=critic_errors),
     Step("momentum", "cmd",
-         lambda g: g.no_score_flow() or all((g.folder / localised("momentum.png", l)).exists() for l in g.langs),
+         lambda g: g.no_score_flow() or all((g.folder / localised("momentum.png", language)).exists() for language in g.langs),
          lambda g: [["momentum", "--official", str(g.official), "--game", str(g.gj), "--lineup",
-                     str(g.lineup), "--out", str(g.folder / localised("momentum.png", l)), "--lang", l]
-                    for l in g.langs],
+                     str(g.lineup), "--out", str(g.folder / localised("momentum.png", language)), "--lang", language]
+                    for language in g.langs],
          inputs=lambda g: None if g.no_score_flow() else [g.official, g.lineup, g.gj],
          params=lambda g: {"langs": list(g.langs)}),
     # tracking numbers for the pages (and the fact sheets): running load per stint, defender distance and matchups;

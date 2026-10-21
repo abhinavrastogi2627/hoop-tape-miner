@@ -39,7 +39,7 @@ SMALL = 1 << 20      # files below this size are signed by content, larger ones 
 def profile_langs() -> tuple:
     """Report languages from team.json `languages` (default zh + en); the page, voices and charts know zh and en."""
     langs = tuple(dict.fromkeys(workspace.profile().get("languages") or LANGS))
-    bad = [l for l in langs if l not in LANGS]
+    bad = [language for language in langs if language not in LANGS]
     if bad:
         sys.exit(f"team.json languages {list(langs)}: {bad} not supported (choose from {list(LANGS)})")
     return langs
@@ -90,7 +90,7 @@ class Unit:
     def fill_values(self) -> dict:
         """Placeholders for agent instructions ({folder}, {run}, {qa}, ...)."""
         return dict(folder=self.folder, run=self.run, review=self.review, video=self.video,
-                    langs=", ".join(self.langs), readmes=" + ".join(readme(l) for l in self.langs), qa=qa_hash(self))
+                    langs=", ".join(self.langs), readmes=" + ".join(readme(language) for language in self.langs), qa=qa_hash(self))
 
     def fill(self, how: str) -> str:
         return how.format(**self.fill_values())
@@ -138,7 +138,7 @@ class Session(Unit):
     def finished(self):
         print(f"[{self.LABEL}] done. Page: {self.folder / 'index.html'}")
         print(f"[{self.LABEL}] explained video (send it yourself, it is not published): "
-              + ", ".join(str(self.folder / f"film.{l}.mp4") for l in self.langs))
+              + ", ".join(str(self.folder / f"film.{language}.mp4") for language in self.langs))
         print(f"[{self.LABEL}] {self.PLAN}: {self.folder / 'plan.json'}")
 
 
@@ -302,7 +302,7 @@ def published(g: Unit) -> bool:
 
 
 def reports_done(g: Unit) -> bool:
-    return all((d / readme(l)).exists() for d in g.reports() for l in g.langs)
+    return all((d / readme(language)).exists() for d in g.reports() for language in g.langs)
 
 
 def clips_done(g: Unit) -> bool:
@@ -310,21 +310,21 @@ def clips_done(g: Unit) -> bool:
 
 
 def film_done(g: Unit) -> bool:
-    return all(newer(g.folder / f"film.{l}.mp4", g.folder / f"film.{l}.md") for l in g.langs)
+    return all(newer(g.folder / f"film.{language}.mp4", g.folder / f"film.{language}.md") for language in g.langs)
 
 
 def listen_done(g: Unit) -> bool:
-    return all(newer(d / f"listen.{l}.mp3", d / f"listen.{l}.md") for d in g.reports() for l in g.langs)
+    return all(newer(d / f"listen.{language}.mp3", d / f"listen.{language}.md") for d in g.reports() for language in g.langs)
 
 
 def html_inputs(g: Unit) -> list[Path]:
-    return [x for d in g.reports() for x in (*(d / readme(l) for l in g.langs), g.gj, *sorted(d.glob("listen.*.mp3")),
+    return [x for d in g.reports() for x in (*(d / readme(language) for language in g.langs), g.gj, *sorted(d.glob("listen.*.mp3")),
                                              *sorted(d.glob("clips/*.mp4")))]
 
 
 def html_done(g: Unit) -> bool:
     def inputs(d: Path) -> list[Path]:
-        return [*(d / readme(l) for l in g.langs), g.gj, *d.glob("listen.*.mp3"), *d.glob("clips/*.mp4")]
+        return [*(d / readme(language) for language in g.langs), g.gj, *d.glob("listen.*.mp3"), *d.glob("clips/*.mp4")]
     return all(newer(d / "index.html", *inputs(d)) for d in g.reports())
 
 
@@ -338,16 +338,16 @@ def tail_steps(video: Callable[[Unit], Path], listen_how: str, qa_how: str, film
         Step("clips", "cmd", clips_done, lambda g: [["clips", str(d), "--video", str(video(g))] for d in g.reports()],
              inputs=lambda g: [video(g)], again=("--force",)),      # a new video re-cuts every clip
         Step("listen-script", "agent",
-             lambda g: all((d / f"listen.{l}.md").exists() for d in g.reports() for l in g.langs), how=listen_how),
+             lambda g: all((d / f"listen.{language}.md").exists() for d in g.reports() for language in g.langs), how=listen_how),
         Step("narrate", "cmd", listen_done, lambda g: [["narrate", str(d), "--lang", *g.langs] for d in g.reports()],
-             inputs=lambda g: [d / f"listen.{l}.md" for d in g.reports() for l in g.langs]),
+             inputs=lambda g: [d / f"listen.{language}.md" for d in g.reports() for language in g.langs]),
         Step("html", "cmd", html_done, lambda g: [["html", str(d)] for d in g.reports()], inputs=html_inputs),
         Step("qa", "agent", qa_done, how=qa_how + QA_STAMP),
         Step("publish", "cmd", published, lambda g: [["publish", *map(str, g.reports()), "--deploy"]]),
-        Step("film-script", "agent", lambda g: all((g.folder / f"film.{l}.md").exists() for l in g.langs),
+        Step("film-script", "agent", lambda g: all((g.folder / f"film.{language}.md").exists() for language in g.langs),
              how=film_script_how),
         Step("film", "cmd", film_done, film_args, long=True,
-             inputs=lambda g: [*(g.folder / f"film.{l}.md" for l in g.langs), video(g)]),
+             inputs=lambda g: [*(g.folder / f"film.{language}.md" for language in g.langs), video(g)]),
     ]
 
 

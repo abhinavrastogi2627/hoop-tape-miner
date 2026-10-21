@@ -43,7 +43,7 @@ def game_folder(tmp_path, trips=TRIPS, cut=True):
     (review / "coach_part1.json").write_text(json.dumps(trips), encoding="utf8")
     (folder / "player-4").mkdir()
     for name in ("README.md", "README.en.md"):
-        (folder / "player-4" / name).write_text(f"# #4\n\nText.\n", encoding="utf8")
+        (folder / "player-4" / name).write_text("# #4\n\nText.\n", encoding="utf8")
     if cut:
         for d in (folder, folder / "player-4"):
             for a, b in clips.find_clips(d):

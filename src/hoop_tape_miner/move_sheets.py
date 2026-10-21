@@ -48,7 +48,8 @@ def draw_overlay(frame: np.ndarray, kp: np.ndarray, conf: np.ndarray, marks: dic
     img = frame.copy()
     marks = marks or {}
     ok = conf >= T.KP_MIN
-    pt = lambda i: (int(round(kp[i, 0])), int(round(kp[i, 1])))
+    def pt(i):
+        return (int(round(kp[i, 0])), int(round(kp[i, 1])))
     for a, b in BONES:
         if ok[a] and ok[b] and np.isfinite(kp[[a, b]]).all():
             col = COL_C if (a in LEFT) != (b in LEFT) else (COL_L if a in LEFT else COL_R)

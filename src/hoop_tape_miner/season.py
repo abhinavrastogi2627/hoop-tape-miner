@@ -460,14 +460,14 @@ def _signed(v) -> str:
 
 def svg_trend(games: list[dict], key: str, lang: str, colours: tuple[str, str]) -> str:
     """Small line chart of one factor per game, us vs them; a game without the number leaves a gap."""
-    w, h, l, r, top, bot = 360, 150, 34, 10, 12, 30
+    w, h, left_margin, r, top, bot = 360, 150, 34, 10, 12, 30
     vals = [((g.get("four_factors") or {}).get(s) or {}).get(key) if g.get("four_factors") else None
             for g in games for s in ("us", "them")]
     nums = [v for v in vals if v is not None]
     hi = max(nums + [10.0])
     hi = (int(hi / 10) + 1) * 10
     n = len(games)
-    xs = [l + (w - l - r) * (i + 0.5) / n for i in range(n)]
+    xs = [left_margin + (w - left_margin - r) * (i + 0.5) / n for i in range(n)]
 
     def y(v):
         return top + (h - top - bot) * (1 - v / hi)
@@ -475,8 +475,8 @@ def svg_trend(games: list[dict], key: str, lang: str, colours: tuple[str, str]) 
              f'font-family="system-ui, sans-serif" font-size="10">',
              f'<rect width="{w}" height="{h}" fill="#ffffff"/>']
     for t in (0, hi / 2, hi):
-        parts.append(f'<line x1="{l}" x2="{w - r}" y1="{y(t):.1f}" y2="{y(t):.1f}" stroke="#e3e3ec"/>'
-                     f'<text x="{l - 4}" y="{y(t) + 3:.1f}" text-anchor="end" fill="#6c6b84">{t:g}</text>')
+        parts.append(f'<line x1="{left_margin}" x2="{w - r}" y1="{y(t):.1f}" y2="{y(t):.1f}" stroke="#e3e3ec"/>'
+                     f'<text x="{left_margin - 4}" y="{y(t) + 3:.1f}" text-anchor="end" fill="#6c6b84">{t:g}</text>')
     for i, g in enumerate(games):
         parts.append(f'<text x="{xs[i]:.1f}" y="{h - bot + 14}" text-anchor="middle" fill="#6c6b84">'
                      f'{html.escape(g["date"][5:])}</text>')
@@ -491,8 +491,8 @@ def svg_trend(games: list[dict], key: str, lang: str, colours: tuple[str, str]) 
             else:
                 run.append(f"{x:.1f},{y(v):.1f}")
                 parts.append(f'<circle cx="{x:.1f}" cy="{y(v):.1f}" r="3" fill="{col}"/>')
-        parts.append(f'<rect x="{l + 6 + j * 70}" y="{h - 12}" width="10" height="3" fill="{col}"/>'
-                     f'<text x="{l + 20 + j * 70}" y="{h - 8}" fill="#221f45">{html.escape(T[lang][side])}</text>')
+        parts.append(f'<rect x="{left_margin + 6 + j * 70}" y="{h - 12}" width="10" height="3" fill="{col}"/>'
+                     f'<text x="{left_margin + 20 + j * 70}" y="{h - 8}" fill="#221f45">{html.escape(T[lang][side])}</text>')
     parts.append("</svg>")
     return "".join(parts)
 
@@ -687,7 +687,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     root = ws.root()
     season, games = build(root, a.season)
-    langs = tuple(l for l in (ws.profile().get("languages") or LANG_ORDER) if l in T) or LANG_ORDER
+    langs = tuple(language for language in (ws.profile().get("languages") or LANG_ORDER) if language in T) or LANG_ORDER
     out = a.out or root / "season" / season["season"]
     written = write(season, games, out, langs, not a.no_html)
     if a.brief:

@@ -152,11 +152,11 @@ def appearance_model(samples: list[tuple[np.ndarray, int]]) -> dict | None:
     Returns the mean player and mean other-person vectors and the spread of the score over the samples, or None
     when no frame shows anyone else."""
     P = [_unit(f[k]) for f, k in samples if k < len(f)]
-    O = [_unit(x) for f, k in samples for j, x in enumerate(f) if j != k]
-    if not P or not O:
+    others = [_unit(x) for f, k in samples for j, x in enumerate(f) if j != k]
+    if not P or not others:
         return None
-    cp, co = np.mean(P, axis=0), np.mean(O, axis=0)
-    sd = float(np.std([x @ co - x @ cp for x in P + O]))
+    cp, co = np.mean(P, axis=0), np.mean(others, axis=0)
+    sd = float(np.std([x @ co - x @ cp for x in P + others]))
     return {"player": cp, "other": co, "spread": sd if sd > 1e-6 else 1.0}
 
 
@@ -359,7 +359,8 @@ def metrics(seg: dict, d: dict) -> dict:
     k = M.slowmo(seg)
     t_src = np.asarray(d["t"], float)
     t = a + (t_src - a) / k  # real-time clock, equal to source time unless the file is slowed down
-    back = lambda x: None if x is None else a + (x - a) * k
+    def back(x):
+        return None if x is None else a + (x - a) * k
     kp, conf = d["kp"], d["conf"]
     contacts = G.foot_contacts(t, kp, conf)
     steps = G.step_metrics(t, kp, conf, contacts)

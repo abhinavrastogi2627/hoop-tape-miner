@@ -68,7 +68,8 @@ def validate(gaits: dict[str, dict], labels: dict) -> dict:
         lo, hi = lab.get("window") or ((min(c["on"] for c in cons) - tol * k, max(c["on"] for c in cons) + tol * k)
                                         if cons else (None, None))
         det = [c for c in g.get("contacts") or [] if lo is not None and lo <= c["on"] <= hi]
-        real = lambda cs: [dict(c, on=c["on"] / k) for c in cs]
+        def real(cs):
+            return [dict(c, on=c["on"] / k) for c in cs]
         chk = G.compare_contacts(real(det), real(cons), tol)
         ok = G.gate(chk, fps)
         to_lab, to_det = lab.get("takeoff"), (g.get("layup") or {}).get("takeoff_t")

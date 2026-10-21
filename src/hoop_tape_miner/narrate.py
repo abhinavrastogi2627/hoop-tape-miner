@@ -96,7 +96,8 @@ def stitch(parts: list[Path], out: Path, tmp: Path, gap: float = PAUSE_S, bell: 
     if not bell:
         seq = seq[:-1]  # a narration ends on the last word; a cue loop keeps its gap so the repeat breathes
     listing = tmp / "list.txt"
-    quote = lambda p: p.as_posix().replace("'", "'\\''")  # ffmpeg concat syntax: ' ends the quote, \' is a quote
+    def quote(p):
+        return p.as_posix().replace("'", "'\\''")  # ffmpeg concat syntax: ' ends the quote, \' is a quote
     listing.write_text("".join(f"file '{quote(p)}'\n" for p in seq), encoding="utf8")
     norm = ["-af", "loudnorm=I=-14:TP=-1.5:LRA=7"] if loud else []
     ffmpeg("-f", "concat", "-safe", "0", "-i", str(listing), *norm, *MP3, str(out))

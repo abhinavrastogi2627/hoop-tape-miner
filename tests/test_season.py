@@ -15,8 +15,9 @@ def write(p: Path, data) -> Path:
 
 
 def ff(us_efg, them_efg, us_poss=40):
-    side = lambda efg, poss: {"efg_pct": efg, "tov_pct": 20.0, "orb_pct": 30.0, "ft_rate_pct": 15.0,
-                              "possessions": poss, "ppp": 0.8}
+    def side(efg, poss):
+        return {"efg_pct": efg, "tov_pct": 20.0, "orb_pct": 30.0, "ft_rate_pct": 15.0,
+                                  "possessions": poss, "ppp": 0.8}
     return {"us": side(us_efg, us_poss), "them": side(them_efg, 42), "decided": {"factor": "efg"}}
 
 

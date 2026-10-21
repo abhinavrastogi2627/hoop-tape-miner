@@ -68,7 +68,8 @@ def has_audio(p: Path) -> bool:
 
 def concat(parts: list[Path], out: Path, workdir: Path) -> None:
     """Join same-format files without re-encoding (list file in `workdir`), web-ready (+faststart)."""
-    quote = lambda p: Path(p).as_posix().replace("'", "'\\''")  # concat syntax: ' ends the quote, \' is a quote
+    def quote(p):
+        return Path(p).as_posix().replace("'", "'\\''")  # concat syntax: ' ends the quote, \' is a quote
     listing = Path(workdir) / "list.txt"
     listing.write_text("".join(f"file '{quote(p)}'\n" for p in parts), encoding="utf8")
     ffmpeg("-f", "concat", "-safe", "0", "-i", listing, "-c", "copy", "-movflags", "+faststart", out)

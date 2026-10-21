@@ -138,7 +138,7 @@ def build_report(folder: Path, dest: Path) -> list[str]:
 
 
 def has_report(folder: Path) -> bool:
-    return any((folder / l[3]).exists() for l in render_html.LANGS)
+    return any((folder / locale_entry[3]).exists() for locale_entry in render_html.LANGS)
 
 
 def title_of(folder: Path) -> str:

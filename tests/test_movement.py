@@ -54,7 +54,8 @@ def test_create_and_extend(tmp_path, monkeypatch):
         out.write_bytes(b"reel")
         return [M.secs(s["to"]) - M.secs(s["from"]) + 0.01 for s in segs]
 
-    prober = lambda p: dict(duration=20.0, fps=30.0)
+    def prober(p):
+        return dict(duration=20.0, fps=30.0)
     f = MN.create([seg(source=str(src), to=5)], "17", "2026-10-20", prober=prober, builder=builder)
     m = M.load(f)
     assert m["kind"] == "movement" and f.name == "2026-10-20"
@@ -250,7 +251,8 @@ def test_plain_scan_repicks_after_who_and_window_change(tmp_path):
     f = _session(tmp_path, [dict(id="L1", kind="layup", view="behind", source="a.mp4", **{"from": 10, "to": 11})])
     calls, run = [], tmp_path / "run"
     MS.scan_segments(f, scanner=_crossing_scanner(calls))
-    y0 = lambda: np.load(run / "seg" / "L1.npz")["box"][0][1]
+    def y0():
+        return np.load(run / "seg" / "L1.npz")["box"][0][1]
     assert y0() == 180 and MS.pick_fresh(run, M.load(f)["segments"][0], M.load(f))  # the trainer, no pick yet
     m = M.load(f)
     m["segments"][0]["who"] = {"t": "00:10.0", "box": 0}

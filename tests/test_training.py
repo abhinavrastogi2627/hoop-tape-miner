@@ -254,8 +254,10 @@ def _person(x: float, y: float, s: float = 100.0) -> np.ndarray:
 
 
 def test_pick_ball_carrier_moves_to_whoever_holds_the_ball():
-    box = lambda x: np.array([x, 100, x + 60, 300], float)
-    kp = lambda x: np.tile([x + 30, 200], (17, 1)).astype(float)  # wrists at the box centre
+    def box(x):
+        return np.array([x, 100, x + 60, 300], float)
+    def kp(x):
+        return np.tile([x + 30, 200], (17, 1)).astype(float)  # wrists at the box centre
     cf = np.ones((2, 17))
     frames = [np.array([box(100), box(300)])] * 4
     kps = [np.array([kp(100), kp(300)])] * 4

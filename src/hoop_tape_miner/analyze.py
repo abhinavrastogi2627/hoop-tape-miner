@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 
 from .camera import sampled_fps
 from .court import LENGTH
@@ -51,13 +52,13 @@ def halves(n_periods: int) -> list[list[int]]:
 def _us_attacks_right(sig: dict) -> bool | None:
     """From the "offence stands further from the basket" signal per court half; None when there is none.
     sig[side] > 0: on that half, us stand further from its basket than them, so us attack it."""
-    r, l = sig["right"], sig["left"]
-    if np.isfinite(r) and np.isfinite(l):
-        return bool(r - l > 0)
+    r, left_signal = sig["right"], sig["left"]
+    if np.isfinite(r) and np.isfinite(left_signal):
+        return bool(r - left_signal > 0)
     if np.isfinite(r):
         return bool(r > 0)
-    if np.isfinite(l):
-        return not l > 0
+    if np.isfinite(left_signal):
+        return not left_signal > 0
     return None
 
 

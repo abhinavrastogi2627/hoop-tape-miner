@@ -13,7 +13,8 @@ HAVE_FFMPEG = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
 
 def test_scene_cmd_uses_the_crf_option(tmp_path):
     sc = film.Scene("card", "Why the run happened")
-    args = lambda **kw: film.scene_cmd(sc, 3.0, 0, 320, 180, tmp_path, None, False, [], "s.ass", "#5b4bd1", "o.mp4", **kw)
+    def args(**kw):
+        return film.scene_cmd(sc, 3.0, 0, 320, 180, tmp_path, None, False, [], "s.ass", "#5b4bd1", "o.mp4", **kw)
     default = args()
     assert default[default.index("-crf") + 1] == str(film.CRF) == "23"
     small = args(crf=30)
