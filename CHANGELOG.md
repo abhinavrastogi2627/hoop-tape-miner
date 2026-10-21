@@ -45,6 +45,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Training sessions: `"jersey": null` in `session.json` marks a guest (e.g. a friend filmed in the same video); no game focus or game-vs-practice rates are linked to them.
 - `run`, `train` and `move` share one driver (`pipeline.py`, with `media.py` and `timefmt.py` helpers). A step whose inputs or settings changed re-runs by itself, `--redo X` also re-runs the steps after X, and `--status` marks them `(stale: ...)`. Old folders count as done; their freshness records are written on the next run, never by `--status` or `--dry`. `clips` re-cuts with `--force` when its video changes; `move-scan` and `move-sheets` re-run with `--force`.
 - Default deliverables are the team page, the focus player's page (with narration and clips) and the explained video; the opponent dossier, court cues, replay, CV figures, event review and the single-file share are optional extras. `new-game` creates the opponent dossier only with `--dossier`.
 - The playbook starts with the one-command run; step numbers changed.

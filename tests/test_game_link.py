@@ -65,6 +65,7 @@ def test_jersey_from_session_player_or_profile(ws):
     assert game_link.jersey_for({"player": "alex"}, {"focus_player": "17"}) == "17"
     assert game_link.jersey_for({"player": "alex", "jersey": "8"}, {"focus_player": "17"}) == "8"
     assert game_link.jersey_for({"player": "alex"}, {}) is None
+    assert game_link.jersey_for({"player": "alex", "jersey": None}, {"focus_player": "17"}) is None
 
 
 def test_workspace_root_from_a_session_folder(ws):

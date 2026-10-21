@@ -39,7 +39,10 @@ def workspace_of(session_folder: Path) -> Path | None:
 
 
 def jersey_for(session: dict, prof: dict) -> str | None:
-    """session.json `jersey`, else a numeric `player`, else team.json focus_player; None when none is known."""
+    """session.json `jersey`, else a numeric `player`, else team.json focus_player; None when none is known or when
+    `jersey` is explicitly null (a guest who plays for no team of ours: no game link)."""
+    if "jersey" in session and session["jersey"] is None:
+        return None
     for v in (session.get("jersey"), session.get("player") if str(session.get("player") or "").isdigit() else None,
               prof.get("focus_player")):
         if v not in (None, ""):
