@@ -137,6 +137,7 @@ Clip windows of any video (side-view phone sprints in slow motion work best; tra
 | `narrate` | narration script → MP3; also on-court cue loops (`--chime --gap`, `--tight` for exact pauses) |
 | `html` | report folder → one bilingual HTML page |
 | `publish` | pages → private-link website on Cloudflare, one stable link per report |
+| `season` | every game → season page (results, Four Factors trends, targets checked, pooled on / off with shrinkage) and a pre-game listen script (`--brief`) |
 | `film` | explained video: narration over clips, freeze frames, court diagrams and charts, with subtitles |
 | `train` | one personal training session: phone videos → session page, explained video, next session's plan (`train-new`, `train-scan`, `train-sheets`, `train-summary` are its stages) |
 | `move` | one movement session: clip windows → movement page, explained video, training / fuel / recovery plan (`move-new`, `move-scan`, `move-sheets`, `move-summary` are its stages) |

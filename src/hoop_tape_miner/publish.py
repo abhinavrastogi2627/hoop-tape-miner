@@ -7,8 +7,9 @@ usage: hoop-tape-miner publish workspace/teams/<opponent>/<date> [workspace/team
 Each report folder gets a random, stable path: re-publishing after an edit overwrites the same page, so the
 link sent once keeps showing the latest version. Pages are the --share text (no local paths or repo links)
 with audio and clips kept as files next to them, which in-app browsers play better than embedded data.
-Team reports (not player-<N> folders) are also listed on a hub page with its own random path; personal
-reports are only reachable through their own link.
+Team reports (not player-<N> folders) are also listed on a hub page with its own random path, season pages
+(`hoop-tape-miner season`, a folder with season.json) pinned at the top; personal reports are only reachable
+through their own link.
 
 Everything is built in <workspace>/site/ (paths -> tokens in <workspace>/publish.json, both gitignored) and
 uploaded with `npx wrangler deploy` as Cloudflare Workers static assets (the successor of Pages; free plan,
@@ -145,10 +146,13 @@ def title_of(folder: Path) -> str:
     return m.group(1).strip() if m else folder.name
 
 
-def hub_page(entries: list[tuple[str, str, str]]) -> str:
-    """entries: (date, title, token) of team reports, newest first."""
-    items = "".join(f'<li><a href="../{t}/"><small>{html.escape(d)}</small>{html.escape(title)}</a></li>'
-                    for d, title, t in entries)
+def hub_page(entries: list[tuple[str, str, str]], seasons: list[tuple[str, str, str]] = ()) -> str:
+    """entries: (date, title, token) of team reports, newest first; seasons: (season id, title, token) of season
+    pages, listed first."""
+    items = "".join(f'<li class="season"><a href="../{t}/"><small>赛季 · Season {html.escape(d)}</small>'
+                    f'{html.escape(title)}</a></li>' for d, title, t in seasons)
+    items += "".join(f'<li><a href="../{t}/"><small>{html.escape(d)}</small>{html.escape(title)}</a></li>'
+                     for d, title, t in entries)
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -164,6 +168,7 @@ ul {{ list-style: none; margin: 0; padding: 0; }}
 li a {{ display: block; padding: 14px 16px; margin-bottom: 10px; background: #fff; border: 1px solid #dcdce6;
         border-radius: 10px; color: inherit; text-decoration: none; }}
 li a:hover {{ border-color: #5b4bd1; }}
+li.season a {{ border-color: #5b4bd1; border-width: 2px; }}
 small {{ display: block; color: #6c6b84; }}
 </style>
 </head>
@@ -177,19 +182,21 @@ def write_site(site: Path, reg: dict, root: Path) -> None:
     (site / "_headers").write_text(HEADERS, encoding="utf8")
     (site / "robots.txt").write_text(ROBOTS, encoding="utf8")
     (site / "index.html").write_text(BLANK, encoding="utf8")
-    team = []
+    team, seasons = [], []
     for key, t in reg["reports"].items():
         folder = root / key
         # player pages and personal (training, movement) sessions get their own link but are never on the team hub
         if (re.fullmatch(r"player-\w+", folder.name) or not has_report(folder)
                 or (folder / "session.json").exists() or (folder / "movement.json").exists()):
             continue
-        team.append((folder.name, title_of(folder), t))
-    if team:
+        # season pages (`hoop-tape-miner season`) are pinned above the games
+        (seasons if (folder / "season.json").exists() else team).append((folder.name, title_of(folder), t))
+    if team or seasons:
         reg.setdefault("hub", token())
         hub = site / reg["hub"]
         hub.mkdir(exist_ok=True)
-        (hub / "index.html").write_text(hub_page(sorted(team, reverse=True)), encoding="utf8")
+        (hub / "index.html").write_text(hub_page(sorted(team, reverse=True), sorted(seasons, reverse=True)),
+                                        encoding="utf8")
 
 
 def npx() -> str:

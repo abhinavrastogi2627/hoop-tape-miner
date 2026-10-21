@@ -279,6 +279,7 @@ uv run hoop-tape-miner publish "$G" "$G/player-<N>" --deploy [--project <name>] 
 
 - Each folder keeps the same random URL across updates: after any edit, publish again and the link already sent shows the new version. Links are stored in `workspace/publish.json`.
 - Team reports are also listed on a hub page (its link is printed); send the hub once and new games appear on it. `player-<N>` reports are only reachable through their own link: send each one only to that player.
+- The season page (see "Season page and pre-game brief" below) is published the same way, `publish workspace/season/<season-id> --deploy`: it keeps its own stable link and is pinned at the top of the hub.
 - Audio and clips stay as separate files behind a small Worker that serves the Range requests iPhones need for video. The explained video is never published.
 - A report counts as published (for `run`) only after `--deploy` succeeded; when wrangler fails, the links stay the same and the next `run --publish` tries again. `publish.json` is written atomically, with the previous version kept as `publish.json.bak`.
 - Pages are markdown only: raw HTML in a README shows as text, and only media files inside the report folder are copied to the site (anything else, e.g. `../` or an absolute path, is left out with a warning). The Worker sends a Content-Security-Policy, `nosniff`, `no-referrer` and `noindex` on every response; each page also pins its own script by hash.
@@ -310,6 +311,23 @@ Not part of the default run; make them when the user asks.
 | Figures from CV (shot zones, heat maps) | `report --run "$RUN" --out "$RUN/report" --game "$GJ" [--events "$RUN/events.json" --coverage "$RUN/review_coverage.json"]` |
 | Event review for shot charts | `review --run "$RUN" --video "$V" --game "$GJ"`; reviewers follow `docs/review_protocol.md`, then `merge-reviews --run "$RUN" --review review` |
 | Single sendable file (offline, or where workers.dev is blocked) | `html "$G" --share --out "$PWD/workspace/share/<us>_vs_<them>_<date>.html"`: embeds audio and clips, strips local paths; re-run QA on it |
+
+## Season page and pre-game brief
+
+A standalone stage, not a step of `run`: make it after a game is finished, or before the next one.
+
+```
+uv run hoop-tape-miner season [--season <id>] [--brief --opponent "<next opponent>"]   # writes workspace/season/<id>/
+uv run hoop-tape-miner narrate --script workspace/season/<id>/brief.zh.md            # and brief.en.md
+uv run hoop-tape-miner publish workspace/season/<id> --deploy                          # own link, pinned on the hub
+```
+
+- Reads every `workspace/teams/<opponent>/<date>/` game: result, official.json, the review's `summary.json` (Four Factors), `insights.json`, `plusminus.json` / `pm_<N>.json`, `lineup_intervals.json`. Of `<date>` and `<date>-v2` folders of one opponent only the last counts. Whatever an older game lacks is listed under "Missing data", never filled in.
+- The page: results, points per half, Four Factors per game (table + small SVG charts), last game's targets checked, recurring KB themes, per-player minutes and on / off pooled over the season, 5-player lineups.
+- Targets: each insight's `target_next_game` from game N is checked in game N+1 where a clause names a number as `summary <path>` (or `official <path>`) followed by "at most N", "at least N", "below N" ..., e.g. `Their fast-break scores (summary them.transition_scores) at most 4 (was 9)`. An insight may also carry a structured `"target": {"metric": "summary.all.us.turnovers", "op": "<=", "value": 10}`. Everything else shows as "not measurable". Write targets this way in step 7 so the season page can check them.
+- Small samples, our rule: a net per 10 minutes is `10 * net / (minutes + 20)`, i.e. 20 minutes of 0 net are added, which pulls short stints toward 0. Under 20 minutes or under 3 games is flagged "small sample". Lineups count only time slices with exactly 5 of our players in the lineup file (CV lineups often have gaps; then the section stays empty).
+- `--brief` writes `brief.<lang>.md`, a spoken script (about 5 minutes once edited): record, recurring themes (else the last game's themes), the last game's targets, and with `--opponent` our past results against them. Lines starting with `#` are notes, not read. Edit it, then `narrate --script`.
+- Preview without touching the workspace: `--out <folder>` (and `--no-html` to skip the page).
 
 ## Personal training sessions
 
