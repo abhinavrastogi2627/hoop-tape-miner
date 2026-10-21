@@ -151,6 +151,16 @@ uv run hoop-tape-miner analyze --run "$RUN" --game "$GJ"
 
 ## 7. Film review (the core)
 
+0. Ball and shot-attempt candidates (optional, before the sheets; needs `official.json` for labels):
+
+```
+uv run hoop-tape-miner ball-track --run "$RUN" > workspace/logs/ball-track.log 2>&1
+uv run hoop-tape-miner rim-scan --run "$RUN" --game "$GJ" > workspace/logs/rim-scan.log 2>&1   # CPU, ~6 min
+uv run hoop-tape-miner shot-proposals --run "$RUN" --official "$RUN/official.json" > workspace/logs/shots.log 2>&1
+```
+
+   `ball_track.pkl` draws the ball trail on the sheets; `shot_proposals.json` draws a cyan "CV attempt? made +2 / likely miss" marker on the rim and lists `cv_attempts` per possession in the part files. They are candidates for the reviewers to confirm or reject, never results: the label only says an official score event matched within the feed lag. On the reference game (numbers in `docs/optimization-backlog.md` item 1) about 4 in 5 candidates fell inside a reviewed shot trip, and about 1 in 3 reviewed makes had no candidate, so reviewers still look for shots without a marker. Rebuild existing sheets to get the layers (drop `--skip-sheets`).
+
 1. Build the coach sheets, part files and briefs:
 
 ```
