@@ -6,7 +6,9 @@ usage: hoop-tape-miner train-new <phone video> [<phone video> ...] [--player 17]
 The phone files are joined in the given order into `session.mp4` (rotation applied, 30 fps, H.264, long side
 --height px) in the media folder; their start offsets in the joined video are kept in session.json `sources`, so
 every time in the report can be traced back to a phone file. Targets from the previous session's plan.json are
-copied into `targets`, and the next train-summary checks them. Prints the session folder.
+copied into `targets`, and the next train-summary checks them. The latest game before the session (the player's
+jersey on our box score) seeds `game_focus`: that game's insights for the jersey, then the team's, with drill and
+next-game target (game_link.focus). Prints the session folder.
 --player defaults to team.json focus_player; --date to the first file's recording date (else its file date).
 """
 from __future__ import annotations
@@ -18,7 +20,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import media
+from . import game_link, media
 from . import training as T
 from . import workspace
 
@@ -94,15 +96,20 @@ def create(videos: list[Path], player: str, date: str | None = None, name: str |
     sources = joiner(videos, video, long_side)
     targets, from_session = previous_targets(folder)
     prof = workspace.profile()
+    jersey = game_link.jersey_for({"player": player}, prof)
+    root = game_link.workspace_of(folder)
+    focus = game_link.focus(root, jersey, date) if jersey and root else None
     s = dict(kind="training", player=str(player), name=name or "", date=date, title="",
              sources=sources, video=str(video.resolve()), run=str((media / "run").resolve()),
              hex=prof.get("hex") or "", plan=plan, targets=targets, targets_from=from_session,
-             rim=[], rim_checked=False)
+             rim=[], rim_checked=False, jersey=jersey, game_focus=focus)
     (folder / "session.json").write_text(json.dumps(s, indent=2, ensure_ascii=False) + "\n", encoding="utf8")
     print(f"[train-new] session {folder}")
     print(f"[train-new] video {video} ({sum(x['duration'] for x in sources) / 60:.1f} min)")
     if targets:
         print(f"[train-new] {len(targets)} targets from {from_session}")
+    if focus:
+        print(f"[train-new] game focus: {len(focus['insights'])} insights from {focus['game']}")
     return folder
 
 
