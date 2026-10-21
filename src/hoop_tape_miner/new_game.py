@@ -46,7 +46,7 @@ def scaffold(opponent: str, date: str, video: str | None = None, us_team: str | 
         dt.date.fromisoformat(date)
     except ValueError:
         raise SystemExit(f"--date must be YYYY-MM-DD, got {date!r}")
-    if not workspace.slug(opponent):
+    if not opponent.strip():
         raise SystemExit("--opponent must not be empty")
     folder = workspace.game_dir(opponent, date)
     folder.mkdir(parents=True, exist_ok=True)

@@ -59,7 +59,7 @@ def main(argv=None):
         print("dry run: refined", (q < 3).mean().round(3), "pred-only", (q == 50).mean().round(3))
         np.savez(run / "camera_dry.npz", H=H_all, frame=cam["frame"], t=cam["t"], quality=q_all, how=how_all.astype(str))
         return
-    np.savez(run / "camera.npz", H=H_all, frame=cam["frame"], t=cam["t"], quality=q_all, how=how_all.astype(str))
+    np.savez(run / "camera.npz", **{**cam, "H": H_all, "quality": q_all, "how": how_all.astype(str)})  # keeps fps
     # recompute court coordinates of every person detection
     Hinv = {int(f): np.linalg.inv(H) for f, H in zip(cam["frame"], H_all) if np.isfinite(H).all()}
     cx, cy = np.full(len(det), np.nan), np.full(len(det), np.nan)

@@ -47,12 +47,13 @@ class Session(R.Game):
     def load(cls, folder: Path) -> "Session":
         if not T.is_session(folder):
             sys.exit(f"{folder / 'session.json'} not found: start with `hoop-tape-miner train <phone videos>`")
-        langs = tuple(workspace.profile().get("languages") or R.LANGS)
+        langs = R.profile_langs()
         return cls(Path(folder), T.load_session(folder), langs)
 
     def fill(self, how: str) -> str:
         return how.format(folder=self.folder, sj=self.gj, run=self.run, review=self.review, video=self.video,
-                          langs=", ".join(self.langs), player=self.game.get("player"), qa=R.qa_hash(self))
+                          langs=", ".join(self.langs), readmes=" + ".join(R.readme(l) for l in self.langs),
+                          player=self.game.get("player"), qa=R.qa_hash(self))
 
     def finished(self):
         print(f"[train] done. Page: {self.folder / 'index.html'}")
@@ -72,7 +73,7 @@ def summary_done(g: Session) -> bool:
 
 
 def report_done(g: Session) -> bool:
-    return all((g.folder / n).exists() for n in ("README.md", "README.en.md", "plan.json"))
+    return all((g.folder / n).exists() for n in (*(R.readme(l) for l in g.langs), "plan.json"))
 
 
 TRAIN_STEPS = [
@@ -96,14 +97,14 @@ TRAIN_STEPS = [
                "read the sheets yourself. Re-run a part whose json does not parse or misses candidate ids."),
     R.Step("summary", "cmd", summary_done, lambda g: [["train-summary", str(g.folder)]]),
     R.Step("report", "agent", report_done,
-           how="Write the session report (playbook, training step 7, prompts/training_report.md): {folder}/README.md "
-               "(Chinese) and README.en.md from {folder}/facts.md, the memos in {review} and the figures, with clip "
+           how="Write the session report (playbook, training step 7, prompts/training_report.md): {readmes} "
+               "in {folder}, from {folder}/facts.md, the memos in {review} and the figures, with clip "
                "markers on the key reps; and {folder}/plan.json, the next session's drills with checkable targets."),
     R.Step("clips", "cmd", R.clips_done, lambda g: [["clips", str(g.folder), "--video", str(g.video)]]),
     R.Step("listen-script", "agent", lambda g: all((g.folder / f"listen.{l}.md").exists() for l in g.langs),
            how="Write the narration scripts {folder}/listen.<lang>.md for {langs} (prompts/narration.md; for a "
                "training session: what went well, what did not, and next session's plan, 2-3 minutes)."),
-    R.Step("narrate", "cmd", R.listen_done, lambda g: [["narrate", str(g.folder)]]),
+    R.Step("narrate", "cmd", R.listen_done, lambda g: [["narrate", str(g.folder), "--lang", *g.langs]]),
     R.Step("html", "cmd", R.html_done, lambda g: [["html", str(g.folder)]]),
     R.Step("qa", "agent", R.qa_done,
            how="QA: have the browser-check subagent serve {folder} over http and check the page in both languages, "

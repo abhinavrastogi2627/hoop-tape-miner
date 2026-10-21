@@ -246,6 +246,30 @@ def test_newer_tolerates_files_copied_together(tmp_path):
     assert not R._newer(a, b)
 
 
+def test_embed_runs_again_after_a_new_extract(game):
+    touch(game, "run/detections.pkl", "run/camera.npz", "run/embeddings.npz")
+    assert dict((n, ok) for n, _, ok in R.status(R.Game.load(game)))["embed"]
+    t = time.time()
+    os.utime(game / "run/detections.pkl", (t + 60, t + 60))
+    assert not dict((n, ok) for n, _, ok in R.status(R.Game.load(game)))["embed"]
+
+
+def test_languages_come_from_the_team_profile(game, tmp_path):
+    g = R.Game.load(game)
+    assert g.langs == ("zh", "en")                                    # default without a profile
+    (tmp_path / "team.json").write_text(json.dumps({"languages": ["en"]}), encoding="utf8")
+    g = R.Game.load(game)
+    assert g.langs == ("en",)
+    touch(game, "README.en.md", "player-17/README.en.md")
+    assert R.reports_done(g)                                          # no Chinese README needed
+    steps = {s.name: s for s in R.STEPS}
+    assert steps["narrate"].args(g)[0][-2:] == ["--lang", "en"]
+    assert [c[c.index("--out") + 1].endswith("momentum.en.png") for c in steps["momentum"].args(g)] == [True]
+    (tmp_path / "team.json").write_text(json.dumps({"languages": ["en", "fr"]}), encoding="utf8")
+    with pytest.raises(SystemExit, match="fr"):
+        R.Game.load(game)
+
+
 def test_official_json_next_to_game_json_is_found(game):
     touch(game, "official.json")
     assert R.Game.load(game).official == game / "official.json"
@@ -258,15 +282,48 @@ def test_redo_reruns_a_done_step(game):
     assert runner.calls and runner.calls[0][0] == "calibrate"
 
 
+def test_until_stops_when_the_step_is_already_done(game, capsys):
+    touch(game, "run/calib/grid_1.jpg")
+    runner = Runner(game)
+    assert R.drive(R.Game.load(game), until="calib-grid", runner=runner) == 0
+    assert not runner.calls and "stopped after calib-grid" in capsys.readouterr().out
+
+
+def test_until_stops_in_custom_step_lists(game, capsys):
+    """train / move pass their own steps to drive: --until applies there too."""
+    steps = [R.Step("a", "cmd", lambda g: True), R.Step("b", "cmd", lambda g: False, lambda g: [["b"]])]
+    runner = Runner(game)
+    assert R.drive(R.Game.load(game), until="a", runner=runner, steps=steps) == 0
+    assert not runner.calls
+
+
 def test_url_target_is_fetched_first(game, monkeypatch):
     import sys
     import types
     seen = []
-    fake = types.SimpleNamespace(main=lambda argv: seen.append(argv) or game)
+    fake = types.SimpleNamespace(main=lambda argv: seen.append(argv) or game, game_id=lambda url: "abc==")
     monkeypatch.setitem(sys.modules, "hoop_tape_miner.fetch", fake)
     import hoop_tape_miner
     monkeypatch.setattr(hoop_tape_miner, "fetch", fake, raising=False)
     R.main(["https://league.example/game/abc==/overview", "--status"])
+    assert seen == [["https://league.example/game/abc==/overview"]]
+
+
+def test_url_of_a_fetched_game_reuses_its_folder(game, monkeypatch, capsys):
+    """Re-entering the run loop with the league url must not fetch again (it would rewrite official.json)."""
+    g = json.loads((game / "game.json").read_text(encoding="utf8"))
+    g["league"] = {"kind": "glory", "game_id": "abc==", "url": "https://league.example/game/abc==/overview"}
+    (game / "game.json").write_text(json.dumps(g), encoding="utf8")
+    import sys
+    import types
+    seen = []
+    fake = types.SimpleNamespace(main=lambda argv: seen.append(argv) or game, game_id=lambda url: "abc==")
+    monkeypatch.setitem(sys.modules, "hoop_tape_miner.fetch", fake)
+    import hoop_tape_miner
+    monkeypatch.setattr(hoop_tape_miner, "fetch", fake, raising=False)
+    R.main(["https://league.example/game/abc==/overview", "--status"])
+    assert seen == [] and "already fetched" in capsys.readouterr().out
+    R.main(["https://league.example/game/abc==/overview", "--status", "--refetch"])
     assert seen == [["https://league.example/game/abc==/overview"]]
 
 

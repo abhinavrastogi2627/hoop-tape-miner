@@ -139,8 +139,12 @@ def build_report(folder: Path, dest: Path) -> list[str]:
     return sorted(set(warnings))
 
 
+def has_report(folder: Path) -> bool:
+    return any((folder / l[3]).exists() for l in render_html.LANGS)
+
+
 def title_of(folder: Path) -> str:
-    m = re.match(r"# (.*)", (folder / "README.md").read_text(encoding="utf8"))
+    m = re.match(r"# (.*)", render_html.first_readme(folder).read_text(encoding="utf8"))
     return m.group(1).strip() if m else folder.name
 
 
@@ -180,7 +184,7 @@ def write_site(site: Path, reg: dict, root: Path) -> None:
     for key, t in reg["reports"].items():
         folder = root / key
         # player pages and personal (training, movement) sessions get their own link but are never on the team hub
-        if (re.fullmatch(r"player-\w+", folder.name) or not (folder / "README.md").exists()
+        if (re.fullmatch(r"player-\w+", folder.name) or not has_report(folder)
                 or (folder / "session.json").exists() or (folder / "movement.json").exists()):
             continue
         team.append((folder.name, title_of(folder), t))
@@ -242,8 +246,8 @@ def main(argv=None):
     warnings = []
     for f in a.folders:
         folder = Path(f)
-        if not (folder / "README.md").exists():
-            sys.exit(f"{folder} has no README.md")
+        if not has_report(folder):
+            sys.exit(f"{folder} has no README.md / README.en.md")
         key = report_key(folder, root)
         old = reg["reports"].get(key)
         if a.new_link or not old:

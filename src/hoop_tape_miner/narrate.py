@@ -21,6 +21,7 @@ import argparse
 import asyncio
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -119,7 +120,8 @@ def render(src: Path, out: Path, lang: str, gap: float, bell: bool, loud: bool, 
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("folder", nargs="?", help="report folder with listen.<lang>.md")
-    ap.add_argument("--lang", nargs="+", default=list(VOICES), choices=list(VOICES))
+    ap.add_argument("--lang", nargs="+", choices=list(VOICES),
+                    help="languages to render (default: every listen.<lang>.md in the folder)")
     ap.add_argument("--script", type=Path, help="a single script file instead of a report folder")
     ap.add_argument("--out", type=Path, help="output mp3 for --script (default: next to it)")
     ap.add_argument("--gap", type=float, default=PAUSE_S, help="seconds of silence after each paragraph")
@@ -130,14 +132,17 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.script:
         vt = voices(load_game(a.script.parent))
-        lang = next((c for c in vt if a.script.name.endswith(f".{c}.md")), a.lang[0])
+        lang = next((c for c in vt if a.script.name.endswith(f".{c}.md")), (a.lang or list(VOICES))[0])
         render(a.script, a.out or a.script.with_suffix(".mp3"), lang, a.gap, a.chime, a.loud, a.rate, vt, a.tight)
         return
     if not a.folder:
         ap.error("give a report folder or --script")
     folder = Path(a.folder)
     vt = voices(load_game(folder))
-    for lang in a.lang:
+    langs = a.lang or [c for c in VOICES if (folder / f"listen.{c}.md").exists()]
+    if not langs:
+        sys.exit(f"{folder} has no listen.<lang>.md ({', '.join(VOICES)})")
+    for lang in langs:
         render(folder / f"listen.{lang}.md", folder / f"listen.{lang}.mp3", lang, a.gap, a.chime, a.loud, a.rate, vt, a.tight)
 
 

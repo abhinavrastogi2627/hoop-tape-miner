@@ -87,6 +87,27 @@ def test_render_html_share_mode_drops_local_links():
     assert "Keep this item" in page and "nested items stay too" in page
 
 
+def test_render_html_english_only_report(tmp_path):
+    folder = tmp_path / "game"
+    shutil.copytree(FIXTURE, folder)
+    (folder / "README.md").unlink()                       # a profile with languages ["en"]
+    page = render_html.page(folder)
+    assert 'data-lang="en"' in page and 'data-lang="zh"' not in page
+    assert '<html lang="en"' in page and '<button type="button" data-set-lang' not in page   # no switch
+    assert publish.title_of(folder) == "Sample report: Owls vs Foxes"
+    (folder / "README.en.md").unlink()
+    with pytest.raises(SystemExit, match="README"):
+        render_html.page(folder)
+
+
+def test_narrate_defaults_to_the_scripts_present(tmp_path, monkeypatch):
+    (tmp_path / "listen.en.md").write_text("Hello.\n", encoding="utf8")
+    done = []
+    monkeypatch.setattr(narrate, "render", lambda src, out, lang, *a, **k: done.append(lang))
+    narrate.main([str(tmp_path)])
+    assert done == ["en"]
+
+
 def test_render_html_tolerates_missing_result_and_colours(tmp_path):
     folder = tmp_path / "game"
     shutil.copytree(FIXTURE, folder)

@@ -7,7 +7,8 @@ steps run (long ones log to <workspace>/logs/<game>-<step>.log), and the run sto
 output is missing, printing what to do. Exit codes: 0 everything done, 3 waiting for the agent, 1 a command failed.
 Deliverables: the team page and the focus-player page (index.html with narration audio and clips, published as
 links with --publish) and the explained video film.<lang>.mp4 (a file to send yourself; never published).
-A league url is fetched first (`fetch`), then the run continues in that game folder.
+A league url is fetched first (`fetch`), then the run continues in that game folder; a url whose game folder
+already exists (game.json league.game_id) reuses it without fetching again (--refetch to force a fetch).
 """
 from __future__ import annotations
 
@@ -27,6 +28,26 @@ from . import clips, game_config, workspace
 WAITING = 3
 LANGS = ("zh", "en")
 KB = Path(__file__).resolve().parents[2] / "prompts" / "coach_kb.md"   # coaching knowledge base (insights step)
+
+
+def profile_langs() -> tuple:
+    """Report languages from team.json `languages` (default zh + en); the page, voices and charts know zh and en."""
+    langs = tuple(dict.fromkeys(workspace.profile().get("languages") or LANGS))
+    bad = [l for l in langs if l not in LANGS]
+    if bad:
+        sys.exit(f"team.json languages {list(langs)}: {bad} not supported (choose from {list(LANGS)})")
+    return langs
+
+
+def readme(lang: str) -> str:
+    """README.md is the Chinese report, README.<lang>.md any other language (same rule as render_html)."""
+    return "README.md" if lang == "zh" else f"README.{lang}.md"
+
+
+def localised(name: str, lang: str) -> str:
+    """momentum.png for zh, momentum.<lang>.png otherwise."""
+    stem, dot, ext = name.rpartition(".")
+    return name if lang == "zh" else f"{stem}.{lang}{dot}{ext}"
 
 
 @dataclass
@@ -97,7 +118,7 @@ class Game:
         gj = folder / "game.json"
         if not gj.exists():
             sys.exit(f"{gj} not found: start with `hoop-tape-miner fetch <league game url>` or `new-game`")
-        langs = tuple(workspace.profile().get("languages") or LANGS)
+        langs = profile_langs()
         return cls(folder, json.loads(gj.read_text(encoding="utf8")), langs)
 
 
@@ -162,7 +183,7 @@ def insights_done(g: Game) -> bool:
 
 
 def reports_done(g: Game) -> bool:
-    return all((d / "README.md").exists() and (d / "README.en.md").exists() for d in g.reports())
+    return all((d / readme(l)).exists() for d in g.reports() for l in g.langs)
 
 
 def clips_done(g: Game) -> bool:
@@ -179,7 +200,7 @@ def listen_done(g: Game) -> bool:
 
 def html_done(g: Game) -> bool:
     def inputs(d: Path) -> list[Path]:
-        return [d / "README.md", d / "README.en.md", g.gj, *d.glob("listen.*.mp3"), *d.glob("clips/*.mp4")]
+        return [*(d / readme(l) for l in g.langs), g.gj, *d.glob("listen.*.mp3"), *d.glob("clips/*.mp4")]
     return all(_newer(d / "index.html", *inputs(d)) for d in g.reports())
 
 
@@ -259,7 +280,7 @@ STEPS = [
     Step("extract", "cmd", extracted,
          lambda g: [["extract", "--video", _v(g), "--out", str(g.run), "--calib", str(g.run / "calib/keyframes.json"),
                      "--fps", "10"]], long=True),
-    Step("embed", "cmd", _exists("embeddings.npz"),
+    Step("embed", "cmd", lambda g: _newer(g.run / "embeddings.npz", g.run / "detections.pkl"),  # new extract: re-embed
          lambda g: [["embed", "--run", str(g.run), "--video", _v(g)]], long=True),
     Step("montage", "cmd", lambda g: any(_exists(f)(g) for f in ("cluster_montage.jpg", "cluster_names.json", "tracks.pkl")),
          lambda g: [["tracks", "--run", str(g.run), "--video", _v(g), "--game", str(g.gj)]], long=True,
@@ -299,22 +320,22 @@ STEPS = [
              "{review}/insights_dropped.json. Then run `hoop-tape-miner coach-insights check --review {review}` and "
              "send the errors back to the writer until it passes."),
     Step("momentum", "cmd",
-         lambda g: g.no_score_flow() or all((g.folder / n).exists() for n in ("momentum.png", "momentum.en.png")),
+         lambda g: g.no_score_flow() or all((g.folder / localised("momentum.png", l)).exists() for l in g.langs),
          lambda g: [["momentum", "--official", str(g.official), "--game", str(g.gj), "--lineup",
-                     str(g.lineup), "--out", str(g.folder / out), "--lang", lang]
-                    for out, lang in (("momentum.png", "zh"), ("momentum.en.png", "en"))]),
+                     str(g.lineup), "--out", str(g.folder / localised("momentum.png", l)), "--lang", l]
+                    for l in g.langs]),
     Step("facts", "agent",
          lambda g: (g.review / "players_facts.md").exists() and (not g.focus or (g.review / f"player{g.focus}_facts.md").exists()),
          how="Write the fact sheets (playbook step 9): {review}/players_facts.md and {review}/player{focus}_facts.md."),
     Step("reports", "agent", reports_done,
-         how="Write the reports (playbook step 10): README.md + README.en.md in {folder} (prompts/coach_report.md) "
+         how="Write the reports (playbook step 10): {readmes} in {folder} (prompts/coach_report.md) "
              "and in {folder}/player-{focus} (prompts/player_deep_dive.md), with clip markers on the key plays."),
     Step("clips", "cmd", clips_done, lambda g: [["clips", str(d), "--video", _v(g)] for d in g.reports()]),
     Step("listen-script", "agent",
          lambda g: all((d / f"listen.{l}.md").exists() for d in g.reports() for l in g.langs),
          how="Write the narration scripts listen.<lang>.md for {langs} in {folder} and {folder}/player-{focus} "
              "(playbook step 11, prompts/narration.md)."),
-    Step("narrate", "cmd", listen_done, lambda g: [["narrate", str(d)] for d in g.reports()]),
+    Step("narrate", "cmd", listen_done, lambda g: [["narrate", str(d), "--lang", *g.langs] for d in g.reports()]),
     Step("html", "cmd", html_done, lambda g: [["html", str(d)] for d in g.reports()]),
     Step("qa", "agent", qa_done,
          how="QA (playbook step 13): have the browser-check subagent serve {folder} over http and check both pages "
@@ -333,7 +354,8 @@ NAMES = [s.name for s in STEPS]
 
 def fill(how: str, g: Game) -> str:
     vals = dict(run=g.run, folder=g.folder, gj=g.gj, video=g.video, review=g.review, focus=g.focus or "<N>",
-                times=calib_times(g), langs=", ".join(g.langs), qa=qa_hash(g),
+                times=calib_times(g), langs=", ".join(g.langs), readmes=" + ".join(readme(l) for l in g.langs),
+                qa=qa_hash(g),
                 us_label=game_config.team(g.game, "us").get("label", "?"),
                 them_label=game_config.team(g.game, "them").get("label", "?"))
     return how.format(**vals)
@@ -389,8 +411,14 @@ def drive(g: Game, until: str | None = None, redo: str | None = None, publish: b
         if s.name == "publish" and not publish:
             if not s.done(g):
                 print("[run] publish skipped: re-run with --publish to deploy the pages as links")
+            if s.name == until:
+                print(f"[run] stopped after {until}")
+                return 0
             continue
         if s.done(g) and s.name != redo:
+            if s.name == until:
+                print(f"[run] stopped after {until} (already done)")
+                return 0
             continue
         if s.kind == "agent":
             print(f"[run] waiting for the agent: {s.name}\n{g.fill(s.how)}")
@@ -412,6 +440,19 @@ def drive(g: Game, until: str | None = None, redo: str | None = None, publish: b
     return 0
 
 
+def game_for_url(url: str, game_id: Callable[[str], str]) -> Path | None:
+    """The workspace game folder already fetched from this league url (game.json league.game_id), else None."""
+    gid = game_id(url)
+    for gj in sorted((workspace.root() / "teams").glob("*/*/game.json")):
+        try:
+            league = json.loads(gj.read_text(encoding="utf8")).get("league") or {}
+        except (OSError, ValueError):
+            continue
+        if league.get("game_id") == gid:
+            return gj.parent
+    return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="hoop-tape-miner run", description=__doc__.splitlines()[0])
     ap.add_argument("target", help="game folder (with game.json), or a league game url to fetch first")
@@ -420,11 +461,18 @@ def main(argv=None):
     ap.add_argument("--until", choices=NAMES, help="stop after this step")
     ap.add_argument("--redo", choices=NAMES, help="run this step again even if its output exists")
     ap.add_argument("--publish", action="store_true", help="also deploy the pages (publish --deploy) at the end")
+    ap.add_argument("--refetch", action="store_true",
+                    help="url target: fetch again even when the game folder exists (keeps an own-video alignment)")
     a = ap.parse_args(argv)
     target = a.target
     if target.startswith(("http://", "https://")):
         from . import fetch
-        target = str(fetch.main([target]))
+        found = None if a.refetch else game_for_url(target, fetch.game_id)
+        if found:
+            print(f"[run] already fetched: {found} (use --refetch to fetch the league data again)")
+            target = str(found)
+        else:
+            target = str(fetch.main([target]))
     g = Game.load(Path(target))
     if a.status:
         for name, kind, ok in status(g):

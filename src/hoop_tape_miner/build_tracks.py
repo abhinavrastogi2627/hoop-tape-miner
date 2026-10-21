@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .camera import sampled_fps
 from .game_config import load_game
 from .tracks import on_court, smooth_tracks, track_team
 
@@ -59,7 +60,12 @@ def classify_colours(p: pd.DataFrame, run: Path, video: str, seed=0) -> pd.DataF
     from sklearn.cluster import KMeans
     from sklearn.linear_model import LogisticRegression
 
+    from .embed import fresh_rows
     e = np.load(run / "embeddings.npz")
+    stale = ~fresh_rows(e, p, missing_ok=True)   # p is the on-court subset of detections.pkl
+    if stale.any():
+        raise SystemExit(f"{run / 'embeddings.npz'}: {int(stale.sum())} embeddings belong to another extract of "
+                         "detections.pkl; run `hoop-tape-miner embed` again (it drops them), then tracks")
     p = p.loc[p.index.intersection(e["idx"])].copy()
     pos = pd.Series(np.arange(len(e["idx"])), index=e["idx"])
     X = e["emb"][pos.loc[p.index].to_numpy()].astype(np.float32)
@@ -92,9 +98,10 @@ def main(argv=None):
     ap.add_argument("--us", default=None, help="our cluster label when cluster_names.json uses colour words "
                     "(default: us.colour from --game; not needed for us/them labels)")
     ap.add_argument("--game", default=None, help="game.json (us.colour)")
-    ap.add_argument("--fps", type=float, default=10.0)
+    ap.add_argument("--fps", type=float, default=None, help="sampled frame rate (default: fps in camera.npz)")
     args = ap.parse_args(argv)
     run = Path(args.run)
+    fps = args.fps or sampled_fps(run)
 
     det = pd.read_pickle(run / "detections.pkl")
     cam = np.load(run / "camera.npz")
@@ -111,7 +118,7 @@ def main(argv=None):
     for i, col in enumerate(order):
         off = i * 100000
         m = p.colour == col
-        ids = track_team(p[m], args.fps)
+        ids = track_team(p[m], fps)
         p.loc[m, "track"] = np.where(ids >= 0, ids + off, -1)
     p = p[p.track >= 0]
     # a tracklet's colour = majority vote of its detections

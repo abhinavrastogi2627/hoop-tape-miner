@@ -1,6 +1,7 @@
 """Pass 1: per-frame detection + court homography + jersey colour features.
 
-Writes one parquet of detections and one npz of homographies. Resumable in chunks.
+Writes detections.pkl and camera.npz (homography, quality and time per sampled frame, plus `fps`: the rate
+actually sampled, video fps / step, which later stages read instead of assuming --fps).
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from .camera import CourtCameraTracker
+from .camera import CourtCameraTracker, sample_step
 from .court import LENGTH, WIDTH, project
 from .device import device, half_dtype
 
@@ -83,7 +84,12 @@ def main(argv=None):
     cap = cv2.VideoCapture(args.video)
     vfps = cap.get(cv2.CAP_PROP_FPS)
     n_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    step = max(1, round(vfps / args.fps))
+    if not cap.isOpened() or vfps <= 0:
+        raise SystemExit(f"cannot read {args.video} (frame rate {vfps})")
+    step = sample_step(vfps, args.fps)
+    fps = vfps / step   # the real sampled rate, recorded in camera.npz and read by tracks / analyze / report
+    if abs(fps - args.fps) > 0.05 * args.fps:
+        print(f"warning: {vfps:g} fps video, sampling every {step} frames = {fps:.2f} fps (asked {args.fps:g})")
     f0 = int(args.start * vfps)
     f_end = min(n_total, int(args.end * vfps))
     cap.set(cv2.CAP_PROP_POS_FRAMES, f0)
@@ -124,17 +130,17 @@ def main(argv=None):
             done = (fi - f0) / max(f_end - f0, 1)
             print(f"[{t/60:5.1f} min] {n} frames, {n/el:.1f} fps, eta {el/done*(1-done)/60 if done else 0:.0f} min, q={q:.1f} {how}", flush=True)
         if n % 1000 == 0:
-            _save(out, rows, Hs, frames_meta)
+            _save(out, rows, Hs, frames_meta, fps)
         fi += 1
-    _save(out, rows, Hs, frames_meta)
+    _save(out, rows, Hs, frames_meta, fps)
     print("done", len(frames_meta), "frames in", time.time() - t0, "s")
 
 
-def _save(out, rows, Hs, meta):
+def _save(out, rows, Hs, meta, fps):
     pd.DataFrame(rows).to_pickle(out / "detections.pkl")
     m = np.array(meta, dtype=object)
     np.savez(out / "camera.npz", H=np.array(Hs), frame=m[:, 0].astype(int), t=m[:, 1].astype(float),
-             quality=m[:, 2].astype(float), how=m[:, 3].astype(str))
+             quality=m[:, 2].astype(float), how=m[:, 3].astype(str), fps=np.float64(fps))
 
 
 if __name__ == "__main__":

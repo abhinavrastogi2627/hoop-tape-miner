@@ -19,12 +19,12 @@ Then, per game, either type `/game <league game url>` in Claude Code (`.claude/c
 uv run hoop-tape-miner run <league game url | game folder> > workspace/logs/run.log 2>&1
 ```
 
-- A url is fetched first (step 1); the run then works in the game folder it prints. Use that folder for every later run.
+- A url is fetched first (step 1); the run then works in the game folder it prints. Use that folder for every later run. Running the url again is safe: a game already fetched (its `game.json` has the league game id) reuses its folder without fetching; `--refetch` fetches the league data again.
 - Each step knows its output file, so a run resumes where it stopped and never redoes a stage whose output exists. CV stages log to `workspace/logs/<team>-<date>-<step>.log`.
 - **Exit 3**: the run waits for you. The log names the step and what to do (the matching section below). Do it, then run again.
 - **Exit 1**: a command failed; the log shows the tail of its stage log. Fix the cause and run again.
 - **Exit 0**: done. It prints the page paths and the explained video paths.
-- `--status` lists every step and whether it is done; `--dry` prints the next command; `--until STEP` stops after a step; `--redo STEP` runs a done step again.
+- `--status` lists every step and whether it is done; `--dry` prints the next command; `--until STEP` stops after a step (also when that step was already done); `--redo STEP` runs a done step again.
 - Publishing is outward-facing, so it only happens with `--publish`: once `qa.md` says PASS with the current `checked:` stamp, run again with `--publish`, then have the browser-check subagent check the live links.
 
 Steps in order (agent steps marked *):
@@ -82,7 +82,7 @@ uv run hoop-tape-miner fetch <game url> [--video OUR_VIDEO] [--no-video]
 - Logs in with `GLORY_EMAIL` / `GLORY_PASSWORD` from the environment or the secrets file in `team.json` (never print them), reads the game, box score and point chart, and downloads the league's game video (720p, resumable).
 - Writes `$GJ` (teams, rosters, final and halftime score, periods, league id) and `$RUN/official.json` (box score, score flow, video alignment). Heavy files go to `<media_root>/teams/<slug>/<date>/` (`video/`, `run/`, raw `league/` responses, which contain names).
 - `--video OUR_VIDEO` keeps our own recording as the game video; the league video is then only used to align the score flow to it.
-- An existing `game.json` keeps the fields you filled (`--force` overwrites them with league data). The last line printed is the game folder.
+- An existing `game.json` keeps the fields you filled, and an existing `$RUN/official.json` keeps its video alignment when it is not the identity (aligned to our own video, or fixed by hand); `--force` overwrites both with league data. The last line printed is the game folder.
 
 **Without league data**:
 
@@ -314,7 +314,7 @@ uv run hoop-tape-miner train workspace/players/17/training/<date> > workspace/lo
 
 **Training step 3: rim boxes.** View `run/train_review/rim_probe.jpg` (four frames across the session, grid lines every 0.1). In `session.json` set `rim` to the rim's box as frame fractions `[x, y, w, h]` (top-left, size), e.g. `[{"from": "00:00", "box": [0.47, 0.18, 0.06, 0.03]}]`. Add an entry with a later `from` when the camera moved, `"box": null` when the rim leaves the frame, or `[]` when it is never in view. Then set `"rim_checked": true`.
 
-**Training step 4: sheets.** `train-sheets` writes overview sheets (a frame every 10 s), rep sheets (set / release / follow-through crops, a rim filmstrip from +0.3 s to +2.1 s, a wide frame at +0.8 s) and dribble sheets, split into parts of 50 candidates with one brief each.
+**Training step 4: sheets.** `train-sheets` writes overview sheets (a frame every 10 s), rep sheets (set / release / follow-through crops, a rim filmstrip from +0.3 s to +2.1 s, a wide frame at +0.8 s) and dribble sheets, split into parts of 50 candidates with one brief each. Once any `review_part<N>.json` exists it will not rebuild (the parts could shift under the reviews); run `hoop-tape-miner train-sheets <session> --force` to rebuild, then review every part again.
 
 **Training step 5: film review.** One subagent per `brief_part<N>.md` (at most 3 at once). Each writes `review_part<N>.json` (every candidate confirmed or rejected, make / miss / unclear, zone, spot, type, miss direction, form notes, drill blocks, dribble drills, reps the scan missed) and `memo_part<N>.md`. Do not read the sheets yourself. Re-run a part whose json does not parse or misses candidate ids.
 
