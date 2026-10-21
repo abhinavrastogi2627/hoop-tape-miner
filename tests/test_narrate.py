@@ -43,12 +43,12 @@ def test_concat_list_quotes_paths_with_an_apostrophe(tmp_path, monkeypatch):
 
 def test_ffprobe_has_a_timeout(tmp_path, monkeypatch):
     import subprocess
-    from hoop_tape_miner import render_html
+    from hoop_tape_miner import media, render_html
     seen = {}
 
     def fake_run(cmd, **kw):
         seen.update(kw)
         return subprocess.CompletedProcess(cmd, 0, stdout="12.5\n")
-    monkeypatch.setattr(render_html.subprocess, "run", fake_run)
+    monkeypatch.setattr(media.subprocess, "run", fake_run)  # render_html probes through media
     assert render_html.duration_s(tmp_path / "a.mp3") == 12.5
     assert seen.get("timeout") and seen.get("encoding") == "utf8"

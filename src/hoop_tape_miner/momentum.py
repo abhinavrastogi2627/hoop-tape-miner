@@ -20,6 +20,7 @@ import numpy as np
 
 from .game_config import find_up, load_game
 from .plots import GRID, INK2, MUTED, TEAM, use_game
+from .timefmt import mmss as _mmss
 
 TEXT = {
     "zh": dict(legend="▼ 对手罚球命中（= 我们犯规送分）  ▲ 我方罚球", ylabel="分差（我方 − 对手）",
@@ -35,10 +36,6 @@ TEXT = {
                who_us="our", who_them="their",
                lanes="On-court time (when CV read the jersey number; a lower bound, gaps ≠ off court)"),
 }
-
-
-def _mmss(s: float) -> str:
-    return f"{int(s // 60):02d}:{int(s % 60):02d}"
 
 
 def find_runs(flow: list[dict], min_swing: int = 8, max_runs: int = 3) -> list[tuple[int, int]]:

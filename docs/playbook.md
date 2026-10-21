@@ -20,11 +20,11 @@ uv run hoop-tape-miner run <league game url | game folder> > workspace/logs/run.
 ```
 
 - A url is fetched first (step 1); the run then works in the game folder it prints. Use that folder for every later run. Running the url again is safe: a game already fetched (its `game.json` has the league game id) reuses its folder without fetching; `--refetch` fetches the league data again.
-- Each step knows its output file, so a run resumes where it stopped and never redoes a stage whose output exists. CV stages log to `workspace/logs/<team>-<date>-<step>.log`.
+- Each step knows its output file, so a run resumes where it stopped. A command step whose inputs or settings changed since its last run (a new video, edited `periods`, a re-run upstream stage) runs again; nothing else is redone. CV stages log to `workspace/logs/<team>-<date>-<step>.log`.
 - **Exit 3**: the run waits for you. The log names the step and what to do (the matching section below). Do it, then run again.
 - **Exit 1**: a command failed; the log shows the tail of its stage log. Fix the cause and run again.
 - **Exit 0**: done. It prints the page paths and the explained video paths.
-- `--status` lists every step and whether it is done; `--dry` prints the next command; `--until STEP` stops after a step (also when that step was already done); `--redo STEP` runs a done step again.
+- `--status` lists every step and whether it is done; `--dry` prints the next command; `--until STEP` stops after a step (also when that step was already done); `--redo STEP` runs a done step again, and the command steps that depend on it follow (`--status` marks them `(stale: ...)`).
 - Publishing is outward-facing, so it only happens with `--publish`: once `qa.md` says PASS with the current `checked:` stamp, run again with `--publish`, then have the browser-check subagent check the live links.
 
 Steps in order (agent steps marked *):

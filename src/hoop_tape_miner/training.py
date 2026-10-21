@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import workspace
+from . import timefmt, workspace
 
 # COCO-17 keypoint indices
 NOSE, L_SH, R_SH, L_EL, R_EL, L_WR, R_WR, L_HIP, R_HIP, L_KN, R_KN, L_AN, R_AN = 0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
@@ -82,16 +82,11 @@ def earlier_sessions(folder: Path) -> list[Path]:
 # ---- time --------------------------------------------------------------------------------------------------
 
 def mmss(t: float) -> str:
-    """83.44 -> '01:23.4'"""
-    t = round(max(0.0, float(t)), 1)  # round first: 59.97 -> '01:00.0', not '00:60.0'
-    m = int(t // 60)
-    return f"{m:02d}:{t - 60 * m:04.1f}"
+    """83.44 -> '01:23.4' (rounded first: 59.97 -> '01:00.0', not '00:60.0')."""
+    return timefmt.mmss(t, 1)
 
 
-def seconds(v) -> float:
-    """'01:23.4' / '1:23' / '1:02:03' / 83.4 -> seconds."""
-    from .movement import secs
-    return secs(v)
+seconds = timefmt.seconds  # '01:23.4' / '1:23' / '1:02:03' / 83.4 -> seconds
 
 
 # ---- pose geometry -----------------------------------------------------------------------------------------

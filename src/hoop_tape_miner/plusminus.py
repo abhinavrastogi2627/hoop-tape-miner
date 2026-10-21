@@ -17,9 +17,7 @@ import argparse
 import json
 from pathlib import Path
 
-
-def mmss(s: float) -> str:
-    return f"{int(s // 60):02d}:{int(s % 60):02d}"
+from .timefmt import mmss
 
 
 def score_events(official: dict, times: dict | None = None) -> list[tuple[float, str, int]]:

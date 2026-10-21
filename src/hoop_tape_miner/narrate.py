@@ -19,13 +19,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+from . import media
 from .game_config import load_game
+from .media import ffmpeg
 
 VOICES = {"zh": ("zh-CN-YunjianNeural", "+0%"), "en": ("en-US-AndrewNeural", "+0%")}
 PAUSE_S = 0.7
@@ -59,10 +59,6 @@ async def speak(paras: list[str], voice: str, rate: str, tmp: Path) -> list[Path
         await edge_tts.Communicate(p, voice, rate=rate).save(str(out))
         parts.append(out)
     return parts
-
-
-def ffmpeg(*args: str):
-    subprocess.run([os.environ.get("FFMPEG", "ffmpeg"), "-v", "error", "-y", *args], check=True)
 
 
 def silence(seconds: float, out: Path) -> Path:
@@ -113,7 +109,8 @@ def render(src: Path, out: Path, lang: str, gap: float, bell: bool, loud: bool, 
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
         parts = asyncio.run(speak(paras, voice, rate or default_rate, tmp))
-        stitch(parts, out, tmp, gap, bell, loud, tight)
+        with media.partial(out) as part:  # a stopped run never leaves a short listen.<lang>.mp3 that counts as done
+            stitch(parts, part, tmp, gap, bell, loud, tight)
     print("wrote", out, f"{out.stat().st_size / 1e6:.1f} MB,", len(paras), "paragraphs")
 
 

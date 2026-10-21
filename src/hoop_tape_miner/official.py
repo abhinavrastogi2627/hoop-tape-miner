@@ -20,6 +20,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .timefmt import seconds
+
 W, H = 64, 36
 NOTE = ("League stat sheet records MADE shots only (attempts = makes), plus personal fouls. "
         "Rebounds/assists/steals/turnovers are not recorded (all 0).")
@@ -123,8 +125,8 @@ def recorded(off: dict) -> dict:
 
 
 def _mmss(s: str) -> int:
-    m, sec = s.split(":")
-    return int(m) * 60 + int(sec)
+    """League clock 'mm:ss' -> whole seconds."""
+    return int(seconds(s))
 
 
 def _bool(v) -> bool:

@@ -13,52 +13,23 @@ already exists (game.json league.game_id) reuses it without fetching again (--re
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import os
-import re
 import subprocess
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from . import clips, game_config, workspace
+from . import game_config, pipeline, workspace
+from .pipeline import (LANGS, QA_STAMP, WAITING, Step, Unit, clips_done, film_done, html_done,  # noqa: F401
+                       listen_done, localised, profile_langs, published, qa_done, qa_hash, readme, reports_done,
+                       tail_steps)
+from .pipeline import newer as _newer
 
-WAITING = 3
-LANGS = ("zh", "en")
 KB = Path(__file__).resolve().parents[2] / "prompts" / "coach_kb.md"   # coaching knowledge base (insights step)
 
 
-def profile_langs() -> tuple:
-    """Report languages from team.json `languages` (default zh + en); the page, voices and charts know zh and en."""
-    langs = tuple(dict.fromkeys(workspace.profile().get("languages") or LANGS))
-    bad = [l for l in langs if l not in LANGS]
-    if bad:
-        sys.exit(f"team.json languages {list(langs)}: {bad} not supported (choose from {list(LANGS)})")
-    return langs
-
-
-def readme(lang: str) -> str:
-    """README.md is the Chinese report, README.<lang>.md any other language (same rule as render_html)."""
-    return "README.md" if lang == "zh" else f"README.{lang}.md"
-
-
-def localised(name: str, lang: str) -> str:
-    """momentum.png for zh, momentum.<lang>.png otherwise."""
-    stem, dot, ext = name.rpartition(".")
-    return name if lang == "zh" else f"{stem}.{lang}{dot}{ext}"
-
-
-@dataclass
-class Game:
-    folder: Path
-    game: dict
-    langs: tuple = LANGS
-
-    @property
-    def gj(self) -> Path:
-        return self.folder / "game.json"
+class Game(Unit):
+    """A game folder: game.json, run/ (the CV pass and the review), the team page and the focus player's page."""
 
     @property
     def run(self) -> Path:
@@ -105,8 +76,14 @@ class Game:
         """Report folders: the team page, plus the focus player's page."""
         return [self.folder] + ([self.folder / f"player-{self.focus}"] if self.focus else [])
 
-    def fill(self, how: str) -> str:
-        return fill(how, self)
+    def fill_values(self) -> dict:
+        return dict(super().fill_values(), gj=self.gj, focus=self.focus or "<N>", times=calib_times(self),
+                    us_label=game_config.team(self.game, "us").get("label", "?"),
+                    them_label=game_config.team(self.game, "them").get("label", "?"))
+
+    def note(self, step: str, errors: list[str]) -> str | None:
+        """Finished games whose reports predate the stricter coach gates get the LEGACY note."""
+        return LEGACY if errors and step in GATED and reports_done(self) else None
 
     def finished(self):
         print("[run] done. Pages: " + ", ".join(str(d / "index.html") for d in self.reports()))
@@ -122,31 +99,11 @@ class Game:
         return cls(folder, json.loads(gj.read_text(encoding="utf8")), langs)
 
 
-@dataclass
-class Step:
-    name: str
-    kind: str                                   # "cmd": run it; "agent": stop and say what to do
-    done: Callable[[Game], bool]
-    args: Callable[[Game], list[list[str]]] = field(default=lambda g: [])   # cmd: one or more stage argv
-    how: str = ""                               # agent: instructions ({run}, {folder}, ... filled in)
-    long: bool = False                          # cmd: log to a file instead of the terminal
-    expect_exit: bool = False                   # cmd: a non-zero exit is the expected stop (tracks pass 1)
-    errors: Callable[[Game], list[str]] | None = None   # agent: why its output does not pass yet (printed when waiting)
-
-
 def _exists(*rel: str, base: str = "run") -> Callable[[Game], bool]:
     def check(g: Game) -> bool:
         root = g.run if base == "run" else g.folder
         return all((root / r).exists() for r in rel)
     return check
-
-
-def _newer(out: Path, *inputs: Path, slack: float = 2.0) -> bool:
-    """out exists and no input changed after it (slack: files copied together differ by milliseconds)."""
-    if not out.exists():
-        return False
-    t = out.stat().st_mtime + slack
-    return all(not i.exists() or i.stat().st_mtime <= t for i in inputs)
 
 
 def extracted(g: Game) -> bool:
@@ -246,74 +203,6 @@ LEGACY = ("this game's reports were written before the stricter coach gates. New
           "or keep the pages already published.")
 
 
-def reports_done(g: Game) -> bool:
-    return all((d / readme(l)).exists() for d in g.reports() for l in g.langs)
-
-
-def clips_done(g: Game) -> bool:
-    return all(clips.clip_path(d, a, b).exists() for d in g.reports() for a, b in clips.find_clips(d))
-
-
-def film_done(g: Game) -> bool:
-    return all(_newer(g.folder / f"film.{l}.mp4", g.folder / f"film.{l}.md") for l in g.langs)
-
-
-def listen_done(g: Game) -> bool:
-    return all(_newer(d / f"listen.{l}.mp3", d / f"listen.{l}.md") for d in g.reports() for l in g.langs)
-
-
-def html_done(g: Game) -> bool:
-    def inputs(d: Path) -> list[Path]:
-        return [*(d / readme(l) for l in g.langs), g.gj, *d.glob("listen.*.mp3"), *d.glob("clips/*.mp4")]
-    return all(_newer(d / "index.html", *inputs(d)) for d in g.reports())
-
-
-def published(g: Game) -> bool:
-    """Every report page was uploaded by a successful `publish --deploy` after its index.html was last built
-    (a failed deploy, or a publish without --deploy, does not count)."""
-    from . import publish
-    path = workspace.root() / "publish.json"
-    if not path.exists():
-        return False
-    reg = publish.load_registry(path)
-    root = workspace.root().resolve()
-    for d in g.reports():
-        try:
-            key = d.resolve().relative_to(root).as_posix()
-        except ValueError:
-            return False
-        if not publish.is_published(reg, key, d / "index.html"):
-            return False
-    return True
-
-
-def qa_hash(g: Game) -> str:
-    """Stamp of what QA checks: the text of each report's pages and READMEs, plus the name and size of its audio
-    and clips. Any edit after QA changes it."""
-    h = hashlib.sha256()
-    for d in g.reports():
-        for p in [d / n for n in ("index.html", "README.md", "README.en.md")]:
-            h.update(f"{p.relative_to(g.folder).as_posix()}\0".encode())
-            h.update(p.read_bytes() if p.exists() else b"-")
-        for p in sorted([*d.glob("listen.*.mp3"), *d.glob("clips/*")]):
-            h.update(f"{p.relative_to(g.folder).as_posix()}\0{p.stat().st_size}\0".encode())
-    return h.hexdigest()[:16]
-
-
-def qa_done(g: Game) -> bool:
-    """qa.md starts with PASS and carries the stamp of the files as they are now (`checked: <qa_hash>`)."""
-    qa = g.folder / "qa.md"
-    if not qa.exists():
-        return False
-    text = qa.read_text(encoding="utf8")
-    stamp = re.search(r"checked:\s*([0-9a-f]{16})", text)
-    return text.lstrip().upper().startswith("PASS") and bool(stamp) and stamp.group(1) == qa_hash(g)
-
-
-QA_STAMP = (" Then add the line `checked: {qa}` to qa.md (the stamp of the files you checked; an edit after QA "
-            "changes it and the run asks for QA again).")
-
-
 def _v(g: Game) -> str:
     return str(g.video)
 
@@ -343,9 +232,11 @@ STEPS = [
              "every frame says PASS; check the ov_*.jpg overlays (lines on the painted lines)."),
     Step("extract", "cmd", extracted,
          lambda g: [["extract", "--video", _v(g), "--out", str(g.run), "--calib", str(g.run / "calib/keyframes.json"),
-                     "--fps", "10"]], long=True),
+                     "--fps", "10"]], long=True,
+         inputs=lambda g: [g.video], params=lambda g: {"fps": 10}),   # not keyframes.json: recalib refits instead
     Step("embed", "cmd", lambda g: _newer(g.run / "embeddings.npz", g.run / "detections.pkl"),  # new extract: re-embed
-         lambda g: [["embed", "--run", str(g.run), "--video", _v(g)]], long=True),
+         lambda g: [["embed", "--run", str(g.run), "--video", _v(g)]], long=True,
+         inputs=lambda g: [g.run / "detections.pkl"]),
     Step("montage", "cmd", lambda g: any(_exists(f)(g) for f in ("cluster_montage.jpg", "cluster_names.json", "tracks.pkl")),
          lambda g: [["tracks", "--run", str(g.run), "--video", _v(g), "--game", str(g.gj)]], long=True,
          expect_exit=True),
@@ -353,18 +244,25 @@ STEPS = [
          how="Name the team clusters (playbook step 5): view {run}/cluster_montage.jpg and write "
              '{run}/cluster_names.json, one label per cluster id: "us", "them", "ref" or "unk" '
              "(our jerseys: {us_label}; theirs: {them_label})."),
+    # tracks.pkl is never an input: analyze rewrites it, so the steps after tracks follow its run stamp (`after`)
     Step("tracks", "cmd", _exists("tracks.pkl"),
-         lambda g: [["tracks", "--run", str(g.run), "--video", _v(g), "--game", str(g.gj)]], long=True),
+         lambda g: [["tracks", "--run", str(g.run), "--video", _v(g), "--game", str(g.gj)]], long=True,
+         inputs=lambda g: [g.run / f for f in ("detections.pkl", "embeddings.npz", "cluster_names.json")]),
     Step("jersey", "cmd", _exists("jersey.json"),
-         lambda g: [["jersey", "--run", str(g.run), "--video", _v(g)]], long=True),
+         lambda g: [["jersey", "--run", str(g.run), "--video", _v(g)]], long=True,
+         inputs=lambda g: [g.run / "detections.pkl"], after=("tracks",)),
     Step("analyze", "cmd", _exists("possessions.pkl", "possession_metrics.pkl"),
-         lambda g: [["analyze", "--run", str(g.run), "--game", str(g.gj)]], long=True),
+         lambda g: [["analyze", "--run", str(g.run), "--game", str(g.gj)]], long=True,
+         inputs=lambda g: [g.run / "jersey.json", g.run / "camera.npz"], after=("tracks",),
+         params=lambda g: {k: g.game.get(k) for k in ("periods", "rosters")}),
     Step("official", "agent", lambda g: g.official.exists() or bool(g.game.get("no_league_data")),
          how="No {run}/official.json. `fetch` writes it for league games; for another league convert its data "
              '(playbook step 6), or set "no_league_data": true in {gj} to go on from the film alone.'),
     Step("coach-sheets", "cmd", lambda g: (g.review / "manifest.json").exists() and parts_listed(g),
          lambda g: [["coach-sheets", "--run", str(g.run), "--game", str(g.gj), "--out", str(g.review), "--parts", "6",
-                     "--video", _v(g)]], long=True),
+                     "--video", _v(g)]], long=True,
+         inputs=lambda g: [g.run / "possessions.pkl", g.run / "possession_metrics.pkl"], after=("analyze",),
+         params=lambda g: {"parts": 6}),
     Step("film-review", "agent", parts_done,
          how="Film review (playbook step 7): launch one subagent per {review}/brief_part<N>.md, at most 3 at once; "
              "each writes coach_part<N>.json, memo_part<N>.md and notes_part<N>.txt there. Do not read the sheets "
@@ -373,10 +271,12 @@ STEPS = [
              "marked unknown); send a part's errors back to its subagent.",
          errors=parts_errors),
     Step("features", "cmd", lambda g: (g.review / "features.json").exists(),
-         lambda g: [["coach-features", "--run", str(g.run), "--review", str(g.review)]]),
+         lambda g: [["coach-features", "--run", str(g.run), "--review", str(g.review)]],
+         inputs=lambda g: [g.review / "manifest.json", *sorted(g.review.glob("coach_part*.json"))], after=("analyze",)),
     Step("coach-eval", "cmd", eval_done,
          lambda g: [["coach-eval", "--review", str(g.review), "--official", str(g.official), "--label", "run",
-                     "--gate"]]),
+                     "--gate"]],
+         inputs=lambda g: [g.official, *sorted(g.review.glob("coach_part*.json"))] if g.official.exists() else None),
     Step("summary", "agent",
          lambda g: (g.review / "summary.json").exists(),
          how="Choose the game's stretches from the score flow, then run `coach-summary --official "
@@ -399,129 +299,40 @@ STEPS = [
          lambda g: g.no_score_flow() or all((g.folder / localised("momentum.png", l)).exists() for l in g.langs),
          lambda g: [["momentum", "--official", str(g.official), "--game", str(g.gj), "--lineup",
                      str(g.lineup), "--out", str(g.folder / localised("momentum.png", l)), "--lang", l]
-                    for l in g.langs]),
+                    for l in g.langs],
+         inputs=lambda g: None if g.no_score_flow() else [g.official, g.lineup, g.gj],
+         params=lambda g: {"langs": list(g.langs)}),
     Step("facts", "agent",
          lambda g: (g.review / "players_facts.md").exists() and (not g.focus or (g.review / f"player{g.focus}_facts.md").exists()),
          how="Write the fact sheets (playbook step 9): {review}/players_facts.md and {review}/player{focus}_facts.md."),
     Step("reports", "agent", reports_done,
          how="Write the reports (playbook step 10): {readmes} in {folder} (prompts/coach_report.md) "
              "and in {folder}/player-{focus} (prompts/player_deep_dive.md), with clip markers on the key plays."),
-    Step("clips", "cmd", clips_done, lambda g: [["clips", str(d), "--video", _v(g)] for d in g.reports()]),
-    Step("listen-script", "agent",
-         lambda g: all((d / f"listen.{l}.md").exists() for d in g.reports() for l in g.langs),
-         how="Write the narration scripts listen.<lang>.md for {langs} in {folder} and {folder}/player-{focus} "
-             "(playbook step 11, prompts/narration.md)."),
-    Step("narrate", "cmd", listen_done, lambda g: [["narrate", str(d), "--lang", *g.langs] for d in g.reports()]),
-    Step("html", "cmd", html_done, lambda g: [["html", str(d)] for d in g.reports()]),
-    Step("qa", "agent", qa_done,
-         how="QA (playbook step 13): have the browser-check subagent serve {folder} over http and check both pages "
-             "in both languages, the audio and every clip. Write the result to {folder}/qa.md, first "
-             "word PASS when it passes." + QA_STAMP),
-    Step("publish", "cmd", published,
-         lambda g: [["publish", *map(str, g.reports()), "--deploy"]]),
-    Step("film-script", "agent", lambda g: all((g.folder / f"film.{l}.md").exists() for l in g.langs),
-         how="Write the explained-video scripts {folder}/film.<lang>.md for {langs} from the finished team report "
-             "(playbook step 15, prompts/film.md); check them with `hoop-tape-miner film {folder} --video {video} --dry`."),
-    Step("film", "cmd", film_done,
-         lambda g: [["film", str(g.folder), "--video", _v(g), "--run", str(g.run)]], long=True),
+    *tail_steps(
+        lambda g: g.video,
+        listen_how="Write the narration scripts listen.<lang>.md for {langs} in {folder} and {folder}/player-{focus} "
+                   "(playbook step 11, prompts/narration.md).",
+        qa_how="QA (playbook step 13): have the browser-check subagent serve {folder} over http and check both pages "
+               "in both languages, the audio and every clip. Write the result to {folder}/qa.md, first "
+               "word PASS when it passes.",
+        film_script_how="Write the explained-video scripts {folder}/film.<lang>.md for {langs} from the finished team "
+                        "report (playbook step 15, prompts/film.md); check them with `hoop-tape-miner film {folder} "
+                        "--video {video} --dry`.",
+        film_run=True),
 ]
 NAMES = [s.name for s in STEPS]
 GATED = ("film-review", "insights", "critic")   # checks made stricter: finished games get the LEGACY note
 
 
-def fill(how: str, g: Game) -> str:
-    vals = dict(run=g.run, folder=g.folder, gj=g.gj, video=g.video, review=g.review, focus=g.focus or "<N>",
-                times=calib_times(g), langs=", ".join(g.langs), readmes=" + ".join(readme(l) for l in g.langs),
-                qa=qa_hash(g),
-                us_label=game_config.team(g.game, "us").get("label", "?"),
-                them_label=game_config.team(g.game, "them").get("label", "?"))
-    return how.format(**vals)
-
-
-def logs_dir() -> Path:
-    d = workspace.root() / "logs"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def stage_cmd(argv: list[str]) -> list[str]:
-    return [sys.executable, "-m", "hoop_tape_miner.cli", *argv]
-
-
-def tail(path: Path, n: int = 15) -> str:
-    lines = path.read_text(encoding="utf8", errors="replace").splitlines()
-    return "\n".join(lines[-n:])
-
-
-def child_env() -> dict:
-    """The environment for stage subprocesses: UTF-8 stdio, so Chinese text in a log file or on a cp1252 / GBK
-    Windows console never raises UnicodeEncodeError."""
-    return {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
-
-
-def run_cmd(step: Step, g: Game, runner=subprocess.run) -> bool:
-    """Run a command step; long ones log to a file and only the tail is printed on failure."""
-    env = child_env()
-    for i, argv in enumerate(step.args(g)):
-        print(f"[run] {step.name}: hoop-tape-miner {' '.join(argv)}", flush=True)
-        if step.long:
-            log = logs_dir() / f"{g.folder.parent.name}-{g.folder.name}-{step.name}{i or ''}.log"
-            print(f"[run]   log: {log}", flush=True)
-            with open(log, "w", encoding="utf8") as fh:
-                rc = runner(stage_cmd(argv), stdout=fh, stderr=subprocess.STDOUT, env=env).returncode
-        else:
-            log, rc = None, runner(stage_cmd(argv), env=env).returncode
-        if rc != 0 and not step.expect_exit:
-            print(f"[run] {step.name} failed (exit {rc})" + (f"; last lines of {log}:\n{tail(log)}" if log else ""))
-            return False
-    return True
-
-
 def status(g: Game) -> list[tuple[str, str, bool]]:
-    return [(s.name, s.kind, s.done(g)) for s in STEPS]
+    """(name, kind, done) per game step; read-only (see pipeline.rows for why a step is stale)."""
+    return pipeline.status(g, STEPS)
 
 
 def drive(g: Game, until: str | None = None, redo: str | None = None, publish: bool = False,
           dry: bool = False, runner=subprocess.run, steps: list[Step] | None = None) -> int:
-    """Walk `steps` (default: the game STEPS); `g` may be a Game subclass (train-run uses a Session)."""
-    for s in STEPS if steps is None else steps:
-        if s.name == "publish" and not publish:
-            if not s.done(g):
-                print("[run] publish skipped: re-run with --publish to deploy the pages as links")
-            if s.name == until:
-                print(f"[run] stopped after {until}")
-                return 0
-            continue
-        if s.done(g) and s.name != redo:
-            if s.name == until:
-                print(f"[run] stopped after {until} (already done)")
-                return 0
-            continue
-        if s.kind == "agent":
-            print(f"[run] waiting for the agent: {s.name}\n{g.fill(s.how)}")
-            errs = s.errors(g) if s.errors else []
-            for e in errs[:12]:
-                print(f"[run]   {e}")
-            if len(errs) > 12:
-                print(f"[run]   ... {len(errs) - 12} more")
-            if errs and s.name in GATED and reports_done(g):
-                print(f"[run] note: {LEGACY}")
-            return WAITING
-        if dry:
-            for argv in s.args(g):
-                print(f"[dry] {s.name}: hoop-tape-miner {' '.join(argv)}")
-            return 0
-        if not run_cmd(s, g, runner):
-            return 1
-        g = type(g).load(g.folder)  # stages may have filled game.json
-        if s.expect_exit and not s.done(g):
-            print(f"[run] {s.name} did not produce its output; see its log")
-            return 1
-        if s.name == until:
-            print(f"[run] stopped after {until}")
-            return 0
-    g.finished()
-    return 0
+    """Walk `steps` (default: the game STEPS) with pipeline.drive; `g` may be any pipeline.Unit."""
+    return pipeline.drive(g, STEPS if steps is None else steps, until, redo, publish, dry, runner)
 
 
 def game_for_url(url: str, game_id: Callable[[str], str]) -> Path | None:
@@ -540,11 +351,7 @@ def game_for_url(url: str, game_id: Callable[[str], str]) -> Path | None:
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="hoop-tape-miner run", description=__doc__.splitlines()[0])
     ap.add_argument("target", help="game folder (with game.json), or a league game url to fetch first")
-    ap.add_argument("--status", action="store_true", help="list every step and whether it is done")
-    ap.add_argument("--dry", action="store_true", help="print the next command instead of running it")
-    ap.add_argument("--until", choices=NAMES, help="stop after this step")
-    ap.add_argument("--redo", choices=NAMES, help="run this step again even if its output exists")
-    ap.add_argument("--publish", action="store_true", help="also deploy the pages (publish --deploy) at the end")
+    pipeline.add_drive_args(ap, NAMES)
     ap.add_argument("--refetch", action="store_true",
                     help="url target: fetch again even when the game folder exists (keeps an own-video alignment)")
     a = ap.parse_args(argv)
@@ -559,8 +366,7 @@ def main(argv=None):
             target = str(fetch.main([target]))
     g = Game.load(Path(target))
     if a.status:
-        for name, kind, ok in status(g):
-            print(f"  {'done' if ok else '----'}  {name:13s} {kind}")
+        pipeline.print_status(g, STEPS)
         line = eval_line(g)
         if line:
             print(f"  {line}")

@@ -29,6 +29,7 @@ from pathlib import Path
 
 from . import game_config as gc
 from .coach_eval import load_trips
+from .timefmt import mmss
 
 MAX_PLAYLIST = 12                 # clips per playlist (earliest first); keeps a published page to a few dozen clips
 PAD = {"shot": (6, 2), "turnover": (5, 2), "foul": (4, 2), "oreb": (1, 6)}   # seconds before / after the event
@@ -91,11 +92,6 @@ class Event:
         if self.made is not True:
             return 0
         return self.points or (3 if self.zone == "three" else 2)
-
-
-def mmss(s: float) -> str:
-    s = max(0, int(s))
-    return f"{s // 60:02d}:{s % 60:02d}"
 
 
 def _num(v) -> bool:

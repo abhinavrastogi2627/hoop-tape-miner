@@ -23,7 +23,6 @@ import base64
 import hashlib
 import html
 import json
-import os
 import re
 import secrets
 import shutil
@@ -32,7 +31,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import render_html
+from . import media, render_html
 from . import workspace as ws
 
 MAX_FILE = 25 * 1024 * 1024  # Cloudflare static assets per-file limit (25 MiB)
@@ -73,15 +72,13 @@ def load_registry(path: Path) -> dict:
 
 def save_registry(path: Path, reg: dict) -> None:
     """Write publish.json atomically (temp file + replace), keeping the previous good version as publish.json.bak."""
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf8")
     if path.exists():
         try:
             json.loads(path.read_text(encoding="utf8"))
             shutil.copy2(path, path.with_name(path.name + ".bak"))
         except ValueError:
             pass  # never back up a broken file over a good .bak
-    os.replace(tmp, path)
+    media.write_text_atomic(path, json.dumps(reg, indent=2) + "\n")
 
 
 def is_published(reg: dict, key: str, page: Path) -> bool:

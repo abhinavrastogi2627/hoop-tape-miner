@@ -19,9 +19,7 @@ import base64
 import html
 import json
 import mimetypes
-import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -30,6 +28,7 @@ from markdown_it import MarkdownIt
 from . import clips as clipmod
 from . import film_index
 from . import game_config as gc
+from .media import duration_s  # ffprobe with a timeout: a cloud placeholder file can hang it
 
 # Raw HTML is off: README text is agent-written and quotes league data, so a <script> or <img onerror> in it must
 # show as text, never run on the published site. Pages use markdown only (clips and images come from markers).
@@ -304,13 +303,6 @@ def inline_images(body: str, folder: Path) -> str:
             return m.group(0)
         return f'src="{data_uri(p)}"'
     return re.sub(r'src="([^"]+)"', sub, body)
-
-
-def duration_s(p: Path) -> float:
-    out = subprocess.run([os.environ.get("FFPROBE", "ffprobe"), "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(p)],
-                         capture_output=True, text=True, encoding="utf8", errors="replace", check=True,
-                         timeout=120).stdout  # a cloud placeholder file can hang ffprobe
-    return float(out.strip())
 
 
 def for_sharing(md_text: str) -> str:

@@ -19,20 +19,18 @@ import argparse
 import datetime as dt
 import json
 import os
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+from . import media
 from . import movement as M
 from . import workspace
 
 
 def probe(p: Path) -> dict:
     """duration (s) and frame rate of a video file."""
-    out = subprocess.run([os.environ.get("FFPROBE", "ffprobe"), "-v", "error", "-print_format", "json",
-                          "-show_format", "-show_streams", str(p)], capture_output=True, text=True, check=True).stdout
-    info = json.loads(out)
+    info = media.probe(p)
     v = next(s for s in info["streams"] if s.get("codec_type") == "video")
     num, den = (v.get("avg_frame_rate") or v.get("r_frame_rate") or "30/1").split("/")
     fps = float(num) / float(den) if float(den) else 30.0
@@ -86,7 +84,6 @@ def place(segments: list[dict], part_durations: list[float]) -> list[dict]:
 def build_reel(segments: list[dict], out: Path, w: int = M.REEL_W, h: int = M.REEL_H) -> list[float]:
     """Cut each window (optional crop), letterbox to w x h at 30 fps, no audio, and join into `out`; returns the
     length of each part in seconds."""
-    ffmpeg = os.environ.get("FFMPEG", "ffmpeg")
     out.parent.mkdir(parents=True, exist_ok=True)
     durs = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -102,15 +99,11 @@ def build_reel(segments: list[dict], out: Path, w: int = M.REEL_W, h: int = M.RE
             part = Path(tmp) / f"{s['id']}.mp4"
             print(f"[move-new] {s['id']} {s['kind']}/{s['view']} {Path(s['source']).name} {s['from']}-{s['to']}",
                   flush=True)
-            subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-y", "-ss", f"{a:.3f}", "-i", s["source"],
-                            "-t", f"{b - a:.3f}", "-vf", ",".join(vf), "-an", "-c:v", "libx264", "-preset", "veryfast",
-                            "-crf", "20", "-pix_fmt", "yuv420p", str(part)], check=True)
+            media.ffmpeg("-ss", f"{a:.3f}", "-i", s["source"], "-t", f"{b - a:.3f}", "-vf", ",".join(vf), "-an",
+                         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", part)
             parts.append(part)
             durs.append(probe(part)["duration"])
-        lst = Path(tmp) / "list.txt"
-        lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf8")
-        subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(lst),
-                        "-c", "copy", "-movflags", "+faststart", str(out)], check=True)
+        media.concat(parts, out, Path(tmp))
     return durs
 
 
