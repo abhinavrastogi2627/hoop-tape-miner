@@ -87,8 +87,63 @@ def classify_colours(p: pd.DataFrame, run: Path, video: str, seed=0) -> pd.DataF
     conf = y != "unk"
     clf = LogisticRegression(max_iter=2000, C=1.0).fit(X[conf], y[conf])
     prob = clf.predict_proba(X)
-    p["colour"] = np.where(prob.max(1) > 0.7, clf.classes_[prob.argmax(1)], "unk")
+    for i, c in enumerate(clf.classes_):
+        p[f"prob_{c}"] = prob[:, i]
+    p["colour"] = hard_colour(p)
     return p
+
+
+def _prob_cols(p: pd.DataFrame) -> list[str]:
+    return [c for c in p.columns if c.startswith("prob_")]
+
+
+def hard_colour(p: pd.DataFrame, min_prob: float = 0.7) -> pd.Series:
+    """Per detection: the most likely cluster label (prob_<label> columns) when above min_prob, else "unk"."""
+    cols = _prob_cols(p)
+    pr = p[cols].to_numpy()
+    lab = np.array([c[5:] for c in cols])[pr.argmax(1)]
+    return pd.Series(np.where(pr.max(1) > min_prob, lab, "unk"), index=p.index)
+
+
+def tracklet_colours(p: pd.DataFrame, min_prob: float = 0.5) -> pd.Series:
+    """track -> label with the highest mean probability over its detections, "unk" when none reaches min_prob
+    (a few mixed crops at a screen do not flip the tracklet)."""
+    cols = _prob_cols(p)
+    m = p.groupby("track")[cols].mean()
+    lab = m.idxmax(axis=1).str[5:]
+    return lab.where(m.max(axis=1) >= min_prob, "unk")
+
+
+def track_people(p: pd.DataFrame, teams: dict[str, str], fps: float, mode: str = "colour") -> pd.DataFrame:
+    """On-court detections with prob_<label> and colour -> tracked rows with track, colour, team, cx_s / cy_s.
+
+    joint: one court-space tracker over every person (unsure and referee crops included), the team per tracklet
+    from the mean class probability. colour: one tracker per hard colour label ("unk" detections are never
+    tracked and a one-frame colour flip moves a box to the other team's tracker). On a reference game joint gave
+    longer tracklets but more tracklets with two jersey numbers and many more frames with a sixth "player" per team
+    (bench and staff kept), so colour stays the default and `stitch` joins its fragments."""
+    p = p.copy()
+    if mode == "joint":
+        ids = track_team(p, fps)
+        p["track"] = ids
+        p = p[p.track >= 0]
+        p["colour"] = p.track.map(tracklet_colours(p))
+    elif mode == "colour":
+        p["track"] = -1
+        order = sorted(l for l in teams if l != "ref") + ["ref"]  # navy < teal: track ids as before
+        for i, col in enumerate(order):
+            m = p.colour == col
+            ids = track_team(p[m], fps)
+            p.loc[m, "track"] = np.where(ids >= 0, ids + i * 100000, -1)
+        p = p[p.track >= 0]
+        # a tracklet's colour = majority vote of its detections
+        p["colour"] = p.track.map(p.groupby("track").colour.agg(lambda s: s.value_counts().index[0]))
+    else:
+        raise ValueError(f"tracking mode {mode!r}: use joint or colour")
+    p = p[p.colour.isin(list(teams))].copy()
+    p["track"] = p.track.astype(int)
+    p["team"] = p.colour.map(teams)
+    return smooth_tracks(p)
 
 
 def main(argv=None):
@@ -99,6 +154,9 @@ def main(argv=None):
                     "(default: us.colour from --game; not needed for us/them labels)")
     ap.add_argument("--game", default=None, help="game.json (us.colour)")
     ap.add_argument("--fps", type=float, default=None, help="sampled frame rate (default: fps in camera.npz)")
+    ap.add_argument("--tracking", choices=["colour", "joint"], default="colour",
+                    help="colour: one tracker per team colour (default; fewer mixed tracklets, `stitch` joins the "
+                    "fragments); joint: one tracker for everybody, team per tracklet (longer but less pure)")
     args = ap.parse_args(argv)
     run = Path(args.run)
     fps = args.fps or sampled_fps(run)
@@ -112,21 +170,8 @@ def main(argv=None):
     p = classify_colours(p, run, args.video)
     print(p.colour.value_counts())
     teams = team_map(set(p.colour), us)
-
-    p["track"] = -1
-    order = sorted(l for l in teams if l != "ref") + ["ref"]  # navy < teal: track ids as before
-    for i, col in enumerate(order):
-        off = i * 100000
-        m = p.colour == col
-        ids = track_team(p[m], fps)
-        p.loc[m, "track"] = np.where(ids >= 0, ids + off, -1)
-    p = p[p.track >= 0]
-    # a tracklet's colour = majority vote of its detections
-    maj = p.groupby("track").colour.agg(lambda s: s.value_counts().index[0])
-    p["colour"] = p.track.map(maj)
-    p["team"] = p.colour.map(teams)
-    p = smooth_tracks(p)
-    p.drop(columns=["feat"]).to_pickle(run / "tracks.pkl")
+    p = track_people(p, teams, fps, mode=args.tracking)
+    p.drop(columns=["feat"], errors="ignore").to_pickle(run / "tracks.pkl")
     tl = p.groupby("track").size()
     print(f"{p.track.nunique()} tracklets, median len {tl.median():.0f} frames, >=50 frames: {(tl >= 50).sum()}")
 
