@@ -30,6 +30,8 @@ STAGES = {
     "coach-features": ("hoop_tape_miner.coach_features", "per-trip numbers from the court tracks (numbers back, spacing); ball quality"),
     "coach-insights": ("hoop_tape_miner.coach_insights", "check insights.json (evidence, KB, numbers, critic); blind A/B rating sheet"),
     "coach-eval": ("hoop_tape_miner.coach_eval", "score the coach review against official facts; lint insights"),
+    "load": ("hoop_tape_miner.load", "running load per stint from the tracks: distance, sprints, top speed -> load.json"),
+    "matchups": ("hoop_tape_miner.matchups", "defender distance at each reviewed shot + who guarded whom -> matchups.json"),
     "report": ("hoop_tape_miner.report", "pass 6: figures + stats.json"),
     "official": ("hoop_tape_miner.official", "league box score + score flow + video alignment"),
     "plusminus": ("hoop_tape_miner.plusminus", "on-court plus-minus per player from lineups + official score flow"),

@@ -175,8 +175,8 @@ def events(trips: list[dict], periods=None) -> list[Event]:
 
 # ---- which events a report folder shows -------------------------------------------------------------------------
 
-def review_dir(folder: Path) -> Path | None:
-    """The review folder of the game this report belongs to, or None."""
+def run_dir(folder: Path) -> Path | None:
+    """The run folder (game.json `run`, default <game>/run) of the game this report belongs to, or None."""
     gj = gc.find_up(folder)
     if gj is None:
         return None
@@ -184,9 +184,16 @@ def review_dir(folder: Path) -> Path | None:
     if gc.is_personal(game):
         return None
     run = Path(game["run"]) if game.get("run") else gj.parent / "run"
-    if not run.is_absolute():
-        run = gj.parent / run
-    review = run / game["review_dir"] if game.get("review_dir") else run / "review_v1"
+    return run if run.is_absolute() else gj.parent / run
+
+
+def review_dir(folder: Path) -> Path | None:
+    """The review folder of the game this report belongs to, or None."""
+    run = run_dir(folder)
+    if run is None:
+        return None
+    review_name = gc.load_game(folder).get("review_dir")
+    review = run / review_name if review_name else run / "review_v1"
     return review if review.is_dir() else None
 
 
