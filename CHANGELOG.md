@@ -30,6 +30,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `publish` stage: builds a private-link website from report folders (audio and clips as files, no local paths) and deploys it to Cloudflare (Workers static assets) for free with `--deploy`. Each report keeps one random URL across updates, and team reports are listed on a hub page.
 
 - `ball-track`, `rim-scan` and `shot-proposals` stages (also `run` steps before the coach sheets): a smoothed ball track and shot-attempt candidates at each rim from the ball arc, labelled made only when an official score event matches. Coach sheets draw the ball trail and a "CV attempt?" marker on the rim and list `cv_attempts` per possession for reviewers to confirm; they are candidates, never results.
+- `season` stage: one page per season from every game folder (results, points per half, Four Factors per game with small charts, last game's targets checked in the next game, recurring coaching themes, per-player on/off and 5-player lineups pooled with shrinkage and small-sample flags); missing data is listed, never filled in. `season --brief [--opponent <name>]` writes a pre-game listen script for `narrate --script`, and `publish` pins the season page at the top of the team hub with its own stable link.
 
 ### Changed
 
