@@ -164,6 +164,21 @@ def test_load_game_finds_session_json(tmp_path):
     assert gc.is_training(g) and g["video"] == "v.mp4"
 
 
+def test_train_sheets_keeps_reviews_unless_forced(tmp_path, monkeypatch):
+    from hoop_tape_miner import train_sheets as S
+    (tmp_path / "session.json").write_text(json.dumps({"kind": "training", "rim": [], "rim_checked": True}))
+    (tmp_path / "run" / "train_review").mkdir(parents=True)
+    np.savez(tmp_path / "run" / "pose.npz", t=np.arange(3.0))
+    calls = []
+    monkeypatch.setattr(S, "build", lambda *a, **k: calls.append(a))
+    S.main([str(tmp_path)])                                   # no reviews yet: builds
+    (tmp_path / "run" / "train_review" / "review_part1.json").write_text("[]")
+    with pytest.raises(SystemExit, match="--force"):
+        S.main([str(tmp_path)])                               # reviews would no longer match the new parts
+    S.main([str(tmp_path), "--force"])
+    assert len(calls) == 2
+
+
 def _person(x: float, y: float, s: float = 100.0) -> np.ndarray:
     """COCO-17 keypoints of a standing person, top of the head at (x, y), s = height in px."""
     kp = np.zeros((17, 2))

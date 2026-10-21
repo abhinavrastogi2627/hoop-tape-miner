@@ -312,7 +312,7 @@ uv run hoop-tape-miner train workspace/players/17/training/<date> > workspace/lo
 
 **Training step 3: rim boxes.** View `run/train_review/rim_probe.jpg` (four frames across the session, grid lines every 0.1). In `session.json` set `rim` to the rim's box as frame fractions `[x, y, w, h]` (top-left, size), e.g. `[{"from": "00:00", "box": [0.47, 0.18, 0.06, 0.03]}]`. Add an entry with a later `from` when the camera moved, `"box": null` when the rim leaves the frame, or `[]` when it is never in view. Then set `"rim_checked": true`.
 
-**Training step 4: sheets.** `train-sheets` writes overview sheets (a frame every 10 s), rep sheets (set / release / follow-through crops, a rim filmstrip from +0.3 s to +2.1 s, a wide frame at +0.8 s) and dribble sheets, split into parts of 50 candidates with one brief each.
+**Training step 4: sheets.** `train-sheets` writes overview sheets (a frame every 10 s), rep sheets (set / release / follow-through crops, a rim filmstrip from +0.3 s to +2.1 s, a wide frame at +0.8 s) and dribble sheets, split into parts of 50 candidates with one brief each. Once any `review_part<N>.json` exists it will not rebuild (the parts could shift under the reviews); run `hoop-tape-miner train-sheets <session> --force` to rebuild, then review every part again.
 
 **Training step 5: film review.** One subagent per `brief_part<N>.md` (at most 3 at once). Each writes `review_part<N>.json` (every candidate confirmed or rejected, make / miss / unclear, zone, spot, type, miss direction, form notes, drill blocks, dribble drills, reps the scan missed) and `memo_part<N>.md`. Do not read the sheets yourself. Re-run a part whose json does not parse or misses candidate ids.
 

@@ -14,6 +14,7 @@ Without --probe (needs rim_checked) it writes to <run>/train_review/:
   dribble_<NN>.jpg    per dribble segment: six crops of the player across it
   manifest.json       parts (time ranges) with their sheets and candidates
   brief_part<N>.md    the review brief per part, from prompts/training_review_brief.md
+Once review_part*.json exist it refuses to rebuild unless --force (the parts may change under the reviews).
 """
 from __future__ import annotations
 
@@ -313,6 +314,8 @@ def main(argv=None):
     ap.add_argument("folder", help="session folder (with session.json)")
     ap.add_argument("--probe", action="store_true", help="only write rim_probe.jpg (for setting session.json rim)")
     ap.add_argument("--reps-per-part", type=int, default=50, help="rep candidates per review part (default 50)")
+    ap.add_argument("--force", action="store_true",
+                    help="rebuild the sheets even when review_part*.json exist (their candidates may no longer match)")
     a = ap.parse_args(argv)
     folder = Path(a.folder)
     s = T.load_session(folder)
@@ -327,6 +330,11 @@ def main(argv=None):
     if not s.get("rim_checked"):
         sys.exit("set session.json `rim` (or [] when the rim is not in view) and \"rim_checked\": true first; "
                  f"see `hoop-tape-miner train-sheets {folder} --probe`")
+    reviewed = sorted((run / "train_review").glob("review_part*.json"))
+    if reviewed and not a.force:
+        sys.exit(f"{len(reviewed)} review_part*.json in {run / 'train_review'} were written against the current "
+                 "sheets; rebuilding may move candidates between parts. Re-run with --force to rebuild anyway "
+                 "(then review every part again).")
     build(folder, s, run, video, a.reps_per_part)
 
 
