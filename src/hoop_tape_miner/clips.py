@@ -7,6 +7,8 @@ A report marks a clip as a markdown image with a `clip:` link in video time (mm:
 This stage scans README.md and README.en.md in the folder, cuts every referenced window from the game video
 into `clips/<from>-<to>.mp4` (small H.264, 480p, mono audio) plus a `.jpg` poster, and skips files that already
 exist. `hoop-tape-miner html` turns the same markers into players (embedded in --share pages).
+It also cuts the short windows the page's shot chart and playlists need (one per reviewed shot, turnover and foul
+with a video time, see film_index.py); a window shared by a marker, the chart and a playlist is cut once.
 
 usage: hoop-tape-miner clips workspace/teams/<opponent>/<date> [--video game.mp4] [--height 480] [--force]
        hoop-tape-miner clips workspace/teams/<opponent>/<date>/player-<number> --video game.mp4
@@ -45,14 +47,19 @@ def clip_path(folder: Path, start: str, end: str) -> Path:
     return folder / "clips" / f"{clip_name(start, end)}.mp4"
 
 
-def find_clips(folder: Path) -> list[tuple[str, str]]:
-    """Unique (start, end) windows referenced by the folder's READMEs, in order of first appearance."""
+def find_clips(folder: Path, film: bool = True) -> list[tuple[str, str]]:
+    """Unique (start, end) windows referenced by the folder's READMEs, in order of first appearance, then (film)
+    the shot chart / playlist windows from the reviewed trips."""
     seen = {}
     for name in READMES:
         p = folder / name
         if p.exists():
             for m in CLIP_RE.finditer(p.read_text(encoding="utf8")):
                 seen.setdefault(m.groups(), None)
+    if film:
+        from .film_index import windows  # film_index imports this module
+        for w in windows(folder):
+            seen.setdefault(w, None)
     return list(seen)
 
 

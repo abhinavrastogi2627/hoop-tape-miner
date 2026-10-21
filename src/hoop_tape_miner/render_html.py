@@ -2,6 +2,7 @@
 a 中文 / EN switch. Images are inlined; if listen.zh.mp3 / listen.en.mp3 sit next to the READMEs
 (`hoop-tape-miner narrate` makes them) the page gets a play button that reads the report aloud. Clip markers
 `![caption](clip:07:24-07:33)` become numbered video players (cut them first with `hoop-tape-miner clips`).
+Game pages with a film review also get a shot chart and playlists after the report (film_index.py).
 
 usage: hoop-tape-miner html workspace/teams/<opponent>/<date> [--out index.html]
        hoop-tape-miner html workspace/teams/<opponent>/<date>/player-<number>
@@ -27,6 +28,7 @@ from pathlib import Path
 from markdown_it import MarkdownIt
 
 from . import clips as clipmod
+from . import film_index
 from . import game_config as gc
 
 # Raw HTML is off: README text is agent-written and quotes league data, so a <script> or <img onerror> in it must
@@ -436,6 +438,7 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
     embed = share if embed is None else embed
     sb = scoreboard(folder)
     arts, tocs, titles = [], [], {}
+    film_assets = False
     langs = report_langs(folder)
     first, first_attr = langs[0][0], langs[0][1]
 
@@ -445,6 +448,8 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
         text = (folder / fname).read_text(encoding="utf8")
         titles[code] = re.match(r"# (.*)", text).group(1).strip()
         body, heads = render(text, code, share, folder, embed)
+        film, film_heads = film_index.sections(folder, code, embed, len(heads) + 1)  # shot chart + playlists
+        body, heads, film_assets = body + film, heads + film_heads, film_assets or bool(film)
         arts.append(f'<article class="report" data-lang="{code}" lang="{attr}"{hide(code)}>{inline_images(body, folder)}</article>')
         links = "".join(f'<li><a href="#{code}-s{i}">{html.escape(h)}</a></li>' for i, h in enumerate(heads, 1))
         tocs.append(f'<nav class="toc" data-lang="{code}" lang="{attr}" aria-label="{UI[code]["contents"]}"{hide(code)}>'
@@ -484,7 +489,8 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
         us_hex=us_hex, them_hex=them_hex, us_light=us_light, them_light=them_light,
         us_light_rgb=", ".join(map(str, gc.hex_to_rgb(us_light))),
         listen=listen, mini=mini, tocs="".join(tocs),
-        articles=("" if sb.get("training") else four_factors_panel(folder, sb, langs)) + "".join(arts),
+        articles=("" if sb.get("training") else four_factors_panel(folder, sb, langs)) + "".join(arts)
+        + (film_index.ASSETS if film_assets else ""),
     )
 
 
