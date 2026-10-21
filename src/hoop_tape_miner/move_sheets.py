@@ -26,7 +26,7 @@ import numpy as np
 
 from . import media
 from . import movement as M
-from . import run as R
+from .pipeline import newer
 from . import train_scan as S
 from . import train_sheets as TS
 from . import training as T
@@ -322,14 +322,14 @@ def build(folder: Path, group_size: int = 8, force: bool = False) -> dict:
         z = np.load(npz)
         pose = {k: z[k] for k in z.files}
         kp_, st_ = out / f"keys_{s['id']}.jpg", out / f"strip_{s['id']}.jpg"
-        if force or not R._newer(kp_, npz):  # missing, or the track was picked again since
+        if force or not newer(kp_, npz):  # missing, or the track was picked again since
             key_sheet(s, g, pose, kp_)
-        if s["view"] == "side" and (force or not R._newer(st_, npz)):
+        if s["view"] == "side" and (force or not newer(st_, npz)):
             strip_sheet(s, g, pose, st_)
         sheets[s["id"]] = {k: str(p) for k, p in (("keys", kp_), ("strip", st_)) if p.exists()}
     reel = M.path(folder, m, "video", "reel.mp4")
     ov = reel.with_name("reel.overlay.mp4")
-    if force or not R._newer(ov, reel, *seg_npzs(run, m)):  # missing, older than the reel or than a re-picked track
+    if force or not newer(ov, reel, *seg_npzs(run, m)):  # missing, older than the reel or than a re-picked track
         print("[move-sheets] drawing the overlay reel", flush=True)
         overlay_reel(m, folder, run, ov)
     m["video_overlay"] = str(ov)
