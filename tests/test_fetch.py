@@ -238,3 +238,26 @@ def test_identity_alignment_maps_every_event():
 def test_queries_packaged():
     q = fetch.queries()
     assert set(fetch.OPS) <= set(q) and all(f"query {op}(" in q[op] for op in fetch.OPS)
+
+
+def test_refetch_without_video_keeps_own_video_alignment(ws, monkeypatch):
+    """A game aligned to our own video keeps that alignment when fetched again without --video (unless --force)."""
+    video = bytes(range(256)) * 40
+    monkeypatch.setattr(fetch, "_open", Fake(video=video))
+    own = ws / "own.mp4"
+    own.write_bytes(b"own")
+    segs = [{"official_from": 0, "official_to": 1200.0, "offset_s": 78.5, "corr": 0.9}]
+    monkeypatch.setattr(fetch.official, "align_videos", lambda a, b: segs)
+    folder = fetch.main([URL, "--video", str(own)])
+    off_path = Path(json.loads((folder / "game.json").read_text(encoding="utf8"))["run"]) / "official.json"
+    first = json.loads(off_path.read_text(encoding="utf8"))
+    assert first["video_alignment"]["segments"] == segs
+
+    fetch.main([URL])                                            # the run loop re-entering with the url
+    again = json.loads(off_path.read_text(encoding="utf8"))
+    assert again["video_alignment"] == first["video_alignment"]
+    assert [e["our_video_t"] for e in again["score_flow"]] == [e["our_video_t"] for e in first["score_flow"]]
+
+    fetch.main([URL, "--force"])
+    forced = json.loads(off_path.read_text(encoding="utf8"))
+    assert forced["video_alignment"]["segments"][0]["offset_s"] == 0

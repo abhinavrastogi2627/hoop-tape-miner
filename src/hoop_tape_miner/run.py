@@ -7,7 +7,8 @@ steps run (long ones log to <workspace>/logs/<game>-<step>.log), and the run sto
 output is missing, printing what to do. Exit codes: 0 everything done, 3 waiting for the agent, 1 a command failed.
 Deliverables: the team page and the focus-player page (index.html with narration audio and clips, published as
 links with --publish) and the explained video film.<lang>.mp4 (a file to send yourself; never published).
-A league url is fetched first (`fetch`), then the run continues in that game folder.
+A league url is fetched first (`fetch`), then the run continues in that game folder; a url whose game folder
+already exists (game.json league.game_id) reuses it without fetching again (--refetch to force a fetch).
 """
 from __future__ import annotations
 
@@ -377,6 +378,19 @@ def drive(g: Game, until: str | None = None, redo: str | None = None, publish: b
     return 0
 
 
+def game_for_url(url: str, game_id: Callable[[str], str]) -> Path | None:
+    """The workspace game folder already fetched from this league url (game.json league.game_id), else None."""
+    gid = game_id(url)
+    for gj in sorted((workspace.root() / "teams").glob("*/*/game.json")):
+        try:
+            league = json.loads(gj.read_text(encoding="utf8")).get("league") or {}
+        except (OSError, ValueError):
+            continue
+        if league.get("game_id") == gid:
+            return gj.parent
+    return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="hoop-tape-miner run", description=__doc__.splitlines()[0])
     ap.add_argument("target", help="game folder (with game.json), or a league game url to fetch first")
@@ -385,11 +399,18 @@ def main(argv=None):
     ap.add_argument("--until", choices=NAMES, help="stop after this step")
     ap.add_argument("--redo", choices=NAMES, help="run this step again even if its output exists")
     ap.add_argument("--publish", action="store_true", help="also deploy the pages (publish --deploy) at the end")
+    ap.add_argument("--refetch", action="store_true",
+                    help="url target: fetch again even when the game folder exists (keeps an own-video alignment)")
     a = ap.parse_args(argv)
     target = a.target
     if target.startswith(("http://", "https://")):
         from . import fetch
-        target = str(fetch.main([target]))
+        found = None if a.refetch else game_for_url(target, fetch.game_id)
+        if found:
+            print(f"[run] already fetched: {found} (use --refetch to fetch the league data again)")
+            target = str(found)
+        else:
+            target = str(fetch.main([target]))
     g = Game.load(Path(target))
     if a.status:
         for name, kind, ok in status(g):

@@ -19,7 +19,7 @@ Then, per game, either type `/game <league game url>` in Claude Code (`.claude/c
 uv run hoop-tape-miner run <league game url | game folder> > workspace/logs/run.log 2>&1
 ```
 
-- A url is fetched first (step 1); the run then works in the game folder it prints. Use that folder for every later run.
+- A url is fetched first (step 1); the run then works in the game folder it prints. Use that folder for every later run. Running the url again is safe: a game already fetched (its `game.json` has the league game id) reuses its folder without fetching; `--refetch` fetches the league data again.
 - Each step knows its output file, so a run resumes where it stopped and never redoes a stage whose output exists. CV stages log to `workspace/logs/<team>-<date>-<step>.log`.
 - **Exit 3**: the run waits for you. The log names the step and what to do (the matching section below). Do it, then run again.
 - **Exit 1**: a command failed; the log shows the tail of its stage log. Fix the cause and run again.
@@ -82,7 +82,7 @@ uv run hoop-tape-miner fetch <game url> [--video OUR_VIDEO] [--no-video]
 - Logs in with `GLORY_EMAIL` / `GLORY_PASSWORD` from the environment or the secrets file in `team.json` (never print them), reads the game, box score and point chart, and downloads the league's game video (720p, resumable).
 - Writes `$GJ` (teams, rosters, final and halftime score, periods, league id) and `$RUN/official.json` (box score, score flow, video alignment). Heavy files go to `<media_root>/teams/<slug>/<date>/` (`video/`, `run/`, raw `league/` responses, which contain names).
 - `--video OUR_VIDEO` keeps our own recording as the game video; the league video is then only used to align the score flow to it.
-- An existing `game.json` keeps the fields you filled (`--force` overwrites them with league data). The last line printed is the game folder.
+- An existing `game.json` keeps the fields you filled, and an existing `$RUN/official.json` keeps its video alignment when it is not the identity (aligned to our own video, or fixed by hand); `--force` overwrites both with league data. The last line printed is the game folder.
 
 **Without league data**:
 

@@ -30,7 +30,7 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 
 | Stage | Required args [optional] | Output |
 |---|---|---|
-| `run` | `TARGET` (game folder or league game url) [`--status --dry --until --redo --publish`] | every stage below in order, resuming from existing outputs; exit 3 when an agent step is due, 1 on a failed stage; publishes only with `--publish` |
+| `run` | `TARGET` (game folder or league game url) [`--status --dry --until --redo --publish --refetch`] | every stage below in order, resuming from existing outputs (a url of a game already fetched reuses its folder); exit 3 when an agent step is due, 1 on a failed stage; publishes only with `--publish` |
 | `fetch` | `URL` [`--video --us-team --secrets --no-video --force`] | Glory League game: `game.json` (teams, rosters, result, periods, league id), `run/official.json`, the league video in `<media>/video/league.mp4` (resumable), raw responses in `<media>/league/` |
 | `new-game` | `--opponent --date` [`--video --us-team --dossier --force`] | `workspace/teams/<slug>/<date>/game.json` (from `templates/game.example.json`), `run/`; `--dossier` also the opponent README |
 | `calibrate` | `--video --times --out` [`--grid --points --propagate --step --detections --max-point-err`] | `--grid`: `grid_<t>.jpg` (pixel grid + numbered landmark map) to read without a GUI; `--points`: solve points.json, print PASS/WEAK per frame (exit 2 if weak); without either, click in a window. `<out>/keyframes.json`, overlays |

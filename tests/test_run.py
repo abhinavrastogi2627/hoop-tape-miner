@@ -229,11 +229,29 @@ def test_url_target_is_fetched_first(game, monkeypatch):
     import sys
     import types
     seen = []
-    fake = types.SimpleNamespace(main=lambda argv: seen.append(argv) or game)
+    fake = types.SimpleNamespace(main=lambda argv: seen.append(argv) or game, game_id=lambda url: "abc==")
     monkeypatch.setitem(sys.modules, "hoop_tape_miner.fetch", fake)
     import hoop_tape_miner
     monkeypatch.setattr(hoop_tape_miner, "fetch", fake, raising=False)
     R.main(["https://league.example/game/abc==/overview", "--status"])
+    assert seen == [["https://league.example/game/abc==/overview"]]
+
+
+def test_url_of_a_fetched_game_reuses_its_folder(game, monkeypatch, capsys):
+    """Re-entering the run loop with the league url must not fetch again (it would rewrite official.json)."""
+    g = json.loads((game / "game.json").read_text(encoding="utf8"))
+    g["league"] = {"kind": "glory", "game_id": "abc==", "url": "https://league.example/game/abc==/overview"}
+    (game / "game.json").write_text(json.dumps(g), encoding="utf8")
+    import sys
+    import types
+    seen = []
+    fake = types.SimpleNamespace(main=lambda argv: seen.append(argv) or game, game_id=lambda url: "abc==")
+    monkeypatch.setitem(sys.modules, "hoop_tape_miner.fetch", fake)
+    import hoop_tape_miner
+    monkeypatch.setattr(hoop_tape_miner, "fetch", fake, raising=False)
+    R.main(["https://league.example/game/abc==/overview", "--status"])
+    assert seen == [] and "already fetched" in capsys.readouterr().out
+    R.main(["https://league.example/game/abc==/overview", "--status", "--refetch"])
     assert seen == [["https://league.example/game/abc==/overview"]]
 
 

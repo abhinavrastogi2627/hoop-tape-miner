@@ -6,7 +6,9 @@ The url is the game page, e.g. https://my.gloryleague.basketball/game/<GAME_ID>/
 Credentials: env GLORY_EMAIL / GLORY_PASSWORD, else KEY=VALUE lines in --secrets or team.json league.secrets.
 Raw league responses (they contain person names) stay in <media>/league/; game.json and official.json keep
 jersey numbers only. The league video goes to <media>/video/league.mp4 (resumable). Without --video it is our
-video too and the alignment is the identity; with --video it is used to align our own video.
+video too and the alignment is the identity; with --video it is used to align our own video. A re-fetch keeps
+filled game.json fields and a non-identity alignment in run/official.json (own video, or fixed by hand); --force
+replaces both.
 """
 from __future__ import annotations
 
@@ -275,6 +277,21 @@ def identity_alignment(length: float | None) -> list[dict]:
              "corr": 1.0}]
 
 
+def kept_alignment(official_json: Path) -> dict | None:
+    """The video_alignment of an existing official.json when it is worth keeping (not the identity): an
+    alignment to our own video, or one fixed by hand. None when there is none or it is the identity."""
+    if not official_json.exists():
+        return None
+    try:
+        va = json.loads(official_json.read_text(encoding="utf8")).get("video_alignment") or {}
+    except (OSError, ValueError):
+        return None
+    segs = va.get("segments") or []
+    if not segs or all(not s.get("offset_s") for s in segs):
+        return None
+    return va
+
+
 # ---- game.json -----------------------------------------------------------------------------------------
 
 def _empty(v, default) -> bool:
@@ -316,7 +333,8 @@ def main(argv=None) -> Path:
     ap.add_argument("--secrets", help="KEY=VALUE file with GLORY_EMAIL / GLORY_PASSWORD "
                                       "(default: league.secrets in team.json)")
     ap.add_argument("--no-video", action="store_true", help="do not download the league video")
-    ap.add_argument("--force", action="store_true", help="overwrite filled game.json fields with league data")
+    ap.add_argument("--force", action="store_true", help="overwrite filled game.json fields with league data and recompute the "
+                                                          "video alignment")
     a = ap.parse_args(argv)
 
     gid = game_id(a.url)
@@ -353,7 +371,13 @@ def main(argv=None) -> Path:
     fill(game, game_fields(facts, prof, a.url, gid, ours, run), default, a.force)
     gj.write_text(json.dumps(game, indent=2, ensure_ascii=False) + "\n", encoding="utf8")
 
-    if own:
+    kept = None if a.force else kept_alignment(run / "official.json")
+    if kept:
+        segs = kept["segments"]
+        gv = Path(game["video"]).expanduser() if game.get("video") else None
+        length = video_length(gv) if gv and gv.exists() else None
+        print(f"kept the video alignment in {run / 'official.json'} (it is not the identity; --force recomputes it)")
+    elif own:
         segs = official.align_videos(own, league_video) if have_league else None
         if not have_league:
             print("note: no league video, so official.json has no alignment (our_video_t is empty)")
@@ -362,7 +386,9 @@ def main(argv=None) -> Path:
         length = video_length(league_video) if have_league else None
         segs = identity_alignment(length)
     off = official.load_glory(data["BoxScore"], data["PointChart"], facts["us_is_home"], segs, length)
-    if own and segs:
+    if kept:
+        off["video_alignment"] = kept
+    elif own and segs:
         off["video_alignment"]["desc"] = "our_video_t = official_video_t - offset_s (fetch: frame correlation)"
     elif not own:
         off["video_alignment"]["desc"] = "our video is the league video: identity alignment"
@@ -375,7 +401,7 @@ def main(argv=None) -> Path:
   game.json     {gj}
   official.json {run / 'official.json'}
   league data   {league}
-  video         {ours or 'none (use --video or drop --no-video)'}
+  video         {game.get('video') or ours or 'none (use --video or drop --no-video)'}
 {folder}""")
     return folder
 
