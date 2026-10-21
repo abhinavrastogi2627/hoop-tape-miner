@@ -363,7 +363,7 @@ def clip_players(body: str, folder: Path | None, lang: str, embed: bool, windows
         if mp4 is None or not mp4.exists():
             print(f"warning: clips/{name}.mp4 missing; run `hoop-tape-miner clips {folder}`", file=sys.stderr)
             return f'<figure class="clip missing" id="{lang}-clip-{name}">{cap}<p>{UI[lang]["missing"]}</p></figure>'
-        poster = mp4.with_suffix(".jpg")
+        poster = clipmod.poster_of(mp4)  # the telestrated poster when the posters stage made one
         src = data_uri(mp4) if embed else f"clips/{mp4.name}"
         post = f' poster="{data_uri(poster) if embed else "clips/" + poster.name}"' if poster.exists() else ""
         return (f'<figure class="clip" id="{lang}-clip-{name}"><video controls playsinline preload="none"{post} src="{src}"></video>'
@@ -450,6 +450,34 @@ def listen_block(folder: Path, embed: bool, langs: list[tuple] | None = None):
     return block, mini
 
 
+def tracking_sections(folder: Path, lang: str, first: int) -> tuple[str, list[str]]:
+    """(HTML, h2 titles) from the run's load.json (player page: stint table) and matchups.json (team page: shot
+    defence + matchups; player page: that player's rows); empty when the files are missing."""
+    from . import load as loadmod
+    from . import matchups as mumod
+
+    run = film_index.run_dir(folder) if Path(folder).is_dir() else None
+    if run is None:
+        return "", []
+    focus = film_index.focus_of(folder)
+    out, heads = [], []
+    for name, mod, render in (("load.json", loadmod, lambda d: loadmod.table_html(d, focus, lang) if focus else ""),
+                              ("matchups.json", mumod, lambda d: mumod.tables_html(d, focus, lang))):
+        p = run / name
+        if not p.exists():
+            continue
+        try:
+            body = render(json.loads(p.read_text(encoding="utf8")))
+        except (ValueError, KeyError, TypeError) as ex:
+            print(f"warning: {p} not shown ({ex})", file=sys.stderr)
+            continue
+        if body:
+            title = mod.UI[lang]["title"]
+            out.append(f'<h2 id="{lang}-s{first + len(heads)}">{title}</h2>{body}')
+            heads.append(title)
+    return "".join(out), heads
+
+
 def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
     """share: drop repo links and local paths; embed (default: same as share): inline audio and clips."""
     embed = share if embed is None else embed
@@ -467,6 +495,8 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
         body, heads = render(text, code, share, folder, embed)
         film, film_heads = film_index.sections(folder, code, embed, len(heads) + 1)  # shot chart + playlists
         body, heads, film_assets = body + film, heads + film_heads, film_assets or bool(film)
+        track, track_heads = tracking_sections(folder, code, len(heads) + 1)  # load per stint, matchups
+        body, heads = body + track, heads + track_heads
         arts.append(f'<article class="report" data-lang="{code}" lang="{attr}"{hide(code)}>{inline_images(body, folder)}</article>')
         links = "".join(f'<li><a href="#{code}-s{i}">{html.escape(h)}</a></li>' for i, h in enumerate(heads, 1))
         tocs.append(f'<nav class="toc" data-lang="{code}" lang="{attr}" aria-label="{UI[code]["contents"]}"{hide(code)}>'

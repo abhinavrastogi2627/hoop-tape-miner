@@ -206,6 +206,15 @@ uv run hoop-tape-miner momentum --official "$RUN/official.json" --game "$GJ" --l
 
 `momentum` detects scoring runs itself (`--min-run 8`); pass `--stretches "Start:0-450,Run:450-1272,..."` to match the stretches you chose in step 7. `--players us#4,us#7` limits the on-court lanes.
 
+Tracking numbers (no video pass, seconds each):
+
+```
+uv run hoop-tape-miner load --run "$RUN"                                  # running load per stint -> $RUN/load.json
+uv run hoop-tape-miner matchups --run "$RUN" --review "$RUN/review_v1" --game "$GJ"   # -> $RUN/matchups.json
+```
+
+`load` gives each player's stints (from `lineup_intervals.json`) with distance, sprints, top speed and high-speed distance, plus how much of the stint the tracks saw; a stint under 50% is flagged, and gaps are never filled, so distance is a lower bound for the tracked time. `matchups` measures the nearest defender at each shot (tight / contested / open, or unknown) and who guarded whom over our and their possessions. The pages pick both up (step 12); quote them in a report only with their coverage, and prefer the reviewer's `contested` label when the two disagree.
+
 ## 9. Fact sheets (before any prose)
 
 Write `$RUN/review_v1/players_facts.md` (all our players) and `player<N>_facts.md` for the focus player from the coach parts, memos, notes, `summary.json`, plus-minus and official data:
@@ -238,6 +247,15 @@ Writes `clips/<from>-<to>.mp4` (480p, about 1 MB per 10 s) and a poster per mark
 
 The same command also cuts the clips of the shot chart and the playlists (one 7–8 s window per reviewed shot, turnover and foul with a video time in the review's `coach_part*.json`; see step 12), so a team page gains about 40–60 clips (about 0.8 MB each). A window that is both a marker and a chart dot is cut once. Trips without a time (old v1 reviews) use their `key_clip`, or stay on the chart without a clip.
 
+Then mark the posters, so a reader sees who to watch before pressing play:
+
+```
+uv run hoop-tape-miner posters "$G" --video "$V"
+uv run hoop-tape-miner posters "$G/player-<N>" --video "$V"
+```
+
+Writes `clips/<from>-<to>.mark.jpg`: the players named in the caption (`我#17`, `对#25`, or a bare `#17`) and the shooter / fouler of the reviewed event get a ring, the rest of the frame is dimmed, a foul gets an arrow to the player fouled. Only players the tracks see at the poster frame are drawn; the others stay plain. Pages use the marked poster; re-cut clips (`clips --force`) fall back to the plain one until `posters` runs again. Spot-check a few marked posters (is the ring on the right player?).
+
 ## 11. Narration
 
 Write `listen.<lang>.md` for each language in `$G` and in `$G/player-<N>/` (`prompts/narration.md`), then:
@@ -262,6 +280,8 @@ When the game has a review (`game.json` `run` / `review_dir`), each page also ge
 
 - **Shot chart**: every reviewed shot as a dot in its zone on a half court (filled = made, ring = missed, dashed ring = make/miss unclear; never guessed), zones shaded by points per shot over the shots whose outcome is known, a zone table, filters by team, player and half; a dot plays its clip under the chart. The player page shows only that player's shots.
 - **Playlists**: per player (their shots and fouls; turnovers carry no jersey in the trip schema) and per theme: our turnovers, live-ball turnovers (when the trips have `turnover_kind`), fouls we gave, their scores, transition defence (when the trips have `transition`), our offensive rebounds. Each plays straight through in one player; at most 12 clips per playlist (`film_index.MAX_PLAYLIST`, the earliest ones).
+
+With `$RUN/load.json` / `$RUN/matchups.json` (step 8) the pages also get, at the end: **Running load per stint** (player page only; low-coverage stints dimmed) and **Matchups and shot defence** (team page: shots by defender distance per team, and for each attacker the defender who guarded them most and the share of time unguarded; player page: that player's line).
 
 `--share` files keep the chart without clips and drop the playlists (they would embed dozens of videos).
 
@@ -308,6 +328,7 @@ Not part of the default run; make them when the user asks.
 | Opponent dossier `workspace/teams/<slug>/README.md` | `new-game --dossier` creates it; update it with `prompts/opponent_dossier.md` |
 | Rematch scouting `workspace/teams/<slug>/scout.md` | `scout --opponent "<name>" [--before <date of the next game>]` pools every past game against them: record and scores, their top scorers by jersey (official box only), Four Factors and points per trip by trip type pooled over the reviewed games (us vs them), what decided each game (Four Factors line, longest runs, halftime), and our insights' targets with the next game's values (met / missed only for an insight with a `target_check`, else "unclear"). `new-game --dossier` refreshes it with the games before its date. Use its numbers in the dossier and the pre-game talk; anything it marks unclear stays unclear. |
 | On-court cue loops | `prompts/court_cues.md` -> `workspace/players/<N>/cues.court.<lang>.md`, then `narrate --script <file> --chime --gap 6 --loud` (during play: `--gap 0.4 --tight`, no chime) |
+| 9:16 phone reel of one player | `reels "$G/player-<N>" --video "$V"` (or `reels "$G" --player <N>`): `reels/reel.<N>.<lang>.mp4`, title card + their shot and foul clips with the crop following them (centre crop where the tracks lose them). Never published; give the path, the user sends it |
 | Tactics-board replay | `replay --run "$RUN" --out "$RUN/replay" --game "$GJ" --pid 13` |
 | Figures from CV (shot zones, heat maps) | `report --run "$RUN" --out "$RUN/report" --game "$GJ" [--events "$RUN/events.json" --coverage "$RUN/review_coverage.json"]` |
 | Event review for shot charts | `review --run "$RUN" --video "$V" --game "$GJ"`; reviewers follow `docs/review_protocol.md`, then `merge-reviews --run "$RUN" --review review` |
