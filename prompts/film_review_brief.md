@@ -33,7 +33,7 @@ You are an experienced basketball assistant coach breaking down game film for a 
 
 ## Per-possession checklist
 
-Fill the JSON for EVERY possession in your part. A possession may contain several trips: split them into separate objects with the same `pid` and a `trip` index (1, 2, ...). Every trip has `"schema": 2` and `t0`/`t1` (trip start/end, seconds of our video). Jerseys are strings like `"13"` or `null`; put doubts ("13 or 45", "likely") in a `*_note` field, never in the jersey field.
+Fill the JSON for EVERY possession in your part. A possession may contain several trips: split them into separate objects with the same `pid` and a `trip` index (1, 2, ...). Every trip has `"schema": 2` and `t0`/`t1` (trip start/end, seconds of our video). Jerseys are strings like `"13"` or `null`; put doubts ("13 or 45", "likely") in a `*_note` field, never in the jersey field. `coach-check` fails a part when a possession has no trip, when more than 20 s inside a possession are covered by no trip, or when a made shot / made free throw has `shooter: null` or a foul has `by: null` without a note: write the jersey, or `"shooter_note"` / `"by_note"`: `"unknown: <why>"`.
 
 Offence:
 - `offence`: us | them | none (dead ball: timeout, period break). What you actually see; correct the CV guess when wrong.

@@ -177,11 +177,11 @@ def test_summarise_has_four_factors_and_ppp(tmp_path, capsys):
 def test_insights_check_verifies_four_factors_numbers():
     summary = {"all": {"four_factors": CS.four_factors(CS.annotate(TRIPS), min_poss=1)}}
     ins = [{"id": "x", "claim": "c", "why": "w", "rule": "r", "drill": "d", "target_next_game": "t",
-            "evidence": [{"t": 1.0}, {"t": 21.0}], "kb": ["k"], "confidence": "high",
+            "evidence": [{"t": 1.0, "pid": 0, "trip": 1}, {"t": 21.0, "pid": 20, "trip": 1}], "kb": ["k"], "confidence": "high",
             "critic": {"verdict": "keep"}, "numbers": {"all.four_factors.us.efg_pct": 70.0,
                                                         "all.four_factors.them.tov_pct": 33.3}}]
     errs = validate_insights(ins, TRIPS, None, summary)
-    assert errs == ["insight x: number all.four_factors.us.efg_pct = 70.0 but the source says 75.0"]
+    assert errs == ["insight x: number all.four_factors.us.efg_pct = 70.0 but summary.json says 75.0"]
 
 
 def test_rebound_field_wins_over_the_next_trip_and_putback_after_free_throws():

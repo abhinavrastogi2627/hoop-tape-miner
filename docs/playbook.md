@@ -37,7 +37,7 @@ Steps in order (agent steps marked *):
 | extract, embed, montage | 4 |
 | clusters*, tracks, jersey, analyze | 5 |
 | official* | 6 |
-| coach-sheets, film-review*, features, summary*, insights* | 7 |
+| coach-sheets, film-review*, features, coach-eval, summary*, insights*, critic* | 7 |
 | momentum | 8 |
 | facts* | 9 |
 | reports*, clips | 10 |
@@ -160,8 +160,9 @@ uv run hoop-tape-miner coach-sheets --run "$RUN" --game "$GJ" --out "$RUN/review
 
    Writes `p<pid>_<k>.jpg` sheets, `manifest.json`, `part<N>.json`, `lineup_intervals.json` and `brief_part<N>.md` (filled from `prompts/film_review_brief.md`). Read one brief: no `{...}` left, team names and jersey colours right. To fix values, edit `$GJ` and re-run with `--skip-sheets`.
 2. Launch one subagent per part, **at most 3 at once**. Each gets only its `brief_part<N>.md` path. It reads every sheet of its part, writes `coach_part<N>.json`, `memo_part<N>.md`, `notes_part<N>.txt` into `$RUN/review_v1`, and replies in at most 8 lines. Do not read the sheets yourself. Close-ups: `uv run hoop-tape-miner coach-sheets zoom SHEET TILE X Y W H OUT [--scale 3]`.
-3. Check every `coach_part<N>.json` passes `uv run hoop-tape-miner coach-check --review "$RUN/review_v1"` (trip schema v2; reviewers run it themselves) and covers all pids of its part; re-run a part that does not. Old v1 reviews: `coach-check --review <v1> --migrate <v2 folder>`.
+3. Check every `coach_part<N>.json` passes `uv run hoop-tape-miner coach-check --review "$RUN/review_v1"` (reviewers run it themselves); `run` waits on `film-review` and lists the errors until it does. It checks trip schema v2 and part coverage (our rule): every pid of `part<N>.json` has a trip, no more than 20 s inside a possession are covered by no trip, and every made shot, made free throw and foul names its jersey or carries `shooter_note` / `by_note` `"unknown: <why>"`. Send a part's errors back to its reviewer. Old v1 reviews: `coach-check --review <v1> --migrate <v2 folder>`.
    Then `run` measures per-trip numbers from the court tracks (step `features`): `uv run hoop-tape-miner coach-features --run "$RUN" --review "$RUN/review_v1"` writes `features.json` and `ball_quality.json`.
+   Then it scores the review against the league data (step `coach-eval`, skipped without `official.json`): `coach-eval --review "$RUN/review_v1" --official "$RUN/official.json" --label run --gate` writes `eval/run.json` and a line in `eval/log.md`. Gate (our rule, not a league standard): points recall and precision at least 0.8 for both teams; a number it cannot compute is listed as "not computed" and does not block. A failed gate exits 1: re-review the parts around the unmatched official events and run again. A drop against the previous eval entry is printed as a WARNING (not blocking); `run --status` shows the last result.
 4. Aggregate. Choose the game's stretches (start, decisive run, comeback, finish) from the score flow first:
 
 ```
@@ -174,13 +175,17 @@ uv run hoop-tape-miner plusminus --lineup "$RUN/review_v1/lineup_intervals.json"
 
    CV lineups are fragmentary. For the focus player, write `film_stints.json` (same shape, `{"us#<N>": [[t0, t1], ...]}`) from substitutions seen in the memos and notes; later `--lineup` files override earlier ones. `--event-times` maps feed times to the real basket times when the feed lags.
 
-5. Coaching insights with a critic (run step `insights`). Launch the writer subagent with `prompts/coach_insights.md` and the review folder: it reads the trips, `summary.json`, `plusminus.json`, `official.json`, `features.json` (if present), `prompts/coach_kb.md` and the memos, and writes `$RUN/review_v1/insights.json` (3-6 team insights and 1-3 per focus player, each a pattern on at least two trips with a KB mechanism, a rule, a drill and a measurable target). Then launch the critic subagent with `prompts/coach_critic.md`: it re-opens the cited sheets, checks counts against `summary.json` and `official.json`, sets `critic.verdict` on each insight and moves dropped ones to `insights_dropped.json`. Finally:
+5. Coaching insights, then a separate critic (run steps `insights` and `critic`). Launch the writer subagent with `prompts/coach_insights.md` and the review folder: it reads the trips, `summary.json`, `plusminus.json`, `official.json`, `features.json` (if present), `prompts/coach_kb.md` and the memos, and writes `$RUN/review_v1/insights.json` (3-6 team insights and 1-3 per focus player, each a pattern on at least two trips with a KB mechanism, a rule, a drill and a measurable target). The writer's check:
 
 ```
-uv run hoop-tape-miner coach-insights check --review "$RUN/review_v1"
+uv run hoop-tape-miner coach-insights check --review "$RUN/review_v1" --no-critic
 ```
 
-   Send the errors back to the writer until it prints PASS. The report's conclusions and practice plan (step 10) come from this file. To compare with the memo conclusions, `coach-insights ab --review "$RUN/review_v1" --out "$RUN/review_v1/eval/ab_insights.md"` writes a blind A/B rating sheet (the key goes to `ab_insights.key.json`; do not show it to the rater).
+   It fails on evidence without a `pid` (and `trip` when the pid has several), a pid or trip not in the trips, a time outside the cited trip, an unknown KB slug, a `numbers` name that does not resolve in its file (`summary.json`, `features.`, `official.`, `plusminus.`, `pm_<N>.`; the value `"unknown"` is allowed) or a different value, and a player not on our box-score roster. Send the errors back to the writer until it prints PASS.
+
+   Then launch a different subagent as the critic with `prompts/coach_critic.md`. It re-opens the cited sheets, writes its own `critic.json` (`{"verdicts": [{id, verdict, note, reopened: [sheet files]}]}`), moves dropped insights to `insights_dropped.json`, and signs with `uv run hoop-tape-miner coach-insights critic --review "$RUN/review_v1"`. A verdict without re-opened sheets, a sheet that does not cover an evidence time (5 s padding), or a verdict set only inside insights.json fails; the signature is the hash of insights.json, so a later edit sends it back to the critic. `coach-insights check` (no flag) is the full check the `critic` step uses.
+
+   Games finished before these gates: `run` waits on `film-review`, `insights` or `critic` with the errors and a note naming what is newly required. Fix them and re-run, or keep the pages already published. The report's conclusions and practice plan (step 10) come from this file. To compare with the memo conclusions, `coach-insights ab --review "$RUN/review_v1" --out "$RUN/review_v1/eval/ab_insights.md"` writes a blind A/B rating sheet (the key goes to `ab_insights.key.json`; do not show it to the rater).
 
 ## 8. Figures
 

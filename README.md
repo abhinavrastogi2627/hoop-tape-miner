@@ -128,10 +128,10 @@ Clip windows of any video (side-view phone sprints in slow motion work best; tra
 | `extract` → `embed` → `tracks` → `jersey` | computer vision: detections, team split, tracking, jersey numbers |
 | `analyze` | identities, possessions, tactical metrics |
 | `coach-sheets` → `coach-summary`, `plusminus` | film-review sheets (also fact-check sheets around each official score and foul), and the numbers from the agents' reviews |
-| `coach-check` | validate the film review against the possession schema (`--migrate` converts old reviews) |
+| `coach-check` | validate the film review against the possession schema and check every possession is covered (`--migrate` converts old reviews) |
 | `coach-features` | per-possession numbers from the court tracks: players back, spacing, paint crowd, standing still |
-| `coach-insights` | check the coaching insights (evidence times, knowledge-base entries, numbers, critic verdict); `ab` builds a blind A/B rating sheet |
-| `coach-eval` | score a film review against the league box score and lint the coaching advice for evidence, reasons, drills and targets |
+| `coach-insights` | check the coaching insights (cited trips, knowledge-base entries, numbers, the critic's signed `critic.json`); `critic` signs the critic's verdicts; `ab` builds a blind A/B rating sheet |
+| `coach-eval` | score a film review against the league box score (with a pass/fail gate and a warning when it got worse) and lint the coaching advice for evidence, reasons, drills and targets |
 | `momentum` | score-margin chart with scoring runs |
 | `clips` | cut the film clips a report marks (`![caption](clip:07:24-07:33)`) |
 | `narrate` | narration script → MP3; also on-court cue loops (`--chime --gap`, `--tight` for exact pauses) |

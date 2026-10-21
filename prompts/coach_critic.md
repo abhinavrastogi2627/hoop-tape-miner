@@ -14,11 +14,17 @@ You get the review folder path (`<review>`). Same inputs as the writer: `coach_p
 
 ## Verdict
 
-Set `critic` on every insight:
+Your verdicts go in your own file, `<review>/critic.json`, not in the writer's. One entry per insight (kept, revised and dropped):
 
 ```json
-"critic": {"verdict": "keep" | "revise" | "drop", "note": "what you checked and what you changed (at most 30 words)"}
+{"verdicts": [
+  {"id": "T1", "verdict": "keep" | "revise" | "drop",
+   "note": "what you checked and what you changed (at most 30 words)",
+   "reopened": ["p031_0.jpg", "p077_1.jpg"]}
+]}
 ```
+
+`reopened` lists the sheet files you actually opened for this insight, as named in `<review>/manifest.json` (paths inside the review folder). The check fails on a verdict without re-opened sheets, a sheet that does not exist, and an evidence time that no re-opened sheet covers: open the sheet for every evidence time before you judge. You may also set the same verdict in the insight's `critic` field; it must match critic.json.
 
 - **keep**: true, explained, actionable as written.
 - **revise**: you fixed wording, evidence times, counts, counter-examples, rule, drill or target, or lowered `confidence`. Say what in `note`.
@@ -32,8 +38,9 @@ Rules:
 
 ## Output
 
-- `<review>/insights.json`: the kept and revised insights only, every one with a `critic` verdict.
+- `<review>/critic.json`: your verdicts (above), one per insight in insights.json and in insights_dropped.json.
+- `<review>/insights.json`: the kept and revised insights only.
 - `<review>/insights_dropped.json`: an array of the dropped insights, unchanged except for their `critic` (verdict `drop` and the reason). Write `[]` when none were dropped.
-- Run `uv run hoop-tape-miner coach-insights check --review <review>` and fix every error it lists (it must print PASS).
+- Last, sign: `uv run hoop-tape-miner coach-insights critic --review <review>`. It runs the writer's checks plus yours and, when everything passes, writes the hash of insights.json into critic.json. Fix every error it lists until it prints PASS. Any edit of insights.json after signing breaks the signature, and the run sends the file back to you.
 
 Reply in at most 8 lines: kept / revised / dropped counts, the biggest correction you made, any fact you could not settle, the check result.

@@ -58,14 +58,15 @@ Field rules:
 - `kb`: one or more slugs from `prompts/coach_kb.md` (without the `KB-` prefix); the check fails on an unknown slug.
 - `claim`: one or two sentences, a pattern seen at least twice, with counts. Jersey numbers only, never names. Uncertain identities say "likely #N".
 - `why`: the mechanism in basketball terms (who was where, what they did, what that opened), linked to the KB entry. Not a restatement of the claim.
-- `evidence`: at least two items at different video times; each `t` is our-video seconds inside the cited trip's `t0`-`t1` (the check allows 3 s slack and fails on a time that falls in no trip). `pid`/`trip` name the trip; `what` says what to watch at that moment (at most 15 words).
-- `counter_examples`: same shape; `[]` only when you looked and found none.
-- `numbers`: every number the claim or target uses that comes from a file, by name. Names are dotted paths: `all.us.turnovers`, `B.them.transition_scores`, `all.four_factors.them.ft_rate_pct`, `all.ppp.them.transition.ppp` (summary.json), `features.<pid>-<trip>.<field>` (features.json, e.g. `features.31-1.numbers_back_2s`). The check compares each value with the file. Counts you made yourself from the trips go in the claim with their trip times, not here. No number from memory or estimate.
+- `evidence`: at least two items at different video times. Every item names its trip: `pid` always, and `trip` when the pid has more than one trip. The check fails on a missing `pid`, a pid or trip that is not in `coach_part*.json`, and a `t` outside the cited trip's `t0`-`t1` (3 s slack). `what` says what to watch at that moment (at most 15 words).
+- `counter_examples`: same shape and same check; `[]` only when you looked and found none.
+- `numbers`: every number the claim or target uses that comes from a file, by name. Names are dotted paths: `all.us.turnovers`, `B.them.transition_scores`, `all.four_factors.them.ft_rate_pct`, `all.ppp.them.transition.ppp` (summary.json); the prefixes `features.<pid>-<trip>.<field>` (features.json, e.g. `features.31-1.numbers_back_2s`), `official.<path>` (official.json), `plusminus.<path>` and `pm_<N>.<path>` (plusminus.json, pm_<N>.json in the review folder) read those files. The check compares each value with the file and fails on a name that does not resolve. When you need a number no file holds, write the value `"unknown"` (it is listed, not checked) and say "unclear" in the text. Counts you made yourself from the trips go in the claim with their trip times, not here. No number from memory or estimate.
+- `player`: must be one of our jerseys in the official box score when official.json has one.
 - `rule`: one in-game rule, phrased as an instruction a player can follow during play.
 - `drill`: from the KB entry, adapted: name, setup, reps, success measure (one or two sentences).
 - `target_next_game`: a number our pipeline can measure next game (a trip field count or share, a features value, a summary count, an official total). "Better transition defence" is not a target.
 - `confidence`: high (clear on several sheets) | medium | low (mostly inferred). Low-confidence insights go last.
-- `critic`: leave `null`; the critic fills it.
+- `critic`: leave `null`. A separate critic subagent records its verdicts in its own file, `critic.json`; never write that file and never set a verdict yourself (a self-set verdict that differs from critic.json fails the check).
 
 ## Do not
 
@@ -80,4 +81,4 @@ Write the text fields in the language of the memos (`memo_language`, default Eng
 
 ## Before you reply
 
-Run `uv run hoop-tape-miner coach-insights check --review <review>`. Errors about the critic are expected at this point (`critic` is `null`); fix every other error. Then reply in at most 8 lines: number of insights (team / player), the top three claims in one line each, and the points involved.
+Run `uv run hoop-tape-miner coach-insights check --review <review> --no-critic` (the writer's check; the critic is checked in its own step) and fix every error until it prints PASS. Then reply in at most 8 lines: number of insights (team / player), the top three claims in one line each, and the points involved.

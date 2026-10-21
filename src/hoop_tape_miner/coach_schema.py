@@ -371,6 +371,8 @@ def main(argv=None):
             n += len(json.loads(p.read_text(encoding="utf8")))
         except (ValueError, TypeError):
             pass
+    from .coach_eval import part_coverage  # every pid of part<N>.json covered, no long gaps, jerseys resolved
+    errs += part_coverage(folder)
     if errs:
         print(f"coach-check: {len(errs)} error(s) in {folder}")
         print("\n".join(f"- {e}" for e in errs))
