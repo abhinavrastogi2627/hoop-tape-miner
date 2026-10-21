@@ -94,7 +94,11 @@ def who_done(g: Session) -> bool:
 
 
 def sheets_done(g: Session) -> bool:
-    return (g.review / "manifest.json").exists() and g.overlay.exists() and any(g.review.glob("brief_*.md"))
+    """Sheets, briefs and the overlay reel exist and none is older than a track move-scan picked again."""
+    from . import move_sheets as MSh
+    segs = MSh.seg_npzs(g.run, g.game)
+    return (R._newer(g.review / "manifest.json", *segs) and R._newer(g.overlay, *segs)
+            and any(g.review.glob("brief_*.md")))
 
 
 def labels_done(g: Session) -> bool:

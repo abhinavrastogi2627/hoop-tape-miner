@@ -550,6 +550,26 @@ def test_move_driver_skips_labels_without_side_view(tmp_path, monkeypatch, capsy
     assert "waiting for the agent: review" in capsys.readouterr().out  # no side segment: no label step
 
 
+def test_sheets_stale_after_a_repick(tmp_path, monkeypatch):
+    import os
+    from hoop_tape_miner import move_run as MR
+    monkeypatch.setenv("HOOP_WORKSPACE", str(tmp_path / "ws"))
+    (tmp_path / "reel.mp4").write_bytes(b"x")
+    f = _session(tmp_path, [dict(id="L01", kind="layup", view="behind", source="a.mp4", **{"from": 0, "to": 4})])
+    g = MR.Session.load(f)
+    (g.run / "seg").mkdir(parents=True)
+    npz = g.run / "seg" / "L01.npz"
+    npz.write_bytes(b"x")
+    g.review.mkdir(parents=True)
+    for n in ("manifest.json", "brief_g1.md"):
+        (g.review / n).write_text("{}")
+    g.overlay.write_bytes(b"x")
+    assert MR.sheets_done(g)
+    later = npz.stat().st_mtime + 60  # move-scan picked the track again after the sheets were drawn
+    os.utime(npz, (later, later))
+    assert not MR.sheets_done(g)
+
+
 def test_movement_board(tmp_path):
     from hoop_tape_miner import render_html
     f = _session(tmp_path, [])

@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 
 from . import movement as M
+from . import run as R
 from . import train_scan as S
 from . import train_sheets as TS
 from . import training as T
@@ -299,6 +300,11 @@ def write_brief(folder: Path, m: dict, out: Path, name: str, segs: list[dict], s
     return p
 
 
+def seg_npzs(run: Path, m: dict) -> list[Path]:
+    """The picked tracks (run/seg/<id>.npz) the sheets and the overlay reel are drawn from."""
+    return [run / "seg" / f"{s['id']}.npz" for s in m.get("segments", [])]
+
+
 def build(folder: Path, group_size: int = 8, force: bool = False) -> dict:
     m = M.load(folder)
     run = M.path(folder, m, "run", "run")
@@ -317,13 +323,14 @@ def build(folder: Path, group_size: int = 8, force: bool = False) -> dict:
         z = np.load(npz)
         pose = {k: z[k] for k in z.files}
         kp_, st_ = out / f"keys_{s['id']}.jpg", out / f"strip_{s['id']}.jpg"
-        if force or not kp_.exists():
+        if force or not R._newer(kp_, npz):  # missing, or the track was picked again since
             key_sheet(s, g, pose, kp_)
-        if s["view"] == "side" and (force or not st_.exists()):
+        if s["view"] == "side" and (force or not R._newer(st_, npz)):
             strip_sheet(s, g, pose, st_)
         sheets[s["id"]] = {k: str(p) for k, p in (("keys", kp_), ("strip", st_)) if p.exists()}
-    ov = M.path(folder, m, "video", "reel.mp4").with_name("reel.overlay.mp4")
-    if force or not ov.exists() or ov.stat().st_mtime < M.path(folder, m, "video", "reel.mp4").stat().st_mtime:
+    reel = M.path(folder, m, "video", "reel.mp4")
+    ov = reel.with_name("reel.overlay.mp4")
+    if force or not R._newer(ov, reel, *seg_npzs(run, m)):  # missing, older than the reel or than a re-picked track
         print("[move-sheets] drawing the overlay reel", flush=True)
         overlay_reel(m, folder, run, ov)
     m["video_overlay"] = str(ov)
