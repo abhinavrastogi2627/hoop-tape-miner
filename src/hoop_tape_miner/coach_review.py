@@ -30,14 +30,11 @@ import numpy as np
 import pandas as pd
 
 from .review import annotate, use_game
+from .timefmt import mmss
 
 LAYOUT = dict(every=1.0, pre=1.0, post=3.0, tile=[800, 450], grid=[2, 2], header=28, quality=82,
               lineup_gap=25.0, lineup_min=8.0, window_pad=8.0)
 BRIEF = Path(__file__).resolve().parents[2] / "prompts" / "film_review_brief.md"
-
-
-def mmss(s: float) -> str:
-    return f"{int(s // 60):02d}:{int(s % 60):02d}"
 
 
 def _num_key(n: str):

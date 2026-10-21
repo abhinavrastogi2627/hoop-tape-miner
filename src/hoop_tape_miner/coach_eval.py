@@ -15,6 +15,8 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
+from .timefmt import mmss as _mmss
+
 V1_RESULTS = ("made2", "made3", "FT", "missed", "turnover", "foul_no_FT", "end_period", "unclear")
 GENERIC = ("communicate better", "be more aggressive", "play harder", "stay focused", "work harder", "more energy",
            "加强沟通", "提高专注", "更积极", "更努力", "打得更硬", "注意力集中", "保持专注")
@@ -271,10 +273,6 @@ def load_trips(review: Path) -> list[dict]:
 # ---- part coverage (film-review gate) ---------------------------------------------------------------------------
 
 MAX_GAP = 20.0   # our rule: an uncovered stretch longer than this inside a possession is a gap (about one trip)
-
-
-def _mmss(t: float) -> str:
-    return f"{int(t // 60):02d}:{int(t % 60):02d}"
 
 
 def _part_possessions(p: Path) -> list[dict]:

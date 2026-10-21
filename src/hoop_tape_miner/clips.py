@@ -24,15 +24,11 @@ import sys
 from pathlib import Path
 
 from . import game_config as gc
+from .timefmt import seconds
 
 READMES = ("README.md", "README.en.md")
 CLIP_RE = re.compile(r"\]\(clip:(\d{1,2}:\d{2}(?:\.\d)?)-(\d{1,2}:\d{2}(?:\.\d)?)\)")
 LONG_CLIP_S = 45  # longer clips get a warning: they bloat the shared page and nobody watches them to the end
-
-
-def seconds(mmss: str) -> float:
-    m, s = mmss.split(":")
-    return int(m) * 60 + float(s)
 
 
 def clip_name(start: str, end: str) -> str:

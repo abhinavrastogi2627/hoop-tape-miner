@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 from . import workspace
+from .timefmt import seconds as secs  # '31:46.5' -> 1906.5, '1:02:03' -> 3723, 12 -> 12.0
 
 KINDS = ("sprint", "run", "dribble-sprint", "layup", "decel", "game", "training")
 VIEWS = ("side", "front", "behind", "game")
@@ -118,17 +119,6 @@ def earlier_folders(folder: Path, keep) -> list[Path]:
 def earlier(folder: Path) -> list[Path]:
     """Sibling movement sessions that sort before this one, oldest first."""
     return earlier_folders(folder, is_movement)
-
-
-def secs(v) -> float:
-    """'31:46.5' -> 1906.5, '1:02:03' -> 3723, 12 -> 12.0."""
-    if isinstance(v, (int, float)):
-        return float(v)
-    parts = [float(x) for x in str(v).strip().split(":")]
-    out = 0.0
-    for x in parts:
-        out = out * 60 + x
-    return out
 
 
 def seg_seconds(seg: dict) -> tuple[float, float]:

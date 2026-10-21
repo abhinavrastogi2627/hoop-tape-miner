@@ -33,6 +33,7 @@ import sys
 from pathlib import Path
 
 from .coach_eval import load_trips, memo_conclusions, trip_times
+from .timefmt import mmss as _mmss
 
 KB = Path(__file__).resolve().parents[2] / "prompts" / "coach_kb.md"
 SLACK = 3.0
@@ -365,10 +366,6 @@ def report_items(text: str) -> list[str]:
             elif row:
                 out.append(" · ".join(c.strip() for c in row.group(1).split("|") if c.strip()))
     return out
-
-
-def _mmss(t: float) -> str:
-    return f"{int(t // 60):02d}:{int(t % 60):02d}"
 
 
 def render_insight(it: dict) -> str:
