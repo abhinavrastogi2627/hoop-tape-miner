@@ -41,8 +41,15 @@ LABELS = {
 
 
 def load_reviews(review_dir: Path) -> list[dict]:
-    parts = sorted(review_dir.glob("review_part*.json"), key=lambda p: int(p.stem.removeprefix("review_part") or 0))
-    return [json.loads(p.read_text(encoding="utf8")) for p in parts]
+    """review_part<N>.json files in part order; other names (review_part2.old.json, a backup) are skipped."""
+    parts = []
+    for p in review_dir.glob("review_part*.json"):
+        n = p.stem.removeprefix("review_part")
+        if not n.isdigit():
+            print(f"[train-summary] skipping {p.name}: not review_part<N>.json")
+            continue
+        parts.append((int(n), p))
+    return [json.loads(p.read_text(encoding="utf8")) for _, p in sorted(parts)]
 
 
 def merge_metrics(reps: list[dict], candidates: list[dict]) -> list[dict]:
@@ -62,22 +69,36 @@ def dribble_summary(reviews: list[dict], detected: list[dict]) -> dict:
     if not drills:
         drills = [{"from": T.mmss(d["from"]), "to": T.mmss(d["to"]), "drill": None, "hand": None, "losses": None}
                   for d in detected]
-    bounces = {"R": 0, "L": 0}
-    secs = counted = 0.0  # counted: seconds of drills the scan has bounces for (the rate)
-    for d in drills:
-        a, b = T.seconds(d["from"]), T.seconds(d["to"])
-        secs += max(b - a, 0)
-        segs = [seg for seg in detected if seg["from"] < b + 0.5 and seg["to"] > a - 0.5]
-        if segs:
-            counted += max(b - a, 0)
-        for seg in segs:
-            for h in bounces:
-                bounces[h] += seg["bounces"][h]
+    windows = merge_windows([(T.seconds(d["from"]), T.seconds(d["to"])) for d in drills])
+    secs = sum(b - a for a, b in windows)
+    share = {"R": 0.0, "L": 0.0}
+    counted = 0.0  # counted: seconds of drill time the scan has bounces for (the rate)
+    for seg in detected:  # each detected segment once, its bounces clipped to the drill windows by time share
+        f, t = float(seg["from"]), float(seg["to"])
+        inside = sum(max(0.0, min(t, b) - max(f, a)) for a, b in windows)
+        if inside <= 0:
+            continue
+        counted += inside
+        frac = inside / (t - f) if t > f else 1.0
+        for h in share:
+            share[h] += seg["bounces"][h] * frac
+    bounces = {h: int(round(v)) for h, v in share.items()}
     total = sum(bounces.values())
     return dict(confirmed=confirmed, seconds=round(secs, 1), drills=drills, bounces=bounces,
                 left_share=round(bounces["L"] / total, 2) if total else None,
                 rate=round(total / counted, 2) if counted else None,
                 losses=sum(d.get("losses") or 0 for d in drills) if confirmed else None)
+
+
+def merge_windows(ws: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Overlapping or touching (from, to) windows joined, empty ones dropped, in time order."""
+    out: list[list[float]] = []
+    for a, b in sorted(w for w in ws if w[1] > w[0]):
+        if out and a <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return [(a, b) for a, b in out]
 
 
 def progress_rows(folder: Path, current: dict) -> list[dict]:
@@ -110,12 +131,12 @@ def summarize(folder: Path, s: dict, run: Path) -> dict:
     fins = [r for r in reps if r["category"] == "finish"]
     reviewed_ids = {r.get("id") for p in reviews for r in p.get("reps", [])}
     missing = [c["id"] for c in candidates if c["id"] not in reviewed_ids]
-    active_min = max(act.get("active_s", 0) / 60, 1e-6)
+    active_min = (act.get("active_s") or 0) / 60
     out = dict(
         session=folder.name, player=s.get("player"), name=s.get("name"), date=s.get("date"),
         duration_s=act.get("duration_s"), active_s=act.get("active_s"), visible_s=act.get("visible_s"),
         totals=dict(all=T.tally(reps), shot=T.tally(shots), finish=T.tally(fins)),
-        reps_per_active_min=round(len(reps) / active_min, 1) if reps else 0,
+        reps_per_active_min=round(len(reps) / active_min, 1) if active_min > 0 else None,  # None: no active time
         zones=T.by(shots, "zone", T.ZONES), spots=T.by(shots, "spot"), types=T.by(reps, "type"),
         finish_hands=T.by(fins, "hand", ("R", "L")),
         left_finish_share=round(sum(r.get("hand") == "L" for r in fins) / len(fins), 2) if fins else None,
@@ -154,7 +175,7 @@ def facts(sm: dict) -> str:
          "Percentages count decided attempts only; `unclear` attempts are listed apart.", "",
          "## Volume", "",
          f"- session {(sm['duration_s'] or 0) / 60:.1f} min, active {(sm['active_s'] or 0) / 60:.1f} min, "
-         f"{len(sm['reps'])} attempts ({sm['reps_per_active_min']} per active minute)",
+         f"{len(sm['reps'])} attempts ({dash(sm['reps_per_active_min'])} per active minute)",
          f"- all {pct(sm['totals']['all'])}, unclear {sm['totals']['all']['unclear']}; shots {pct(sm['totals']['shot'])}; "
          f"finishes {pct(sm['totals']['finish'])}",
          f"- longest make streak {sm['streak']}",

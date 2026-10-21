@@ -75,6 +75,22 @@ def test_summary_counts_targets_dribbling_and_progress(session):
     assert "3/6 (50%)" in text and "ft 50%" in text and "None" not in text
 
 
+def test_dribble_bounces_clipped_to_drills_and_counted_once():
+    detected = [{"from": 90.0, "to": 130.0, "bounces": {"R": 40, "L": 40}}]  # starts 10 s before the drill
+    two = [{"dribble": [{"from": "01:40", "to": "01:50", "losses": 0}, {"from": "01:45", "to": "02:10", "losses": 1}]}]
+    d = train_summary.dribble_summary(two, detected)  # overlapping drills: one 30 s window, bounces once
+    assert d["seconds"] == 30 and d["bounces"] == {"R": 30, "L": 30} and d["rate"] == 2.0
+
+
+def test_summary_edge_cases(session, capsys):
+    run = session / "run"
+    write(run / "activity.json", {"duration_s": 200.0, "active_s": 0, "visible_s": 0})
+    write(run / "train_review" / "review_part1.old.json", {"reps": []})  # a backup next to the real part
+    sm = summary_of(session)
+    assert sm["reps_per_active_min"] is None and "skipping review_part1.old.json" in capsys.readouterr().out
+    assert "None" not in train_summary.facts(sm)
+
+
 def test_page_band_shows_the_session_not_a_score(session):
     write(session / "summary.json", summary_of(session))
     sb = render_html.scoreboard(session)
