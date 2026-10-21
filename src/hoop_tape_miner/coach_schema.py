@@ -10,6 +10,9 @@ v2 trip = the v1 checklist fields, plus `schema: 2`, `t0`/`t1`, `result` from RE
   fts:   null | {shooter, made, att}
   foul:  null | {t, by_team, by, on, type, cause, led_to}
   evidence: {field: [video seconds]} for result, shot, foul (and optionally fts, coach_note).
+Optional (older reviews without them stay valid): `transition`: true | false | null (the trip attacked before the
+defence was set), `turnover_kind`: "live" | "dead" | null (only with result turnover: live = the defence gained the
+ball in play, e.g. a steal; dead = the ball went dead, e.g. out of bounds, travel, offensive foul).
 Jerseys are strings of digits or null; anything uncertain goes into a *_note field, never into the jersey.
 Migration never drops information: the original text stays in result_v1 / shooter_note / by_note / *_v1.
 """
@@ -35,6 +38,7 @@ CONTESTED = ("open", "contested", "heavily_contested")
 FOUL_TYPES = ("reach_in", "shooting_on_drive", "shooting_on_jumper", "block_charge", "over_the_back", "loose_ball",
               "off_ball", "unclear")
 LED_TO = ("1 FT", "2 FT", "3 FT", "side-out", "unclear")
+TURNOVER_KINDS = ("live", "dead")
 EVIDENCE_FIELDS = ("result", "shot", "fts", "foul", "coach_note")
 COPY = ("part*.json", "manifest.json", "lineup_intervals.json", "brief_part*.md", "memo_part*.md", "notes_part*.txt")
 _JERSEY = re.compile(r"^\d{1,2}$")
@@ -48,7 +52,7 @@ def _enum(errs: list, where: str, v, allowed, nullable=True):
     if v is None and nullable:
         return
     if v not in allowed:
-        errs.append(f"{where} {v!r} not in {'|'.join(allowed)}" + ("|null" if nullable else ""))
+        errs.append(f"{where} {v!r} not in {'|'.join(map(str, allowed))}" + ("|null" if nullable else ""))
 
 
 def _jersey_ok(errs: list, where: str, v):
@@ -75,6 +79,11 @@ def validate_trip(trip: dict) -> list[str]:
     res = trip.get("result")
     _enum(e, "result", res, RESULTS, nullable=False)
     _enum(e, "confidence", trip.get("confidence"), CONFIDENCE, nullable=False)
+    if trip.get("transition") is not None and not isinstance(trip.get("transition"), bool):
+        e.append(f"transition {trip.get('transition')!r} must be true, false or null")
+    _enum(e, "turnover_kind", trip.get("turnover_kind"), TURNOVER_KINDS)
+    if trip.get("turnover_kind") is not None and res != "turnover":
+        e.append(f"turnover_kind only goes with result turnover, not {res}")
 
     shot, fts, foul = trip.get("shot"), trip.get("fts"), trip.get("foul")
     if shot is not None:

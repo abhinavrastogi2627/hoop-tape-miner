@@ -7,6 +7,7 @@ numbers are kept, never person names.
 * `align_videos`  - map official-video time to our (edited) video time
 * `load_glory`    - box score + point chart JSON -> official.json structure
 * `map_time`      - apply the alignment segments to one timestamp
+* `recorded`      - which counts an official.json really holds (attempts, turnovers, offensive rebounds)
 """
 from __future__ import annotations
 
@@ -89,6 +90,11 @@ def map_time(official_t: float, segments: list[dict], video_len: float | None = 
     return None
 
 
+# optional sheet columns -> our key (kept only when the sheet has them)
+_COUNTS = {"TO": "TOV", "TOV": "TOV", "OREB": "ORB", "OR": "ORB", "ORB": "ORB", "DREB": "DRB", "DR": "DRB",
+           "DRB": "DRB"}
+
+
 def _stats(stats: list[dict]) -> dict:
     out = {}
     for s in stats:
@@ -97,7 +103,23 @@ def _stats(stats: list[dict]) -> dict:
             out[n] = int(s["value"])
         elif n in ("FGM-A", "2PM-A", "3PM-A", "FTM-A"):
             out[n] = {"made": int(s["made"]), "att": int(s["total"])}
+        elif n in _COUNTS and s.get("value") not in (None, ""):
+            out[_COUNTS[n]] = int(s["value"])
     return out
+
+
+def recorded(off: dict) -> dict:
+    """Which team counts official.json really holds. attempts: some FG/FT attempt total exceeds the makes (a sheet
+    that records makes only has att == made everywhere); turnovers / rebounds: TOV / ORB present for both teams
+    and not all zero (a sheet that does not record them shows zeros)."""
+    tot = (off or {}).get("totals") or {}
+    sides = [tot.get(s) or {} for s in ("us", "them")]
+    att = any(isinstance(t.get(k), dict) and t[k].get("att", 0) > t[k].get("made", 0)
+              for t in sides for k in ("FGM-A", "2PM-A", "3PM-A", "FTM-A"))
+
+    def counted(key):
+        return all(isinstance(t.get(key), int) for t in sides) and any(t[key] for t in sides)
+    return {"attempts": att, "turnovers": counted("TOV"), "rebounds": counted("ORB")}
 
 
 def _mmss(s: str) -> int:
