@@ -165,7 +165,7 @@ uv run hoop-tape-miner coach-sheets --run "$RUN" --game "$GJ" --out "$RUN/review
 4. Aggregate. Choose the game's stretches (start, decisive run, comeback, finish) from the score flow first:
 
 ```
-uv run hoop-tape-miner coach-summary --review "$RUN/review_v1" --segments "A:0-450,B:450-1272,C:1272-1810,D:1810-2184" --out "$RUN/review_v1/summary.json"
+uv run hoop-tape-miner coach-summary --review "$RUN/review_v1" --official "$RUN/official.json" --segments "A:0-450,B:450-1272,C:1272-1810,D:1810-2184" --out "$RUN/review_v1/summary.json"
 uv run hoop-tape-miner plusminus --lineup "$RUN/review_v1/lineup_intervals.json" --official "$RUN/official.json" \
     --out "$RUN/review_v1/plusminus.json" --windows 450-1272,1272-1810
 uv run hoop-tape-miner plusminus --lineup "$RUN/review_v1/lineup_intervals.json" --lineup film_stints.json \

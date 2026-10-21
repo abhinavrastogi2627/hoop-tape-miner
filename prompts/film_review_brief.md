@@ -38,6 +38,7 @@ Fill the JSON for EVERY possession in your part. A possession may contain severa
 Offence:
 - `offence`: us | them | none (dead ball: timeout, period break). What you actually see; correct the CV guess when wrong.
 - `entry`: transition | early_offense (<7 s after crossing) | halfcourt_set | BLOB/SLOB inbound | after_FT | OREB_putback.
+- `transition`: true when the trip attacked before the defence was set (a break, a quick push after a rebound or a steal), false for a set offence, null when you cannot tell. It feeds the transition / half-court points per trip.
 - `alignment`: 5-out | 4-out-1-in | 3-out-2-in | 2-guard front | horns | stack | unclear.
 - `initiator`: jersey # who initiates (brings the ball or starts the action), or null.
 - `primary_action`: PnR | DHO | post_up | isolation | drive_kick | off_ball_screen | cut | kick_ahead | swing_swing | none/stagnant.
@@ -49,7 +50,8 @@ Offence:
 - `shot`: null or `{"t": s, "shooter": "13" | null, "made": true | false, "points": 2 | 3, "zone": rim | paint_non_rim | midrange | three, "type": layup | floater | pullup_mid | catch_shoot_mid | three_catch | three_pullup | post | putback, "contested": open | contested | heavily_contested}` (the last attempt of the trip; `t` = release time). Required for made2/made3/missed.
 - `fts`: null or `{"shooter": "13" | null, "made": n, "att": n}`. Required for foul_ft; also for an and-one.
 - `turnover_cause`: bad_pass | lost_dribble | travel | charge | out_of_bounds | violation | steal_on_ball | null; `turnover_lead_to`: transition points for the other team? yes | no | unclear.
-- `oreb_crash`: `{"n": attackers crashing (0-3+), "got": "us" | "them" | "unclear"}`.
+- `turnover_kind` (only with result turnover): live (the defence took the ball in play: steal, deflection they kept, pick-up of a lost dribble) | dead (out of bounds, travel, violation, offensive foul: play stops and they inbound) | null when unclear. Live-ball turnovers are the ones that become breaks.
+- `oreb_crash`: `{"n": attackers crashing (0-3+), "got": "us" | "them" | "unclear"}`. On a miss, `got` decides the offensive / defensive rebound; when the offence keeps the ball, its next trip is a new object with the same `pid` and the next `trip` index.
 
 Defence (the team NOT on offence):
 - `pickup_point`: full | 3/4 | half | top_of_key | FT_line/paint (where the first defender engages the ball).

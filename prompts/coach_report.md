@@ -27,6 +27,8 @@ Us = {us_colour} {us_team} (home/away). Them = {them_colour} {them_team}. All ti
 
 ![momentum](momentum.en.png)        (README.md: momentum.png, rendered with --lang zh)
 
+**Four Factors** (the page shows the full table above the report; quote the line, do not rebuild the table): one sentence from `summary.json` `all.four_factors.decided.text` with its numbers (eFG%, TOV% live/dead, ORB%, FT rate = FTM/FGA, from `all.four_factors.us|them`), plus the points per trip that explain it from `all.ppp` (transition / half_court / second_chance / after_live_turnover). When `decided.status` is "unclear", say the deciding factor is unclear and why; never pick one yourself.
+
 Sources: **official** = <league feed, what it records>; **film** = review of N possessions and M trips. <What is estimated; jersey-reading accuracy; what "likely" means.>
 
 ---
@@ -34,7 +36,7 @@ Sources: **official** = <league feed, what it records>; **film** = review of N p
 ## 1. Game flow and momentum
 - Table of 3-5 stretches: label, video time, score in the stretch, what happened.
 - The decisive run, point by point: table of every opposing score in it (official time, score, how we gave it up, type), then totals by type.
-- Our offence in the same stretch, in counts (possessions, points, ball screens, ball stops, isolations, transition trips and points).
+- Our offence in the same stretch, in counts (possessions, points, ball screens, ball stops, isolations, transition trips and points; `<stretch>.four_factors` and `<stretch>.ppp` give the stretch's Four Factors and points per trip from the film alone).
 - Check the team's own theory (e.g. "it was the substitutions") against the film and say plainly whether it holds.
 - Comparison table: the bad stretch vs the good stretch, 3-5 rows.
 

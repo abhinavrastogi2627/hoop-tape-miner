@@ -19,7 +19,7 @@ To confirm a moment you cite, look at the sheet that covers it (the trip's posse
 
 ## How to find the insights
 
-1. Start from the points. Which patterns cost us the most points or gave us the most (opponent transition scores, fouls that sent them to the line, turnovers that became breaks, our scoring trips)? Rank candidates by points involved, from `summary.json` and the trips.
+1. Start from the points. Which patterns cost us the most points or gave us the most (opponent transition scores, fouls that sent them to the line, turnovers that became breaks, our scoring trips)? Rank candidates by points involved, from `summary.json` and the trips. `all.four_factors` (eFG%, TOV% with live/dead split, ORB%, FT rate = FTM/FGA, possessions, points per possession, `decided` = the factor with the largest weighted gap) and `all.ppp` (points per trip: transition / half_court / second_chance / after_live_turnover) tell you where the points went; an insight on the deciding factor quotes those numbers by name in `numbers`.
 2. For each candidate, find the KB entry whose **Symptom** matches the trip fields. No matching entry → leave the candidate out (or note it in your reply); do not invent a mechanism.
 3. Collect the trips that show it (at least two) and the trips that contradict it (counter-examples: the same situation where we did it right, or where it did not cost us). Counter-examples are not a weakness; they show the fix is possible.
 4. Check the entry's **What to check on film** items on the cited sheets. Name the mechanism you actually saw, not every mechanism the entry lists.
@@ -60,7 +60,7 @@ Field rules:
 - `why`: the mechanism in basketball terms (who was where, what they did, what that opened), linked to the KB entry. Not a restatement of the claim.
 - `evidence`: at least two items at different video times; each `t` is our-video seconds inside the cited trip's `t0`-`t1` (the check allows 3 s slack and fails on a time that falls in no trip). `pid`/`trip` name the trip; `what` says what to watch at that moment (at most 15 words).
 - `counter_examples`: same shape; `[]` only when you looked and found none.
-- `numbers`: every number the claim or target uses that comes from a file, by name. Names are dotted paths: `all.us.turnovers`, `B.them.transition_scores` (summary.json), `features.<pid>-<trip>.<field>` (features.json, e.g. `features.31-1.numbers_back_2s`). The check compares each value with the file. Counts you made yourself from the trips go in the claim with their trip times, not here. No number from memory or estimate.
+- `numbers`: every number the claim or target uses that comes from a file, by name. Names are dotted paths: `all.us.turnovers`, `B.them.transition_scores`, `all.four_factors.them.ft_rate_pct`, `all.ppp.them.transition.ppp` (summary.json), `features.<pid>-<trip>.<field>` (features.json, e.g. `features.31-1.numbers_back_2s`). The check compares each value with the file. Counts you made yourself from the trips go in the claim with their trip times, not here. No number from memory or estimate.
 - `rule`: one in-game rule, phrased as an instruction a player can follow during play.
 - `drill`: from the KB entry, adapted: name, setup, reps, success measure (one or two sentences).
 - `target_next_game`: a number our pipeline can measure next game (a trip field count or share, a features value, a summary count, an official total). "Better transition defence" is not a target.
