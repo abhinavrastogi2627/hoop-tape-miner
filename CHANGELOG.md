@@ -31,8 +31,24 @@ All notable changes to this project are documented here. The format follows [Kee
 - The playbook starts with the one-command run; step numbers changed.
 - HTML pages carry `noindex, nofollow`.
 - Coaching knowledge base checked page by page against its sources: the press-break entry now separates trap/zone presses (three passing options) from man-to-man presses (clear out, or a forward cuts back), page references were corrected (pick-and-roll show, help the helper, pack-line weaknesses, last-possession timing), Free Throw Golf scoring was fixed, and the team's own rules and all target and success numbers are labelled as "our rule" / trial values. The audience is an adult rec team.
+- QA must be redone after any edit: `qa.md` needs `PASS` plus the `checked: <stamp>` line that `run` prints at the QA step (older `qa.md` files are asked for again).
+- A report counts as published only after a successful `--deploy`; `publish.json` is written atomically with a `.bak`, and a failed wrangler run is retried on the next `run --publish` (links stay the same).
+- Publishing is safer: raw HTML in READMEs is shown as text, pages only take media from their own report folder, and the Worker sends Content-Security-Policy, nosniff, no-referrer and noindex headers on every response (live after the next deploy).
+- Report languages come from `team.json` `languages` (zh and/or en, default both).
+- `train-sheets` refuses to rebuild sheets once review files exist unless `--force` is given (the flag was documented but missing).
+- `run <url>` reuses an already-fetched game folder; a re-fetch keeps your own video alignment unless `--force`.
+- Movement label checks compare slow-motion clips in real time and only validate segments of the same kind, view, source file and frame rate; other segments are listed as unvalidated and not quoted.
+- `move-scan` and `train-scan` caches are keyed by their inputs (video content, window, fps, picks, seed, follow), so a re-run re-picks the player after `who.json` or seed changes; sheets and the overlay are redrawn after a re-pick.
 
 ### Fixed
+
+- A re-fetch with `run <url>` and no `--video` overwrote `run/official.json` with a zero offset, shifting every time on games filmed with our own camera.
+- `extract` sampled 25 fps video at 12.5 fps while later stages assumed 10 fps (minutes and speeds 25 % high); the sampled rate is now recorded and read downstream.
+- `--until STEP` did not stop when that step was already done (game, train and move drivers).
+- `analyze` dropped every identity when roster numbers were integers, and silently assumed "attacks left" when the direction signal was missing; direction is now decided per half.
+- The embedding cache survived a re-extract; the camera tracker returned a stale homography when lost; team names with characters Windows forbids broke folder paths.
+- `narrate` failed on paths containing `'` in the ffmpeg concat list.
+- Training summary: time formatting at minute boundaries, h:m:s times, date-then-number session order, sample sd shown from 3 reps, dribble bounces counted once within the drill windows.
 
 - `film --video` with a relative path failed in ffmpeg; the path is now resolved first.
 - The listen label said "About 0 min" for audio under 30 s.
