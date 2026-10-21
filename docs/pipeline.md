@@ -1,6 +1,6 @@
 # Pipeline
 
-Local pipeline that turns one amateur basketball game into a coach's team page, a focus-player page and an explained video. Developed on a single 8 GB NVIDIA GPU. All stages run through `uv run hoop-tape-miner <stage> ...`. Per-game data lives in the workspace (`$HOOP_WORKSPACE`, default `./workspace`, gitignored): `workspace/teams/<opponent-slug>/<date>/` holds `game.json` and the finished reports; the heavy `run/` folder sits there too, or under `media_root` from `workspace/team.json` (game.json `run`). `run` drives every stage below in order and stops where the agent must judge. The step-by-step procedure is `docs/playbook.md`.
+Local pipeline that turns one amateur basketball game into a coach's team page, a focus-player page and an explained video. Developed on a single 8 GB NVIDIA GPU. All stages run through `uv run hoop-tape-miner <stage> ...`. Per-game data lives in the workspace (`$HOOP_WORKSPACE`, default `./workspace`, gitignored): `workspace/teams/<opponent-slug>/<date>/` (slug: lowercase letters and digits joined by `-`, safe on Windows) holds `game.json` and the finished reports; the heavy `run/` folder sits there too, or under `media_root` from `workspace/team.json` (game.json `run`). `run` drives every stage below in order and stops where the agent must judge. The step-by-step procedure is `docs/playbook.md`.
 
 ## Why a custom pipeline
 
@@ -34,12 +34,12 @@ So we reuse the good parts (SigLIP+UMAP+KMeans team recipe, ByteTrack, RF-DETR) 
 | `fetch` | `URL` [`--video --us-team --secrets --no-video --force`] | Glory League game: `game.json` (teams, rosters, result, periods, league id), `run/official.json`, the league video in `<media>/video/league.mp4` (resumable), raw responses in `<media>/league/` |
 | `new-game` | `--opponent --date` [`--video --us-team --dossier --force`] | `workspace/teams/<slug>/<date>/game.json` (from `templates/game.example.json`), `run/`; `--dossier` also the opponent README |
 | `calibrate` | `--video --times --out` [`--grid --points --propagate --step --detections --max-point-err`] | `--grid`: `grid_<t>.jpg` (pixel grid + numbered landmark map) to read without a GUI; `--points`: solve points.json, print PASS/WEAK per frame (exit 2 if weak); without either, click in a window. `<out>/keyframes.json`, overlays |
-| `extract` | `--video --out --calib` [`--fps 10 --start --end`] | per-frame detections (pickle), homographies (`camera.npz`) |
+| `extract` | `--video --out --calib` [`--fps 10 --start --end`] | per-frame detections (pickle), homographies (`camera.npz`, with `fps`: the rate actually sampled, video fps / the whole-frame step closest to `--fps`; `tracks`, `analyze` and `report` read it, old runs fall back to 10) |
 | `recalib` (optional) | `--run --video --calib` [`--start --end --dry`] | court homography re-run, court coordinates recomputed |
 | `embed` | `--run --video` [`--batch`] | SigLIP embeddings of on-court person crops |
 | `tracks` | `--run --video` [`--game --us --fps`] | pass 1: `cluster_montage.jpg`; pass 2 (after `cluster_names.json` with `us`/`them`/`ref`/`unk`): `tracks.pkl` |
 | `jersey` | `--run --video` [`--min-len --limit`] | jersey number per tracklet (VLM, voting) |
-| `analyze` | `--run --game` [`--fps`] | identities, possessions, tactical metrics |
+| `analyze` | `--run --game` [`--fps`] | identities (roster numbers compared as strings), possessions, tactical metrics; attack direction decided once per half (periods 1-2 / 3+ with quarters); a half with no signal takes the other half's switched with a warning, no signal at all stops with an error |
 | `official` (optional; `fetch` does this for league links) | `--boxscore --pointchart --us-home --out` [`--video --official-video --fps`] | `official.json`: box score, score flow, video alignment (one league JSON format for now) |
 | `review` (optional) | `--run --video` [`--every --pad --game`] | `run/review/`: 3x2 event sheets + manifest (`docs/review_protocol.md`) |
 | `merge-reviews` (optional) | `--run` [`--review review`] | `events.json`, `review_coverage.json` from `events_part*/coverage_part*` |

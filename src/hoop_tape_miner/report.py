@@ -11,6 +11,7 @@ import pandas as pd
 
 from .court import LENGTH, WIDTH
 from .events import event_summary, resolved_events, reviewed_events
+from .camera import sampled_fps
 from .metrics import player_summary, zone_of
 from .game_config import load_game
 from .plots import INK2, MUTED, GRID, TEAM, TEAM_NAME, bar_compare, draw_court, heatmap, to_attack_right, use_game
@@ -212,6 +213,7 @@ def main(argv=None):
     L.update(STR[args.lang])
     focus = args.focus or (game.get("us") or {}).get("focus_player")
     tr = pd.read_pickle(run / "tracks.pkl")
+    fps = sampled_fps(run)
     poss = pd.read_pickle(run / "possessions.pkl")
     pm = pd.read_pickle(run / "possession_metrics.pkl")
     events = None
@@ -239,11 +241,11 @@ def main(argv=None):
                               "Cross time starts at the CV segment boundary, not a confirmed change of possession."],
              "possession_metrics_mean": pm.groupby("offence").mean(numeric_only=True).round(3).to_dict()}
     if focus:
-        stats["focus_player"] = player_summary(tr, focus_tracks)
+        stats["focus_player"] = player_summary(tr, focus_tracks, fps)
     players = {}
     for team in ("us", "them"):
         for n, g in tr[(tr.team == team) & tr.number.notna()].groupby("number"):
-            players[f"{team}#{n}"] = player_summary(tr, g.track.unique())
+            players[f"{team}#{n}"] = player_summary(tr, g.track.unique(), fps)
     stats["players"] = players
     if events is not None:
         stats["reviewed_events"] = event_summary(events)
