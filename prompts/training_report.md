@@ -19,6 +19,10 @@ same content in English (the page switches between them).
   entry (re-set the trial numbers from this session), and never use an entry whose symptom is not in the data.
 - Trainer-led sessions (session.json `look` set, or a trainer in the memos): the trainer chose the drills, so say
   what each block trained, how it went and what to do better in it next time, rather than judging the choice.
+- facts.md "Game focus" (the latest game's insights for this jersey, then the team's) and "Game vs practice" (make
+  rates per category with a sample label). Train at least one player insight from that game in plan.json and name
+  the game and insight id in its `why`. Quote a game vs practice gap only with its sample label, as a direction
+  (game shots are defended), and never for a row marked "too few".
 - Optional: the latest game deep dive (`workspace/teams/<opponent>/<date>/player-<N>/README.md`) to tie the plan to
   game habits. Say which game when you use it.
 

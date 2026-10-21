@@ -65,6 +65,7 @@ Field rules:
 - `rule`: one in-game rule, phrased as an instruction a player can follow during play.
 - `drill`: from the KB entry, adapted: name, setup, reps, success measure (one or two sentences).
 - `target_next_game`: a number our pipeline can measure next game (a trip field count or share, a features value, a summary count, an official total). "Better transition defence" is not a target.
+- Optional `target_check`: `{"number": "<a summary.json or official. name>", "max": 3}` (or `"min"`) when the target is one such number; `hoop-tape-miner scout` then marks it met / missed from the next game's files. Leave it out for a target no single number measures.
 - `confidence`: high (clear on several sheets) | medium | low (mostly inferred). Low-confidence insights go last.
 - `critic`: leave `null`. A separate critic subagent records its verdicts in its own file, `critic.json`; never write that file and never set a verdict yourself (a self-set verdict that differs from critic.json fails the check).
 
