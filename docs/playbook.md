@@ -37,15 +37,17 @@ Steps in order (agent steps marked *):
 | extract, embed, montage | 4 |
 | clusters*, tracks, jersey, analyze | 5 |
 | official* | 6 |
-| coach-sheets, film-review*, features, coach-eval, summary*, insights*, critic* | 7 |
-| momentum | 8 |
+| ball-track, rim-scan, shot-proposals, coach-sheets, film-review*, features, coach-eval, summary*, insights*, critic* | 7 |
+| momentum, load, matchups | 8 |
 | facts* | 9 |
-| reports*, clips | 10 |
+| reports*, clips, posters | 10 |
 | listen-script*, narrate | 11 |
 | html | 12 |
 | qa* | 13 |
 | publish (only with `--publish`) | 14 |
 | film-script*, film | 15 |
+
+ball-track, rim-scan, shot-proposals, load, matchups and posters add layers to sheets and pages; a game whose sheets (or pages) already exist skips them.
 
 The sections below also work by hand. Conventions (POSIX shell; on PowerShell use `$env:G = ...` and `$env:G`):
 
