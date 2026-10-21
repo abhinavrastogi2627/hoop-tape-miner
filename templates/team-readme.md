@@ -9,6 +9,9 @@ One file per opponent, kept across games. Each game against them has its own fol
 |---|---|---|---|
 | {date} | (fill in) | | [{date}/index.html]({date}/index.html) |
 
+Rematch numbers (record, their scorers, Four Factors, our past targets): [scout.md](scout.md), refreshed by
+`hoop-tape-miner scout --opponent "{opponent}"` (and by `new-game --dossier`).
+
 ## Who to watch
 
 - `#__`: role, strengths, what hurt us.

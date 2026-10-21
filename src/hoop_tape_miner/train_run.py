@@ -76,7 +76,7 @@ TRAIN_STEPS = [
     P.Step("summary", "cmd", summary_done, lambda g: [["train-summary", str(g.folder)]],
            inputs=lambda g: [*sorted(g.review.glob("review_part*.json")),
                              *(g.run / f for f in ("reps.json", "activity.json", "dribble.json"))],
-           params=lambda g: {"targets": g.game.get("targets")}),
+           params=lambda g: {"targets": g.game.get("targets"), "game_focus": g.game.get("game_focus")}),
     P.Step("report", "agent", report_done,
            how="Write the session report (playbook, training step 7, prompts/training_report.md): {readmes} "
                "in {folder}, from {folder}/facts.md, the memos in {review} and the figures, with clip "

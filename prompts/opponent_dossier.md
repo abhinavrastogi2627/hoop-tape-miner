@@ -5,6 +5,9 @@ One living page per opponent, updated after every game against them. Readers: th
 ## Inputs
 
 - Each game's `game.json`, `official.json` (if any) and coach report (sections 2 and 4).
+- `scout.md` / `scout.json` next to the dossier (`hoop-tape-miner scout --opponent <name>`): record, their top
+  scorers, pooled Four Factors and points per trip, what decided each game, our past targets. Take numbers from it;
+  what it marks "unclear" stays unclear.
 
 ## Skeleton
 

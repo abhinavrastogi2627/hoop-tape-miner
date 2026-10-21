@@ -3,8 +3,9 @@
 usage: hoop-tape-miner train-summary <session folder>
 
 Reads <run>/train_review/review_part<N>.json (the film review), <run>/reps.json (pose metrics), dribble.json and
-activity.json, session.json targets and every earlier session's summary.json of the same player. Writes to the
-session folder:
+activity.json, session.json targets and every earlier session's summary.json of the same player, and our games up
+to the session date for the player's jersey (game_link: insights to train for, game vs practice make rates). Writes
+to the session folder:
   summary.json   totals, per zone / spot / type / hand, misses, streak, thirds, form, dribbling, targets,
                  previous session and progress over all sessions (the html band reads `totals`)
   facts.md       the same as tables with video times: the only numbers the report may use
@@ -20,6 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import game_link, workspace
 from . import training as T
 
 LABELS = {
@@ -153,6 +155,7 @@ def summarize(folder: Path, s: dict, run: Path) -> dict:
                     notes=[p.get("notes") for p in reviews if p.get("notes")]),
         reps=[{k: v for k, v in r.items() if k != "t_s"} for r in reps],
     )
+    out.update(game_loop(folder, s, out))
     out["progress"] = progress_rows(folder, out)
     prev = out["progress"][-2] if len(out["progress"]) > 1 else None
     if prev:
@@ -163,7 +166,45 @@ def summarize(folder: Path, s: dict, run: Path) -> dict:
     return out
 
 
+def game_loop(folder: Path, s: dict, sm: dict) -> dict:
+    """game_focus (session.json, else the latest game now) and game_vs_practice for the player's jersey; both None
+    when the session is outside a workspace or no jersey is known."""
+    root, jersey = game_link.workspace_of(folder), game_link.jersey_for(s, workspace.profile())
+    if not root or not jersey or not s.get("date"):
+        return dict(game_focus=s.get("game_focus"), game_vs_practice=None)
+    return dict(game_focus=s.get("game_focus") or game_link.focus(root, jersey, s["date"]),
+                game_vs_practice=game_link.compare(root, jersey, s["date"], sm))
+
+
 # ---- facts.md ----------------------------------------------------------------------------------------------
+
+def _rate(t: dict | None) -> str:
+    return pct(t) if t else "–"
+
+
+def game_facts(sm: dict) -> list[str]:
+    """facts.md lines: the latest game's insights to train for, and game vs practice make rates."""
+    L = []
+    gf = sm.get("game_focus")
+    if gf:
+        L += [f"## Game focus (from {gf['game']}, jersey #{gf['jersey']})", ""]
+        L += [f"- {i['id']} ({i['scope']}): {i.get('claim') or ''} Drill: {i.get('drill') or 'unclear'}. "
+              f"Game target: {i.get('target_next_game') or 'unclear'}" for i in gf["insights"]]
+        L += ([gf["note"]] if gf.get("note") else []) + [""]
+    gv = sm.get("game_vs_practice")
+    if gv and gv["rows"]:
+        L += [f"## Game vs practice (jersey #{gv['jersey']}, {gv['games']} game(s), last {gv['last_game']})", "",
+              gv["note"] + f" Small sample = fewer than {gv['small_n']} attempts on a side.", "",
+              "| category | practice (this session) | last game | all games | gap (games - practice) | sample |",
+              "|---|---|---|---|---|---|"]
+        for r in gv["rows"]:
+            g = r["games"]
+            L.append(f"| {r['category']} | {_rate(r['practice'])} | {_rate(r['last_game'])} | {_rate(g)} ({g['source']}) | "
+                     f"{'+' if r['gap_pp'] >= 0 else ''}{r['gap_pp']} pp | {r['sample']}"
+                     + (f"; {r['unattributed']} of our reviewed shots have no shooter, so his game attempts are "
+                        "likely more" if r.get("unattributed") else "") + " |")
+        L.append("")
+    return L
 
 def pct(t):
     return f"{t['made']}/{t['att']} ({round(100 * t['pct'])}%)" if t and t.get("att") else "–"
@@ -213,6 +254,7 @@ def facts(sm: dict) -> str:
             got = f"{t['actual_made']}/{t['actual_att']}" + (f" ({round(100 * t['actual_pct'])}%)" if t["actual_pct"] is not None else "")
             L.append(f"| {t['name']} | {want} | {got} | {t['status']} |")
         L += [""]
+    L += game_facts(sm)
     if len(sm["progress"]) > 1:
         L += ["## Progress", "", "| session | all | shots | finishes | free throws | active min | dribble min |", "|---|---|---|---|---|---|---|"]
         L += [f"| {r['session']} | {pct(r['all'])} | {pct(r['shot'])} | {pct(r['finish'])} | {pct(r['ft'])} | {r['active_min']} | "

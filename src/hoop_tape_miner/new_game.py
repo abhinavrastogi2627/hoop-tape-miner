@@ -3,7 +3,8 @@
 usage: hoop-tape-miner new-game --opponent "Red Foxes" --date 2026-10-14 [--video PATH] [--us-team NAME] [--dossier]
        [--force]
 Creates <workspace>/teams/<opponent-slug>/<date>/{game.json, run/} (workspace = $HOOP_WORKSPACE or ./workspace);
-with --dossier also <workspace>/teams/<opponent-slug>/README.md. An existing game.json / README.md is never
+with --dossier also <workspace>/teams/<opponent-slug>/README.md, and scout.json + scout.md from the past games against
+them (`hoop-tape-miner scout`, games before --date; refreshed every time). An existing game.json / README.md is never
 overwritten unless --force.
 """
 from __future__ import annotations
@@ -13,7 +14,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from . import workspace
+from . import scout, workspace
 
 TEMPLATES = Path(__file__).resolve().parents[2] / "templates"
 
@@ -66,6 +67,8 @@ def scaffold(opponent: str, date: str, video: str | None = None, us_team: str | 
             text = template("team-readme.md").read_text(encoding="utf8")
             readme.write_text(text.replace("{opponent}", opponent).replace("{date}", date), encoding="utf8")
             print("wrote", readme)
+        sc = scout.write(folder.parent, workspace.root(), before=date)
+        print(f"wrote {folder.parent / 'scout.md'} ({sc['record']['games']} past game(s))")
     return folder
 
 
