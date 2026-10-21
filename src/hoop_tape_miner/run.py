@@ -379,8 +379,9 @@ STEPS = [
                      "--gate"]]),
     Step("summary", "agent",
          lambda g: (g.review / "summary.json").exists(),
-         how="Choose the game's stretches from the score flow, then run `coach-summary` and `plusminus` into "
-             "{review}/summary.json and {review}/plusminus.json (playbook step 7.4)."),
+         how="Choose the game's stretches from the score flow, then run `coach-summary --official "
+             "{run}/official.json` (with Four Factors) and `plusminus` into {review}/summary.json and "
+             "{review}/plusminus.json (playbook step 7.4)."),
     Step("insights", "agent", lambda g: not insights_errors(g),
          how="Coaching insights (playbook step 7.5): launch the writer subagent with prompts/coach_insights.md "
              "(review folder {review}; it also uses {review}/features.json when present); it writes "
