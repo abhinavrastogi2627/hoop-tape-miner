@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -267,6 +268,144 @@ def load_trips(review: Path) -> list[dict]:
     return trips
 
 
+# ---- part coverage (film-review gate) ---------------------------------------------------------------------------
+
+MAX_GAP = 20.0   # our rule: an uncovered stretch longer than this inside a possession is a gap (about one trip)
+
+
+def _mmss(t: float) -> str:
+    return f"{int(t // 60):02d}:{int(t % 60):02d}"
+
+
+def _part_possessions(p: Path) -> list[dict]:
+    d = json.loads(p.read_text(encoding="utf8"))
+    return d if isinstance(d, list) else d.get("possessions", []) if isinstance(d, dict) else []
+
+
+def unresolved_jerseys(x: dict) -> list[str]:
+    """Scoring and foul jerseys the trip leaves null without saying why: a made shot without shot.shooter, made free
+    throws without fts.shooter, a foul without foul.by. A `*_note` ("unknown: back to camera") resolves it."""
+    def noted(obj: dict, key: str) -> bool:
+        return bool(str(obj.get(key) or x.get(key) or "").strip())
+    out = []
+    shot, fts, foul = (x.get(k) if isinstance(x.get(k), dict) else None for k in ("shot", "fts", "foul"))
+    if shot and shot.get("made") is True and shot.get("shooter") is None and not noted(shot, "shooter_note"):
+        out.append("shot.shooter")
+    if fts and _int(fts.get("made")) > 0 and fts.get("shooter") is None and not noted(fts, "shooter_note"):
+        out.append("fts.shooter")
+    if foul and foul.get("by") is None and not noted(foul, "by_note"):
+        out.append("foul.by")
+    return out
+
+
+def part_coverage(review: Path, max_gap: float = MAX_GAP) -> list[str]:
+    """Errors when a coach_part<N>.json does not cover its part<N>.json: a possession (pid) with no trip, a stretch
+    longer than `max_gap` s inside a possession that no trip's [t0, t1] covers, or a null scoring / foul jersey
+    with no note. Parts whose coach json is unreadable are left to coach-check's schema errors."""
+    review, errs = Path(review), []
+    for p in sorted(review.glob("part*.json")):
+        try:
+            poss = [x for x in _part_possessions(p) if isinstance(x, dict) and "pid" in x]
+        except (OSError, ValueError):
+            continue
+        if not poss:
+            continue
+        cp = review / f"coach_{p.name}"
+        if not cp.exists():
+            errs.append(f"{cp.name}: missing ({p.name} lists {len(poss)} possessions)")
+            continue
+        try:
+            trips = [x for x in json.loads(cp.read_text(encoding="utf8")) if isinstance(x, dict)]
+        except (OSError, ValueError, TypeError):
+            continue
+        span = {str(x["pid"]): (x.get("start"), x.get("end")) for x in poss}
+        wins = []
+        for x in trips:
+            a, b = trip_times(x)
+            if a is None:
+                a, b = span.get(str(x.get("pid")), (None, None))
+            if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+                wins.append((a, b))
+        wins.sort()
+        have = {str(x.get("pid")) for x in trips}
+        for x in poss:
+            pid, a, b = x["pid"], x.get("start"), x.get("end")
+            when = f" ({_mmss(a)}-{_mmss(b)})" if isinstance(a, (int, float)) and isinstance(b, (int, float)) else ""
+            if str(pid) not in have:
+                errs.append(f"{cp.name}: pid {pid}{when} has no trip (write it; a dead ball is a dead_ball trip)")
+                continue
+            if not when:
+                continue
+            gaps, cur = [], a
+            for s, e in wins:
+                if e <= cur:
+                    continue
+                if s >= b:
+                    break
+                gaps.append((cur, s))
+                cur = e
+            gaps.append((cur, b))
+            errs += [f"{cp.name}: pid {pid} gap {_mmss(s)}-{_mmss(e)} ({e - s:.1f} s) covered by no trip "
+                     f"(our rule: at most {max_gap:.0f} s)" for s, e in gaps if e - s > max_gap]
+        for i, x in enumerate(trips):
+            for f in unresolved_jerseys(x):
+                errs.append(f"{cp.name} trip {i} (pid {x.get('pid')}): {f} is null; write the jersey, or a note "
+                            f"(\"{'by_note' if f == 'foul.by' else 'shooter_note'}\": \"unknown: <why>\") when it "
+                            f"cannot be read")
+    return errs
+
+
+# ---- the eval gate (run step `coach-eval`) ------------------------------------------------------------------------
+
+# Our rule: a review that misses or invents more than about one basket in five, for either team, goes back to the
+# reviewers before anything is written from it. Numbers the eval cannot compute (no official points on our video)
+# are recorded as skipped and do not block.
+GATE = {"pts_recall": 0.8, "pts_precision": 0.8}
+# metric, higher is better: compared with the previous eval entry and printed as a warning when it got worse
+TRACKED = [("us", "pts_recall", True), ("us", "pts_precision", True), ("them", "pts_recall", True),
+           ("them", "pts_precision", True), ("us", "player_pts_abs_err", False), ("us", "player_pf_abs_err", False),
+           (None, "invalid_result_share", False)]
+
+
+def gate(facts: dict) -> dict:
+    """{"pass", "failed": [...], "skipped": [...]} for the GATE thresholds on both teams."""
+    failed, skipped = [], []
+    for side in ("us", "them"):
+        for k, lo in GATE.items():
+            v = facts.get(side, {}).get(k)
+            if v is None:
+                skipped.append(f"{side} {k} (not computable: no official points on our video, or none reviewed)")
+            elif v < lo:
+                failed.append(f"{side} {k} {v} < {lo}")
+    return {"pass": not failed, "failed": failed, "skipped": skipped}
+
+
+def regressions(prev: dict | None, cur: dict) -> list[str]:
+    """Tracked metrics that got worse from the previous eval's facts to these."""
+    if not prev:
+        return []
+    out = []
+    for side, k, up in TRACKED:
+        a = (prev.get(side, {}) if side else prev).get(k)
+        b = (cur.get(side, {}) if side else cur).get(k)
+        if isinstance(a, (int, float)) and isinstance(b, (int, float)) and (b < a if up else b > a):
+            out.append(f"{side + ' ' if side else ''}{k} {a} -> {b}")
+    return out
+
+
+def previous_eval(out: Path) -> dict | None:
+    """The most recent <review>/eval/*.json that holds facts (by its `at` time)."""
+    best = None
+    for p in out.glob("*.json"):
+        try:
+            d = json.loads(p.read_text(encoding="utf8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(d, dict) and isinstance(d.get("facts"), dict) and (best is None or str(d.get("at")) > str(best.get("at"))):
+            best = d
+    return best
+
+
 def _ev(side: dict) -> str:
     m, n = side["events_matched"], side["events"]
     return f"shots {m['shots']}/{n['shots']} FT {m['fts']}/{n['fts']}"
@@ -279,28 +418,45 @@ def main(argv=None):
     ap.add_argument("--insights", help="insights.json, or a glob inside --review such as 'memo_part*.md' "
                                        "(the numbered conclusion items are linted)")
     ap.add_argument("--label", required=True)
+    ap.add_argument("--gate", action="store_true", help="exit 1 when a GATE threshold fails (the run step uses this)")
     a = ap.parse_args(argv)
     review = Path(a.review)
     off = Path(a.official) if a.official else review.parent / "official.json"
     res = {"label": a.label, "at": datetime.now().isoformat(timespec="seconds"),
            "facts": facts_eval(load_trips(review), json.loads(off.read_text(encoding="utf8")))}
+    res["gate"] = gate(res["facts"])
+    out = review / "eval"
+    out.mkdir(exist_ok=True)
+    prev = previous_eval(out)
+    res["previous"] = prev.get("label") if prev else None
+    res["regressions"] = regressions(prev.get("facts") if prev else None, res["facts"])
     if a.insights:
         if a.insights.endswith(".json"):
             items = json.loads(Path(a.insights).read_text(encoding="utf8"))
         else:
             items = [c for p in sorted(review.glob(a.insights)) for c in memo_conclusions(p.read_text(encoding="utf8"))]
         res["insights"] = insight_lint(items)
-    out = review / "eval"
-    out.mkdir(exist_ok=True)
     (out / f"{a.label}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf8")
-    f = res["facts"]
+    f, g = res["facts"], res["gate"]
     line = (f"- {res['at']} **{a.label}**: us pts {f['us']['team_pts']} recall {f['us']['pts_recall']} "
             f"prec {f['us']['pts_precision']} events {_ev(f['us'])} playerPTS err {f['us']['player_pts_abs_err']} PF err "
             f"{f['us']['player_pf_abs_err']}; them pts {f['them']['team_pts']} recall {f['them']['pts_recall']} events {_ev(f['them'])}; "
-            f"invalid {f['invalid_result_share']}" + (f"; insights {res['insights']}" if "insights" in res else ""))
+            f"invalid {f['invalid_result_share']}" + (f"; insights {res['insights']}" if "insights" in res else "")
+            + f"; gate {'PASS' if g['pass'] else 'FAIL'}")
     with open(out / "log.md", "a", encoding="utf8") as fh:
         fh.write(line + "\n")
     print(json.dumps(res, ensure_ascii=False, indent=1))
+    rule = ", ".join(f"{k} >= {v}" for k, v in GATE.items())
+    print(f"coach-eval gate (our rule: {rule} for both teams): {'PASS' if g['pass'] else 'FAIL'}")
+    for x in g["failed"]:
+        print(f"  FAIL {x}")
+    for x in g["skipped"]:
+        print(f"  not computed: {x}")
+    for x in res["regressions"]:
+        print(f"WARNING: worse than the previous eval ({res['previous']}): {x}")
+    if a.gate and not g["pass"]:
+        sys.exit("coach-eval: the review misses or invents too many points; fix the trips (re-review the parts "
+                 "around the unmatched official events, or `coach-sheets event` + `event-merge`), then run again")
 
 
 if __name__ == "__main__":
