@@ -106,6 +106,25 @@ def test_embedding_cache_rows_from_another_extract_are_stale(tmp_path):
     assert embed.fresh_rows(np.load(tmp_path / "old.npz"), det).all()
 
 
+# ---- camera loss ----------------------------------------------------------------------------------------------
+
+class _NoMatchBank:
+    frames = [object()]
+
+    def localise(self, gray, mask=None):
+        return None, 0
+
+
+def test_lost_camera_returns_no_homography_instead_of_the_last_one():
+    tr = camera.CourtCameraTracker(_NoMatchBank())
+    tr.H = np.eye(3)                                  # a pose from an earlier frame
+    blank = np.zeros((48, 64, 3), np.uint8)           # featureless: no flow, no keyframe match
+    for _ in range(2):
+        H, q, how = tr.update(blank)
+        assert H is None and how == "none"
+    assert tr.lost == 2
+
+
 # ---- slugs ----------------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("name, slug", [("Red Foxes", "red-foxes"), ("Bulls/Bears", "bulls-bears"),

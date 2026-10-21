@@ -77,7 +77,7 @@ Current limits: the HTML page and narration handle exactly two languages, Chines
 
 ## Key design decisions
 
-- **Court space first.** The camera pans and zooms, so everything is projected to metres on a FIBA court (x 0-28, y 0-15). The per-frame homography comes from optical flow (background only, players masked), snapped to painted lines to kill drift, with SIFT relocalisation against calibrated keyframes when tracking is lost.
+- **Court space first.** The camera pans and zooms, so everything is projected to metres on a FIBA court (x 0-28, y 0-15). The per-frame homography comes from optical flow (background only, players masked), snapped to painted lines to kill drift, with SIFT relocalisation against calibrated keyframes when tracking is lost; a frame with no pose stores a NaN homography (its detections get no court position) rather than the last pose.
 - **Team clusters are named once.** KMeans on SigLIP embeddings is unsupervised; one look at the montage tells which cluster is us, them and the referees.
 - **Possessions from positions, not the ball.** The camera follows the ball, so the half occupied by the ten players tells where play is; the offence is the side standing further from the basket.
 - **Agents for meaning, CV for geometry.** CV gives positions, lineups and segment boundaries; actions, results, fouls and coaching judgement come from film review against a fixed checklist, checked against official totals when a league feed exists.

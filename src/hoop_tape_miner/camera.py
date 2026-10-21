@@ -135,7 +135,10 @@ class CourtCameraTracker:
                 self.unrefined += 1
             self.lost = 0
         else:
+            # lost: no pose for this frame (extract stores NaN), and the old pose is not chained by flow later;
+            # the next frame relocalises from the keyframe bank
             self.lost += 1
+            self.H = None
         self.prev_gray = gray
         self._prev_boxes = list(person_boxes)
         return self.H, quality, how
