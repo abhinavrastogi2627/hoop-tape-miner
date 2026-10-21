@@ -42,7 +42,7 @@ UI = {
                training="个人训练", made="命中 / 出手", shots="投篮", finishes="终结", dribble="运球",
                targets="目标达成", vs_last="对比上次", minutes="分钟", unclear="无法判断",
                movement="运动模式", segments="片段", seen="看到的问题", hypotheses="待侧拍验证", good="保持的优点",
-               measured="测量值"),
+               measured="测量值", season="赛季", points="得分–失分", games="场次"),
     "en": dict(us="Us", them="Them", half1="1st half", half2="2nd half", final="Final", contents="Contents", switch="Switch language",
                listen="Listen to the report", listen_sub="About {m} min. Read along or just listen.", play="Play / pause",
                seek="Playback position", speed="Playback speed",
@@ -50,7 +50,8 @@ UI = {
                training="Training", made="Made / attempts", shots="Shots", finishes="Finishes", dribble="Dribbling",
                targets="Targets met", vs_last="vs last session", minutes="min", unclear="unclear",
                movement="Movement", segments="Segments", seen="Findings seen", hypotheses="To test (side re-shoot)",
-               good="Good habits", measured="Measured"),
+               good="Good habits", measured="Measured", season="Season", points="Points for–against",
+               games="Games"),
 }
 PLAY_ICON = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5.5v13l10.5-6.5z"/>'
              '<path class="i-pause" d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>')
@@ -78,6 +79,8 @@ def scoreboard(folder: Path):
         raise FileNotFoundError(f"game.json / session.json not found in {folder} or its parent")
     if gc.is_personal(game):
         return training_scoreboard(folder, game)
+    if gc.is_season(game):
+        return season_scoreboard(game)
     res = game.get("result") or {}
     fin = (_num(res.get("us")), _num(res.get("them")))
     ht = res.get("halftime") or {}
@@ -109,6 +112,28 @@ def training_scoreboard(folder: Path, s: dict) -> dict:
     name = s.get("name") or f"#{s.get('player', '')}"
     return dict(training=True, movement=gc.is_movement(s), us=name, them="", date=s.get("date") or folder.name,
                 summary=summ, colours=colours)
+
+
+def season_scoreboard(s: dict) -> dict:
+    """Season band (season.json from `hoop-tape-miner season`): our team, won-lost, points for-against."""
+    colours = dict(DEFAULT_COLOURS)
+    for side in gc.SIDES:
+        h = gc.team(s, side).get("hex")
+        if gc.is_hex(h):
+            colours[side] = (h, gc.mix(h, "#ffffff", 0.55))
+    return dict(season=True, us=gc.team_name(s, "us"), them="", record=s.get("record") or {},
+                games=s.get("games"), sid=s.get("season", ""), colours=colours)
+
+
+def season_board(sb: dict, lab) -> str:
+    r = sb["record"]
+    wl = f'{r.get("W", 0)}–{r.get("L", 0)}' + (f'–{r["T"]}' if r.get("T") else "")
+    return f"""<div class="score" data-result="season">
+      <div class="team us"><span class="name">{html.escape(sb["us"])}</span><span class="side">{lab("season")} · {html.escape(str(sb["sid"]))}</span></div>
+      <div class="pts" aria-label="{wl}"><span>{wl}</span></div>
+      <div class="team them"><span class="name">{r.get("for", 0)}–{r.get("against", 0)}</span><span class="side">{lab("points")}</span></div>
+    </div>
+    <div class="halves"><span>{lab("games")}<b>{sb["games"]}</b></span></div>"""
 
 
 def _pct(t: dict | None) -> str:
@@ -452,7 +477,9 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
 
     def title_spans():
         return "".join(f'<span data-lang="{c}"{hide(c)}>{html.escape(titles[c])}</span>' for c, *_ in langs)
-    if sb.get("movement"):
+    if sb.get("season"):
+        board = season_board(sb, lab)
+    elif sb.get("movement"):
         board = movement_board(sb, lab)
     elif sb.get("training"):
         board = training_board(sb, lab)
@@ -481,7 +508,7 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
         us_hex=us_hex, them_hex=them_hex, us_light=us_light, them_light=them_light,
         us_light_rgb=", ".join(map(str, gc.hex_to_rgb(us_light))),
         listen=listen, mini=mini, tocs="".join(tocs),
-        articles=("" if sb.get("training") else four_factors_panel(folder, sb, langs)) + "".join(arts)
+        articles=("" if sb.get("training") or sb.get("season") else four_factors_panel(folder, sb, langs)) + "".join(arts)
         + (film_index.ASSETS if film_assets else ""),
     )
 
