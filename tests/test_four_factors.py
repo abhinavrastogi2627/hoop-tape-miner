@@ -182,3 +182,14 @@ def test_insights_check_verifies_four_factors_numbers():
                                                         "all.four_factors.them.tov_pct": 33.3}}]
     errs = validate_insights(ins, TRIPS, None, summary)
     assert errs == ["insight x: number all.four_factors.us.efg_pct = 70.0 but the source says 75.0"]
+
+
+def test_rebound_field_wins_over_the_next_trip_and_putback_after_free_throws():
+    miss = trip(0, "us", "missed", "halfcourt_set", 5, oreb_crash={"n": 1, "rebound": "them"})
+    again = trip(10, "us", "made2", "halfcourt_set", 14)  # they rebounded and lost it: a new possession of ours
+    ft = trip(20, "us", "foul_ft", "halfcourt_set", fts={"shooter": None, "made": 1, "att": 2})
+    put = trip(25, "us", "made2", "OREB_putback", 26)      # rebound of the missed free throw
+    xs = CS.annotate([miss, again, ft, put])
+    assert [x["_kind"] for x in xs] == ["half_court", "half_court", "half_court", "second_chance"]
+    us = CS.four_factors(xs, min_poss=1)["us"]
+    assert (us["orb"], us["orb_chances"], us["possessions"]) == (0, 1, 3)

@@ -73,12 +73,14 @@ METHOD = {
                    "possession); without reviewed trips, the estimate FGA - ORB + TOV + 0.44*FTA",
     "efg": "(FGM + 0.5*3PM) / FGA",
     "tov": "TOV / possessions; live = the defence gained the ball in play (steal), dead = the ball went dead",
-    "orb": "ORB / (ORB + opponent DRB) over our missed shots whose rebound is known",
+    "orb": "ORB / (ORB + opponent DRB) over our missed field goals whose rebound is known (the trip's oreb_crash "
+           "got/rebound, else which team has the next trip); rebounds of missed free throws are not counted",
     "ft_rate": "FTM / FGA (Oliver's definition; the league sheet records makes reliably)",
     "shooting_sources": "official makes when official.json is given; attempts from the official sheet only when it "
                         "records them, else official makes + reviewed misses; FTA = reviewed attempts + official "
                         "makes the review did not see (a lower bound)",
-    "trip_types": "second_chance = trip right after the same team's missed shot (or entry OREB_putback); else "
+    "trip_types": "second_chance = trip right after the same team's missed shot that the defence did not "
+                  "rebound, or entry OREB_putback (also after a missed free throw); else "
                   "`transition` field, else entry transition/early_offense vs half-court entries, else our rule: "
                   f"first shot or foul within {TRANSITION_S:g} s of t0 = transition, later = half_court; else "
                   "unknown. after_live_turnover overlaps the others: trips right after the other team's live-ball "
@@ -158,7 +160,8 @@ def annotate(trips: list[dict]) -> list[dict]:
     for i, x in enumerate(xs):
         prev = xs[i - 1] if i else None
         nxt = xs[i + 1] if i + 1 < len(xs) else None
-        second = bool(prev and prev["offence"] == x["offence"] and prev.get("result") == "missed")
+        second = bool(prev and prev["offence"] == x["offence"] and prev.get("result") == "missed"
+                      and prev["_reb"] != "drb")
         x["_points"] = trip_points(x)
         x["_kind"] = _kind(x, second)
         x["_tov_kind"] = turnover_kind(x)
