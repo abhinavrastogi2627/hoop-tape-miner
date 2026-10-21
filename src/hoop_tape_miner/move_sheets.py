@@ -17,15 +17,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 import numpy as np
 
+from . import media
 from . import movement as M
 from . import run as R
 from . import train_scan as S
@@ -237,9 +236,9 @@ def overlay_reel(m: dict, folder: Path, run: Path, out: Path) -> Path:
             wr.write(f)
         wr.release()
         cap.release()
-        subprocess.run([os.environ.get("FFMPEG", "ffmpeg"), "-nostdin", "-v", "error", "-y", "-i", str(raw),
-                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-                        "-movflags", "+faststart", str(out)], check=True)
+        with media.partial(out) as part:  # a stopped encode never leaves a short overlay reel
+            media.ffmpeg("-i", raw, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+                         "-movflags", "+faststart", part)
     return out
 
 

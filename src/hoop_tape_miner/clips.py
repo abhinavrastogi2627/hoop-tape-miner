@@ -17,13 +17,12 @@ usage: hoop-tape-miner clips workspace/teams/<opponent>/<date> [--video game.mp4
 from __future__ import annotations
 
 import argparse
-import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 from . import game_config as gc
+from . import media
 from .timefmt import seconds
 
 READMES = ("README.md", "README.en.md")
@@ -63,15 +62,14 @@ def cut(video: Path, start: str, end: str, out: Path, height: int = 480):
     t0, t1 = seconds(start), seconds(end)
     if t1 <= t0:
         raise ValueError(f"clip {start}-{end}: end must be after start")
-    ffmpeg = os.environ.get("FFMPEG", "ffmpeg")
     out.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run([ffmpeg, "-v", "error", "-y", "-ss", f"{t0:.2f}", "-i", str(video), "-t", f"{t1 - t0:.2f}",
-                    "-vf", f"scale=-2:{height},fps=30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
-                    "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-c:a", "aac", "-b:a", "64k", "-ac", "1", str(out)],
-                   check=True)
-    # poster = first frame, so a reader sees which play it is before pressing play
-    subprocess.run([ffmpeg, "-v", "error", "-y", "-i", str(out), "-frames:v", "1", "-q:v", "6", str(out.with_suffix(".jpg"))],
-                   check=True)
+    with media.partial(out) as part:  # a stopped run leaves no half clip that the next run would skip
+        media.ffmpeg("-ss", f"{t0:.2f}", "-i", video, "-t", f"{t1 - t0:.2f}",
+                     "-vf", f"scale=-2:{height},fps=30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
+                     "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-c:a", "aac", "-b:a", "64k", "-ac", "1", part)
+        # poster = first frame, so a reader sees which play it is before pressing play (made before the clip
+        # lands, so a finished clip always has one)
+        media.ffmpeg("-i", part, "-frames:v", "1", "-q:v", "6", out.with_suffix(".jpg"))
 
 
 def main(argv=None):

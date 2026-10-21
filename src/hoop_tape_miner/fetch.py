@@ -17,14 +17,13 @@ import datetime as dt
 import json
 import os
 import re
-import shutil
 import subprocess
 import urllib.error
 import urllib.request
 import zoneinfo
 from pathlib import Path
 
-from . import new_game, official, workspace
+from . import media, new_game, official, workspace
 
 API = "https://api.gloryleague.com/onsen/graphql"
 LOGIN = "mutation ($input: LoginInput!) { login(input: $input) { authToken } }"
@@ -258,17 +257,12 @@ def download(url: str, dest, max_bytes: int | None = None, log=print) -> Path:
 
 
 def video_length(path) -> float | None:
-    exe = shutil.which("ffprobe")
-    if not exe and os.environ.get("FFMPEG"):
-        cand = Path(os.environ["FFMPEG"]).with_name("ffprobe" + Path(os.environ["FFMPEG"]).suffix)
-        exe = str(cand) if cand.exists() else None
-    if not exe or not Path(path).exists():
+    """Seconds of the video, or None when it is missing or ffprobe is absent or fails."""
+    if not Path(path).exists():
         return None
     try:
-        out = subprocess.run([exe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
-                             check=True, capture_output=True, text=True).stdout
-        return float(out.strip())
-    except (subprocess.CalledProcessError, ValueError):
+        return media.duration_s(Path(path))
+    except (OSError, subprocess.SubprocessError, ValueError):
         return None
 
 

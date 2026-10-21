@@ -14,12 +14,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import os
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+from . import media
 from . import training as T
 from . import workspace
 
@@ -28,9 +27,7 @@ LONG_SIDE = 1080
 
 def probe(p: Path) -> dict:
     """width / height after rotation, duration (s) and recording date (YYYY-MM-DD or None) of a video."""
-    out = subprocess.run([os.environ.get("FFPROBE", "ffprobe"), "-v", "error", "-print_format", "json",
-                          "-show_format", "-show_streams", str(p)], capture_output=True, text=True, check=True).stdout
-    info = json.loads(out)
+    info = media.probe(p)
     v = next(s for s in info["streams"] if s.get("codec_type") == "video")
     w, h = int(v["width"]), int(v["height"])
     rot = int(float((v.get("tags") or {}).get("rotate", 0) or 0))
@@ -53,7 +50,6 @@ def join(videos: list[Path], out: Path, long_side: int = LONG_SIDE) -> list[dict
     """Normalise every file to the first file's orientation and size, then concatenate; returns sources."""
     infos = [probe(v) for v in videos]
     W, H = target_size(infos[0]["w"], infos[0]["h"], long_side)
-    ffmpeg = os.environ.get("FFMPEG", "ffmpeg")
     out.parent.mkdir(parents=True, exist_ok=True)
     sources, start = [], 0.0
     with tempfile.TemporaryDirectory() as tmp:
@@ -63,17 +59,14 @@ def join(videos: list[Path], out: Path, long_side: int = LONG_SIDE) -> list[dict
             vf = (f"scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,setsar=1,"
                   "fps=30")
             print(f"[train-new] {v.name}: {info['duration']:.0f} s", flush=True)
-            subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-y", "-i", str(v), "-vf", vf, "-c:v", "libx264",
-                            "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k",
-                            "-ar", "48000", "-ac", "1", str(part)], check=True)
+            media.ffmpeg("-i", v, "-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt",
+                         "yuv420p", "-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "1", part)
             parts.append(part)
             dur = probe(part)["duration"]
             sources.append(dict(file=str(v.resolve()), start=round(start, 2), duration=round(dur, 2)))
             start += dur
-        lst = Path(tmp) / "list.txt"
-        lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf8")
-        subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(lst),
-                        "-c", "copy", "-movflags", "+faststart", str(out)], check=True)
+        with media.partial(out) as joined:
+            media.concat(parts, joined, Path(tmp))
     return sources
 
 

@@ -40,9 +40,7 @@ import argparse
 import asyncio
 import hashlib
 import json
-import os
 import re
-import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -50,7 +48,9 @@ from pathlib import Path
 
 from . import film_draw as fd
 from . import game_config as gc
+from . import media
 from .clips import seconds
+from .media import duration_s, ffmpeg, has_audio, video_size
 from .narrate import voices
 
 FPS = 30
@@ -401,32 +401,6 @@ def title_text(folder: Path, game: dict, h: int) -> str:
 
 # ---- speech ------------------------------------------------------------------------------------------------
 
-def ffmpeg(*args: str, cwd: Path | None = None):
-    # -nostdin: a backgrounded ffmpeg that reads the terminal can stall or misread keys
-    subprocess.run([os.environ.get("FFMPEG", "ffmpeg"), "-nostdin", "-v", "error", "-y", *args], check=True, cwd=cwd)
-
-
-def duration_s(p: Path) -> float:
-    out = subprocess.run([os.environ.get("FFPROBE", "ffprobe"), "-v", "error", "-show_entries", "format=duration",
-                          "-of", "csv=p=0", str(p)], capture_output=True, text=True, check=True).stdout
-    return float(out.strip())
-
-
-def video_size(p: Path) -> tuple[int, int]:
-    out = subprocess.run([os.environ.get("FFPROBE", "ffprobe"), "-v", "error", "-select_streams", "v:0",
-                          "-show_entries", "stream=width,height", "-of", "csv=p=0", str(p)],
-                         capture_output=True, text=True, check=True).stdout
-    w, h = out.strip().split(",")[:2]
-    return int(w), int(h)
-
-
-def has_audio(p: Path) -> bool:
-    out = subprocess.run([os.environ.get("FFPROBE", "ffprobe"), "-v", "error", "-select_streams", "a",
-                          "-show_entries", "stream=index", "-of", "csv=p=0", str(p)],
-                         capture_output=True, text=True, check=True).stdout
-    return bool(out.strip())
-
-
 async def _tts(text: str, voice: str, rate: str, out: Path) -> list[tuple[float, float, str]]:
     import edge_tts
 
@@ -455,8 +429,9 @@ def spoken(text: str, voice: str, rate: str, cache: Path) -> tuple[Path, float, 
                         encoding="utf8")
     if not wav.exists():
         # edge-tts ends every clip with ~0.9 s of silence; cut it so scene changes and paragraph gaps stay tight
-        ffmpeg("-i", str(mp3), "-af", "areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse",
-               "-c:a", "pcm_s16le", str(wav))
+        with media.partial(wav) as part:  # a stopped run must not leave a cut-short voice in the cache
+            ffmpeg("-i", str(mp3), "-af", "areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse",
+                   "-c:a", "pcm_s16le", str(part))
     dur = duration_s(wav)
     return wav, dur, [(s, min(e, dur), t) for s, e, t in cues if s < dur]
 
@@ -682,9 +657,8 @@ def build(folder: Path, lang: str, video: Path | None, height: int, font: str, p
                               ass_name, accent, seg, segs=segs, bg=bg, court=court, crf=crf), cwd=tmp)
             rendered.append(seg)
             print(f"scene {i}/{len(scenes)} {sc.kind} {length:.1f} s", flush=True)
-        (tmp / "list.txt").write_text("".join(f"file '{x}'\n" for x in rendered), encoding="utf8")
-        ffmpeg("-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy", "-movflags", "+faststart",
-               str(out.resolve()), cwd=tmp)
+        with media.partial(out) as part:  # a stopped render never leaves a short film.<lang>.mp4 that counts as done
+            media.concat([tmp / x for x in rendered], part.resolve(), tmp)
     if not pick:
         poster(out, out.with_suffix(".jpg"))
     print(f"wrote {out} {out.stat().st_size / 1e6:.1f} MB, {duration_s(out) / 60:.1f} min")
