@@ -34,7 +34,10 @@ uv run --no-sync pytest -q
 
 ## Project map
 
-- `src/hoop_tape_miner/` the pipeline, one module per CLI stage; `cli.py` lists them.
+- `src/hoop_tape_miner/` the pipeline, one module per CLI stage; `cli.py` lists them. Shared internals:
+  - `pipeline.py` the step driver behind `run`, `train` and `move` (step tables, exit codes, QA stamp, publish check, provenance records in `.hoop-steps.json`). A driver module keeps only its step list and folder specifics; give a new command step `inputs` / `params` so it re-runs when they change.
+  - `media.py` every ffmpeg / ffprobe call, atomic writes, and `partial()` for long writers (a killed run never leaves a half-written output).
+  - `timefmt.py` the one `mm:ss` rule for times shown or parsed.
 - `docs/playbook.md` the procedure an AI agent follows, video to report. `docs/pipeline.md` has stage details.
 - `prompts/` writing guides for the agent (film review, coach report, narration).
 - `templates/` `game.json` and report skeletons.
