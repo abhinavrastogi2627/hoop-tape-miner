@@ -221,6 +221,8 @@ uv run hoop-tape-miner clips "$G/player-<N>" --video "$V"
 
 Writes `clips/<from>-<to>.mp4` (480p, about 1 MB per 10 s) and a poster per marker; existing files are kept (`--force` re-cuts). Check each clip shows the play its caption describes (a subagent can read 3–4 frames per clip with ffmpeg).
 
+The same command also cuts the clips of the shot chart and the playlists (one 7–8 s window per reviewed shot, turnover and foul with a video time in the review's `coach_part*.json`; see step 12), so a team page gains about 40–60 clips (about 0.8 MB each). A window that is both a marker and a chart dot is cut once. Trips without a time (old v1 reviews) use their `key_clip`, or stay on the chart without a clip.
+
 ## 11. Narration
 
 Write `listen.<lang>.md` for each language in `$G` and in `$G/player-<N>/` (`prompts/narration.md`), then:
@@ -241,9 +243,16 @@ uv run hoop-tape-miner html "$G/player-<N>"
 
 Writes `index.html` in each folder (team names, colours and score from `game.json`, found in the folder or its parent). Audio and clips stay as files next to it.
 
+When the game has a review (`game.json` `run` / `review_dir`), each page also gets two sections after the report, in both languages and in the contents:
+
+- **Shot chart**: every reviewed shot as a dot in its zone on a half court (filled = made, ring = missed, dashed ring = make/miss unclear; never guessed), zones shaded by points per shot over the shots whose outcome is known, a zone table, filters by team, player and half; a dot plays its clip under the chart. The player page shows only that player's shots.
+- **Playlists**: per player (their shots and fouls; turnovers carry no jersey in the trip schema) and per theme: our turnovers, live-ball turnovers (when the trips have `turnover_kind`), fouls we gave, their scores, transition defence (when the trips have `transition`), our offensive rebounds. Each plays straight through in one player; at most 12 clips per playlist (`film_index.MAX_PLAYLIST`, the earliest ones).
+
+`--share` files keep the chart without clips and drop the playlists (they would embed dozens of videos).
+
 ## 13. QA via the browser-check subagent
 
-Ask it (text result only, at most 10 lines) to serve `$G` over http and check, for each `index.html` and each language: title and score band correct, every image loads, audio plays and its length label matches, every clip plays and the slow-mo button works, tables do not overflow at 390 px width, no console errors, no dead links, no local paths visible. Fix and re-render until it passes, then write `$G/qa.md` with `PASS` as its first word (the run waits for that).
+Ask it (text result only, at most 10 lines) to serve `$G` over http and check, for each `index.html` and each language: title and score band correct, every image loads, audio plays and its length label matches, every clip plays and the slow-mo button works, shot chart dots and filters work and a dot plays its clip, each playlist plays and moves to the next clip, tables do not overflow at 390 px width, no console errors, no dead links, no local paths visible. Fix and re-render until it passes, then write `$G/qa.md` with `PASS` as its first word (the run waits for that).
 
 ## 14. Publish the pages
 
