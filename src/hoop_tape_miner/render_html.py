@@ -154,6 +154,124 @@ def movement_board(sb: dict, lab) -> str:
     <div class="halves">{"".join(stats)}</div>"""
 
 
+# ---- Four Factors panel (team page) ----------------------------------------------------------------------------
+FF_UI = {
+    "zh": dict(title="四要素 Four Factors", side="", efg="有效命中率 eFG%", tov="失误率 TOV%", live="活球", dead="死球",
+               orb="进攻篮板率 ORB%", ft="罚球率（罚中/出手）", poss="回合数", ppp="每回合得分",
+               transition="转换进攻 每次得分", half_court="阵地进攻 每次得分", second_chance="二次进攻 每次得分",
+               after_live_turnover="对方活球失误后 每次得分", trips="次",
+               note="来源：联赛数据（命中）+ 录像复盘（出手、失误、篮板、回合）。百分比 = 每 100 次。",
+               factors=dict(efg="投篮（eFG%）", tov="失误（TOV%）", orb="进攻篮板（ORB%）", ft="罚球（罚球率）"),
+               decided="决定比赛的因素：{f}，我们 {a} 对 对手 {b}，{who}领先 {gap} 个百分点（加权 {w}）。",
+               us_word="我们", them_word="对手",
+               unclear="决定比赛的因素：无法判断（样本太小或差距太小）。"),
+    "en": dict(title="Four Factors", side="", efg="Effective FG% (eFG%)", tov="Turnover rate (TOV%)", live="live",
+               dead="dead", orb="Offensive rebounding (ORB%)", ft="Free-throw rate (FTM/FGA)", poss="Possessions",
+               ppp="Points per possession", transition="Transition, points per trip",
+               half_court="Half-court, points per trip", second_chance="Second chance, points per trip",
+               after_live_turnover="After their live-ball turnover, points per trip", trips="trips",
+               note="Sources: league sheet (makes) + film review (attempts, turnovers, rebounds, possessions). "
+                    "Percentages are per 100.",
+               factors=dict(efg="shooting (eFG%)", tov="turnovers (TOV%)", orb="offensive rebounding (ORB%)",
+                            ft="free throws (FT rate)"),
+               decided="The factor that decided the game: {f}, us {a} vs them {b}, {gap} points in favour of {who} "
+                       "(weighted {w}).",
+               us_word="us", them_word="them",
+               unclear="The factor that decided the game: unclear (sample or gap too small)."),
+}
+_FF_KEYS = {"efg": "efg_pct", "tov": "tov_pct", "orb": "orb_pct", "ft": "ft_rate_pct"}
+
+
+def _ff_pct(v) -> str:
+    return "–" if v is None else f"{v:.1f}%"
+
+
+def four_factors_summary(folder: Path) -> dict | None:
+    """summary.json `all` block with `four_factors` for a team report folder (game.json in the folder itself):
+    the folder's own summary.json, else <run>/<review_dir or review_v1>/summary.json; None when there is none."""
+    gj = folder / "game.json"
+    if not gj.exists():
+        return None
+    game = json.loads(gj.read_text(encoding="utf8"))
+    run = Path(game["run"]) if game.get("run") else folder / "run"
+    for p in (folder / "summary.json", run / (game.get("review_dir") or "review_v1") / "summary.json"):
+        if p.exists():
+            try:
+                allv = json.loads(p.read_text(encoding="utf8")).get("all") or {}
+            except (ValueError, AttributeError):
+                continue
+            if isinstance(allv, dict) and isinstance(allv.get("four_factors"), dict):
+                return allv
+    return None
+
+
+def four_factors_panel(folder: Path, names: dict | None = None) -> str:
+    """Small two-team table (zh + en blocks, one shown at a time) with the Four Factors, PPP by trip type and the
+    deciding-factor line; empty string when the review has no four_factors yet."""
+    allv = four_factors_summary(folder)
+    if not allv:
+        return ""
+    ff, pp = allv["four_factors"], allv.get("ppp") or {}
+    us, them = ff.get("us") or {}, ff.get("them") or {}
+    names = names or {}
+    blocks = []
+    for c, attr, *_ in LANGS:
+        t = FF_UI[c]
+
+        def tov(s):
+            if s.get("tov_pct") is None:
+                return "–"
+            extra = (f' <small>({t["live"]} {s["tov_live_pct"]:.1f} · {t["dead"]} {s["tov_dead_pct"]:.1f})</small>'
+                     if s.get("tov_live_pct") is not None and s.get("tov_dead_pct") is not None else "")
+            return _ff_pct(s["tov_pct"]) + extra
+
+        def orb(s):
+            v = _ff_pct(s.get("orb_pct"))
+            return v + (f' <small>({s["orb"]}/{s["orb_chances"]})</small>' if s.get("orb_chances") else "")
+
+        def poss(s):
+            return "–" if s.get("possessions") is None else f'{s["possessions"]:g}'
+
+        def num(v):
+            return "–" if v is None else f"{v:.2f}"
+
+        def ppp_cell(side, k):
+            g = (pp.get(side) or {}).get(k) or {}
+            return f'{num(g.get("ppp"))} <small>({g.get("trips", 0)} {t["trips"]})</small>' if g.get("trips") else "–"
+        rows = [(t["efg"], _ff_pct(us.get("efg_pct")), _ff_pct(them.get("efg_pct"))),
+                (t["tov"], tov(us), tov(them)),
+                (t["orb"], orb(us), orb(them)),
+                (t["ft"], _ff_pct(us.get("ft_rate_pct")), _ff_pct(them.get("ft_rate_pct"))),
+                (t["poss"], poss(us), poss(them)),
+                (t["ppp"], num(us.get("ppp")), num(them.get("ppp")))]
+        rows += [(t[k], ppp_cell("us", k), ppp_cell("them", k))
+                 for k in ("transition", "half_court", "second_chance", "after_live_turnover") if pp]
+        d = ff.get("decided") or {}
+        if d.get("status") == "ok" and d.get("factor") in _FF_KEYS:
+            key = _FF_KEYS[d["factor"]]
+            line = t["decided"].format(f=t["factors"][d["factor"]], a=_ff_pct(us.get(key)),
+                                       b=_ff_pct(them.get(key)), gap=f'{abs(d["gap"]):.1f}',
+                                       w=f'{abs(d["weighted"][d["factor"]]):.1f}',
+                                       who=t["us_word"] if d["favours"] == "us" else t["them_word"])
+        else:
+            line = t["unclear"]
+        head = (f'<tr><th></th><th>{html.escape(names.get("us") or UI[c]["us"])}</th>'
+                f'<th>{html.escape(names.get("them") or UI[c]["them"])}</th></tr>')
+        body = "".join(f"<tr><td>{a}</td><td>{b}</td><td>{e}</td></tr>" for a, b, e in rows)
+        blocks.append(f'<section class="factors" data-lang="{c}" lang="{attr}"{hide(c)}>'
+                      f'<h2 class="factors-title">{t["title"]}</h2><p class="decided">{html.escape(line)}</p>'
+                      f'<div class="table-wrap"><table>{head}{body}</table></div>'
+                      f'<p class="factors-note">{t["note"]}</p></section>')
+    style = ("<style>.factors{margin-top:2rem}.factors .factors-title{font:700 1.3rem/1.2 var(--display);margin:0 0 .5rem;"
+             "border:0;padding:0}.factors .decided{font-weight:700;border-left:4px solid var(--us);padding-left:.8rem}"
+             ".factors td,.factors th{white-space:nowrap;font-variant-numeric:tabular-nums}"
+             ".factors td:first-child{white-space:normal}.factors small{color:var(--muted)}"
+             ".factors-note{color:var(--muted);font-size:.8rem}"
+             "@media (max-width:560px){.factors table{font-size:.8rem}.factors td,.factors th{padding:.4rem .45rem}}"
+             "</style>")
+    return style + "".join(blocks)
+
+
 def data_uri(p: Path) -> str:
     mime = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
     return f"data:{mime};base64,{base64.b64encode(p.read_bytes()).decode()}"
@@ -322,7 +440,8 @@ def page(folder: Path, share: bool = False, embed: bool | None = None) -> str:
         buttons=buttons, switch=UI["zh"]["switch"], heading=title_spans(), board=board,
         us_hex=us_hex, them_hex=them_hex, us_light=us_light, them_light=them_light,
         us_light_rgb=", ".join(map(str, gc.hex_to_rgb(us_light))),
-        listen=listen, mini=mini, tocs="".join(tocs), articles="".join(arts),
+        listen=listen, mini=mini, tocs="".join(tocs),
+        articles=("" if sb.get("training") else four_factors_panel(folder, sb)) + "".join(arts),
     )
 
 
